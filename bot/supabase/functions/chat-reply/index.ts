@@ -2808,12 +2808,16 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // SRS-5.1zzzzze (khách mô phỏng lần bảy: "phí 1% lấy từ bên bán hay bên mua?" — model trả lời đúng "lấy từ bên bán, bên mua miễn
         // phí", lượt soát bỏ cả câu vì chính sách phí không nằm trong nguồn nào, khách nhận "Vâng ạ." cụt hai lần). Chính sách thật của
         // bên em (luật phí model được dặn) là nguồn hợp lệ — cùng một bản với bản model đã thấy khi viết.
-        const { nhanXet, usage } = await soatNhanXetBangModel(anthropicS as unknown as Parameters<typeof soatNhanXetBangModel>[0], MODEL, loi, bangChung, daGhi, "chu_nha", tra);
+        // SRS-5.1zzzzzf: sổ ghi của lượt (cùng nguồn với dòng EM VỪA GHI của câu lệnh) — căn cứ duy nhất cho câu "em ghi X rồi".
+        // (Lượt 5.1zzzzze merge thiếu đối số FEES ở đây — lượt soát không thấy luật phí; nay e2e ZZZZZE-01 soi câu lệnh soát.)
+        const vuaGhi = [...ghiLuot.filter((g) => g.doi && g.question !== "nhan" && g.question !== "kien_thuc")
+          .map((g) => `${(FACT_LABELS[g.question] ?? g.question).replace(/\s*\(.*\)\s*$/, "")}: ${g.ghi}`), ...(quanGhiLuot ? [quanGhiLuot] : [])].join("\n");
+        const { nhanXet, usage } = await soatNhanXetBangModel(anthropicS as unknown as Parameters<typeof soatNhanXetBangModel>[0], MODEL, loi, bangChung, daGhi, "chu_nha", tra, FEES, vuaGhi);
         nhanXetAiXong = true;
         await doTien(client, usage as Parameters<typeof doTien>[1]);
         for (const n of nhanXet) if (n.noi_trang_thai_tin === true && n.cau?.trim() && !/\?/.test(n.cau)) aiNoiTrangThai.push(n.cau.trim());
         const nguon = `${bangChung}\n${daGhi}\n${tra}\n${FEES}`;
-        const bo = nhanXetKhongCanCu(nhanXet, nguon);
+        const bo = nhanXetKhongCanCu(nhanXet, nguon, vuaGhi);
         const boHoi = cauHoiGoiYKhongNguon(nhanXet, nguon);
         if (!bo.length && !boHoi.length) return loi;
         console.log("chat-reply: bo khang dinh khong nguon", [...bo, ...boHoi].join(" | "));
@@ -2925,6 +2929,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
             const { error: dtErr } = await ghiFact(client, { p_listing_id: d.id, p_question: "dien_tich", p_answer: dtB, p_source: NGUON_AI });
             if (dtErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ai_kiem dien_tich ngang x dai)", dtErr.message);
             else daGhi.push({ question: "dien_tich", answer: dtB, khoa: "ngang_x_dai" });
+          } else if (ktB.dai != null && ktB.ngang == null && (d as { length_m?: number | null }).length_m == null && !daGhi.some((g) => g.question === "chieu_dai")) {
+            // SRS-5.1zzzzzf: dài nói riêng (chưa có ngang) — cùng luật với docAiChinh, fact `chieu_dai` chỉ điền length_m.
+            const { error: cdErr } = await ghiFact(client, { p_listing_id: d.id, p_question: "chieu_dai", p_answer: `dài ${ktB.dai}m`, p_source: NGUON_AI });
+            if (cdErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ai_kiem chieu_dai)", cdErr.message);
+            else daGhi.push({ question: "chieu_dai", answer: `dài ${ktB.dai}m`, khoa: "dai" });
           }
           const { data: boSungCu } = await client.from("listing_facts").select("answer")
             .eq("listing_id", d.id).eq("question", "bo_sung").limit(40);
@@ -5198,6 +5207,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const quanDoan = (() => { const ds = cacQuanTrong(c.goc, boDau); return ds.length === 1 ? ds[0] : null; })();
         const quanCan = acCan ? acCan.quan : c.quan ?? quanDoan ?? quanCau ?? null;
         const keThua = !quanCan || quanCan === (goc?.district ?? null);
+        // SRS-5.1zzzzzf (khách mô phỏng lần bảy, môi giới: "còn 2 căn nữa, hẻm Nguyễn Trãi …, và hẻm An Dương Vương …" cùng Quận 5 với
+        // căn đầu → hai tin mới mang cột street "Trần Hưng Đạo" + phường của căn đầu). Cùng quận không phải cùng địa chỉ: căn có đường
+        // riêng (AI đọc ra cho đúng căn đó, hoặc luật thấy địa chỉ trong đoạn của căn) thì không mượn đường / phường / địa chỉ căn cũ.
+        const coDiaChiRieng = !!(acCan?.duong || acCan?.tenDuong || bocViTriRao(c.goc));
+        const keThuaDiaChi = keThua && !coDiaChiRieng;
         // Không mở trùng mã căn cho cùng người bán.
         if (c.ma) {
           const { data: trung } = await client.from("listings").select("id")
@@ -5207,8 +5221,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const { data: moi, error: moiErr } = await client.from("listings").insert({
           code: null, seller_id: sellerRow.id, deal: goc?.deal ?? "ban",
           // 11/09: căn nói rõ quận riêng ("1 căn q11 …") thì không kế thừa địa chỉ căn cũ.
-          district: quanCan ?? goc?.district ?? null, ward: keThua ? tenPhuongCot(goc?.ward, goc?.district) : null,
-          location_raw: keThua ? goc?.location_raw ?? null : null, street: keThua ? goc?.street ?? null : null,
+          district: quanCan ?? goc?.district ?? null, ward: keThuaDiaChi ? tenPhuongCot(goc?.ward, goc?.district) : null,
+          location_raw: keThuaDiaChi ? goc?.location_raw ?? null : null, street: keThuaDiaChi ? goc?.street ?? null : (acCan?.tenDuong ?? null),
           description: c.goc, price_raw: c.gia ?? null,
           property_type: acCan?.loaiBds ?? c.loai ?? (DAT_KD_RE.test(boDau(c.goc)) ? "dat" : loaiDauTin ?? goc?.property_type ?? "chua_ro"), status: "cho_thong_tin",
           can_chu_duyet: true, unit_code: c.ma ?? null,

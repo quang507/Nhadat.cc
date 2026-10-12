@@ -258,7 +258,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
       : (fact("dien_tich") ?? fact("dien_tich_dat") ?? fact("dien_tich_tim_tuong")),
     l.frontage_m && l.length_m
       ? `ngang ${so(l.frontage_m)}m x dài ${so(l.length_m)}m`
-      : (l.frontage_m ? `ngang ${so(l.frontage_m)}m` : fact("mat_tien") ? `ngang ${fact("mat_tien")}` : null),
+      : (l.frontage_m ? `ngang ${so(l.frontage_m)}m` : fact("mat_tien") ? `ngang ${fact("mat_tien")}` : l.length_m ? `dài ${so(l.length_m)}m` : null),
     l.rear_width_m ? `nở hậu ${so(l.rear_width_m)}m` : fact("no_hau") ? `nở hậu ${fact("no_hau")}` : null,
     nhan("thổ cư", fact("tho_cu")),
     fact("hinh_dang"),

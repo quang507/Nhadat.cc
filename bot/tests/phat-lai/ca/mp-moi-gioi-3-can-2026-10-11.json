@@ -1484,6 +1484,22 @@
    "cot": "district",
    "bang": "Quận 5",
    "ghi_chu": "quận chung của lô"
+  },
+  {
+   "sau_luot": 4,
+   "tin": 1,
+   "loai": "cot",
+   "cot": "street",
+   "mau": "^Nguyễn Trãi$",
+   "ghi_chu": "SRS-5.1zzzzzf: căn thêm cùng Quận 5 có đường riêng → không mượn street Trần Hưng Đạo của căn đầu"
+  },
+  {
+   "sau_luot": 4,
+   "tin": 2,
+   "loai": "cot",
+   "cot": "street",
+   "mau": "^An Dương Vương$",
+   "ghi_chu": "SRS-5.1zzzzzf: căn thêm thứ hai cũng giữ đường riêng"
   }
  ]
 }

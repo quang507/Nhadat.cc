@@ -31,6 +31,9 @@ const NhanXet = z.object({
   goi_y: z.boolean().nullish().describe("true khi câu là CÂU HỎI mà đưa sẵn một giá trị cụ thể (tên phường / đường / quận, con số, loại nhà…) để chủ nhà gật (\"nhà bác ở phường Thạnh Lộc đúng không?\", \"giá 5 tỷ phải không anh?\"). Câu hỏi mở (\"phường nào ạ?\") → false."),
   // SRS-5.1zzzzzc (khách mô phỏng lần năm: "anh cứ bận, tối em gọi lại nha" — bot không gọi điện được).
   hua_khong_lam: z.boolean().nullish().describe("true khi câu là LỜI HỨA bot làm việc bot KHÔNG tự làm được: gọi điện / gọi lại, đi xem nhà, gặp mặt, kiểm tra quy hoạch / sổ / giá giao dịch rồi báo (\"tối em gọi lại nha\", \"em qua xem nhà\", \"để em check quy hoạch rồi báo\"). Hứa báo khi có khách, đăng khi đủ, chờ khách nhắn → false."),
+  // SRS-5.1zzzzzf (khách mô phỏng lần bảy: "Vâng ạ, 4x16 cháu ghi rồi bác ơi." — lượt đó chỉ ghi hẻm 4m + kết cấu; model ghép hẻm 4 với
+  // dài 16 thành "4x16"). Câu nói bot ĐÃ GHI một giá trị cụ thể là khẳng định về sổ ghi: căn cứ chỉ ở khối EM VỪA GHI.
+  ghi_nhan: z.boolean().nullish().describe("true khi câu nói bot ĐÃ GHI / lưu / ghi nhận một GIÁ TRỊ CỤ THỂ (con số, kích thước, tên đường, loại giấy tờ…): \"4x16 cháu ghi rồi\", \"em ghi hẻm 4m rồi ạ\", \"dạ sổ hồng riêng em lưu rồi\". Ghi nhận chung không kèm giá trị (\"dạ em ghi rồi ạ\") → false."),
   danh_gia_thi_truong: z.boolean().describe("true khi câu ĐÁNH GIÁ giá trị / thị trường / khả năng bán của KHU VỰC hay MỨC GIÁ, không gắn với một đặc điểm của căn (\"đất vàng\", \"khu đó bán được lắm\", \"giá khu này đang lên\")."),
 });
 const KetSoat = z.object({ nhan_xet: z.array(NhanXet) });
@@ -44,8 +47,10 @@ nào), giá / thị trường, pháp lý, quy hoạch, dự án, hay khen dựa 
 xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "khách chuộng …").
 - LIỆT KÊ cả CÂU HỎI đưa sẵn một giá trị cụ thể chủ nhà chưa nói ("nhà bác ở phường Thạnh Lộc đúng không bác?", "giá mình 5 tỷ phải
   không?") với goi_y = true — câu đó khẳng định giá trị trước khi hỏi; can_cu như mọi khẳng định khác.
-- KHÔNG liệt kê: câu hỏi mở, lời chào, cảm ơn, ghi nhận chung ("dạ em ghi rồi ạ"), lời hứa bot LÀM ĐƯỢC (báo khi có khách, đăng khi đủ,
-  chờ khách nhắn).
+- KHÔNG liệt kê: câu hỏi mở, lời chào, cảm ơn, ghi nhận chung không kèm giá trị ("dạ em ghi rồi ạ"), lời hứa bot LÀM ĐƯỢC (báo khi có
+  khách, đăng khi đủ, chờ khách nhắn).
+- LIỆT KÊ câu nói bot ĐÃ GHI một giá trị cụ thể ("4x16 cháu ghi rồi", "em ghi hẻm 4m rồi") với ghi_nhan = true — can_cu chỉ chép từ khối
+  EM VỪA GHI LƯỢT NÀY (đúng giá trị được nói); giá trị không có trong khối đó (kể cả khi chủ nhà có nói) thì can_cu = null.
 - LIỆT KÊ lời hứa bot KHÔNG tự làm được (gọi điện, "tối em gọi lại", đi xem nhà, gặp mặt, kiểm tra quy hoạch / sổ / giá giao dịch rồi báo)
   với hua_khong_lam = true, can_cu = null.
 - LIỆT KÊ cả câu nói TRẠNG THÁI TIN ("em vừa đăng tin rồi ạ", "tin mình lên sóng rồi", "bài đang chạy") với noi_trang_thai_tin = true,
@@ -97,6 +102,8 @@ export async function soatNhanXetBangModel(
   duLieuTra = "",
   /** SRS-5.1zzzzze: chính sách thật của bên em (luật phí) — nguồn hợp lệ cho câu bot nói về phí / ai trả. */
   chinhSach = "",
+  /** SRS-5.1zzzzzf: sổ ghi của lượt này ("nhãn: giá trị" mỗi dòng) — nguồn DUY NHẤT cho câu "em ghi X rồi". */
+  vuaGhi = "",
 ): Promise<{ nhanXet: NhanXetLLM[]; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
@@ -105,7 +112,7 @@ export async function soatNhanXetBangModel(
     system: [{ type: "text", text: doiTuong === "nguoi_mua" ? LUAT_MUA : LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
       role: "user",
-      content: `${doiTuong === "nguoi_mua" ? "LỜI KHÁCH MUA" : "LỜI CHỦ NHÀ"}:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}${duLieuTra ? `DỮ LIỆU TRA CỨU:\n${duLieuTra.slice(0, 800)}\n` : ""}${chinhSach ? `CHÍNH SÁCH CỦA BÊN EM:\n${chinhSach.slice(0, 1800)}\n` : ""}LỜI BOT:\n${loiBot.slice(0, 800)}`,
+      content: `${doiTuong === "nguoi_mua" ? "LỜI KHÁCH MUA" : "LỜI CHỦ NHÀ"}:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}${duLieuTra ? `DỮ LIỆU TRA CỨU:\n${duLieuTra.slice(0, 800)}\n` : ""}${chinhSach ? `CHÍNH SÁCH CỦA BÊN EM:\n${chinhSach.slice(0, 1800)}\n` : ""}EM VỪA GHI LƯỢT NÀY:\n${vuaGhi.trim() ? vuaGhi.slice(0, 600) : "(không ghi gì)"}\nLỜI BOT:\n${loiBot.slice(0, 800)}`,
     }],
   });
   const k = docLong(KetSoat, r.parsed_output);

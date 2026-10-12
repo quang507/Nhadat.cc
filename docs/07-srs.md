@@ -3569,6 +3569,76 @@ Ngoài e2e:
 
 e2e **1229/1229**.
 
+### SRS-5.1zzzzzf · Bóc tách không đủ: dài nói riêng mất, tên đường AI viết lại, căn thêm mượn đường căn đầu, "em ghi X rồi" bịa (12/10/2026)
+
+`[nguồn: chủ dự án 12/10/2026: "Bot nói '4x16 cháu ghi rồi' ở lượt không ghi do cả code lẫn AI ko ghi được ạ" — "ok làm đi rồi merge" — "đa phần là do bóc tách ko đủ"]`
+
+**Cách soát.** Đọc đầu ra bóc tách AI đã ghi trong 5 ca phát lại lần bảy, chạy qua `kiemDeXuat` + `docAiChinh`, liệt kê mọi ô AI đọc ra mà code bỏ
+kèm lý do, rồi so với trạng thái tin cuối mỗi ca. Đa số dòng "bỏ" là đúng thiết kế: trích dẫn nằm ở tin cũ (lượt chốt tin), số tầng trùng kết
+cấu, "ko có gác lửng" thành 1 tầng. Còn lại bốn lỗi thật.
+
+**Lớp lỗi (1) — một chiều kích thước không có ô.** Khách nói "chiều sâu thì 16 mét" khi chưa nói ngang. AI đọc dài 16, nhưng khoá `dai` chỉ có
+chỗ ghi khi đi cùng ngang (thành "AxB") nên bị bỏ (`khoa_khong_co_cho_ghi`), bot hỏi lại diện tích. Ngang đi một mình thì có ô (`mat_tien`),
+dài đi một mình thì không.
+- **Sửa:** fact mới `chieu_dai` ("dài 16m"). Migration `20261012a`: nhánh riêng trong `listing_facts_sync_cols`, chỉ điền cột `length_m`;
+  ngang tới sau thì trigger trên `listings` nhân ra diện tích. Không dùng `mat_tien` / `dien_tich`: có fact đó thì `listing_missing_facts`
+  coi như đã trả lời ngang / diện tích, bot thôi hỏi.
+- Hai đường ghi cùng một luật: `docAiChinh` (mọi chỗ tạo / ghi tin) và nhánh bóng ở chat-reply (cạnh chỗ ghi "AxB"). Nhãn `chieu_dai`
+  ("chiều dài") ở `FACT_LABELS`; bản nháp in "dài Nm" khi chỉ có dài; DB giả e2e có nhánh cùng tên (`mock-trigger-du.mjs` canh).
+
+**Lớp lỗi (2) — tên riêng AI viết lại khác chữ khách.** Khách gõ "hẻm Phan Xích Long", lượt chốt tin trả `ten_duong` "Phạm Xích Long"
+kèm trích dẫn đúng chữ khách. Kiểm bằng chứng chỉ soi trích dẫn, nên cột `street` nhận tên sai. Ô địa chỉ (`vi_tri`) không dính vì đã ghi
+nguyên văn từ cụm khách gõ (5.1zzr); `ten_duong` thì không.
+- **Sửa (`docAiChinh`, một chỗ):** giá trị tên đường phải nằm trong cụm trích (so bỏ dấu, không phân biệt hoa thường). Khác thì lấy đúng
+  chữ khách trong cụm, bỏ chữ hẻm / đường / số nhà ở đầu. Khách gõ không dấu mà AI thêm dấu thì vẫn nhận bản AI. Sửa chính tả là việc của
+  từ điển `duong` (`tim_duong` hỏi xác nhận), không phải của model.
+- **Cùng lớp:** `du_an` và địa chỉ đã ghi nguyên văn; phường đi qua `tenPhuongCot`; quận qua `bocQuan`. Còn `ten_duong` là tên riêng duy
+  nhất ghi theo giá trị AI.
+
+**Lớp lỗi (3) — "cùng quận" bị coi là "cùng địa chỉ".** Môi giới rao thêm hai căn (hẻm Nguyễn Trãi, hẻm An Dương Vương) cùng Quận 5 với căn
+đầu (mặt tiền Trần Hưng Đạo). Nhánh tạo tin nhiều căn kế thừa `street` / `ward` / `location_raw` của căn đầu khi cùng quận (`keThua`), nên
+hai tin mới mang đường và phường của căn đầu.
+- **Sửa:** `keThuaDiaChi`. Căn có địa chỉ riêng (AI đọc ra `duong` / `ten_duong` cho đúng căn, hoặc luật thấy địa chỉ trong đoạn của căn)
+  thì không mượn địa chỉ căn cũ. `street` lấy `ten_duong` AI đọc cho căn đó, phường để trống cho bot hỏi. Dự án vẫn kế thừa theo quận như cũ.
+
+**Lớp lỗi (4) — câu "em ghi X rồi" không ai soát.** Khách nói "hẻm 4 mét, chiều sâu 16 mét"; lượt đó code ghi hẻm 4m và kết cấu. Câu lệnh
+gửi model nói đúng "EM VỪA GHI: độ rộng hẻm; kết cấu … không đọc lại số", nhưng model vẫn viết "Vâng ạ, 4x16 cháu ghi rồi bác ơi" (ghép hẻm 4
+với dài 16). Lượt soát trả rỗng, vì luật soát loại "ghi nhận chung" ra khỏi danh sách cần liệt kê.
+- **Sửa:** luật soát (`kiem-khen.ts`) tách ghi nhận CHUNG ("dạ em ghi rồi ạ", vẫn không liệt kê) khỏi ghi nhận kèm GIÁ TRỊ ("4x16 cháu ghi
+  rồi", liệt kê với `ghi_nhan = true`). Lượt soát nhận khối `EM VỪA GHI LƯỢT NÀY`, dựng từ sổ `ghiLuot` của lượt, cùng nguồn với dòng EM VỪA
+  GHI của câu lệnh viết. `nhanXetKhongCanCu(…, vuaGhi)`: câu `ghi_nhan` chỉ đứng khi căn cứ nằm trong sổ ghi lượt; lời chủ nhà có giá trị đó
+  cũng không đủ.
+- Phát lại không kiểm được phần AI (đầu ra soát đã ghi là của câu lệnh cũ). Kiểm bằng e2e: câu lệnh soát có khối sổ ghi lượt, và code bỏ
+  / giữ đúng theo `ghi_nhan`.
+
+**Lỗi của chính lượt trước (5.1zzzzze).** Bản merge thiếu đối số `FEES` ở lời gọi `soatNhanXetBangModel`: code đối chiếu căn cứ với luật
+phí, nhưng câu lệnh soát không có luật phí. Gốc: script tắt-thử-bản-sửa sao lưu file trước mỗi chỗ sửa, nên khi hai chỗ sửa cùng file, chỗ
+thứ nhất không được khôi phục. Model giả của e2e trả căn cứ bất kể câu lệnh nên ca vẫn xanh. Nay đã trả đối số, script tắt-thử chỉ sao lưu
+mỗi file một lần, và e2e ZZZZZE-01 soi câu lệnh soát phải có khối CHÍNH SÁCH.
+
+**Địa danh TP.HCM.** Lượt `nap-duong --thieu` ngày 12/10 đếm được: TP.HCM 37.081 dòng tên đường / hẻm, 167/168 phường có dữ liệu, Tây Ninh
+1.598, Đồng Nai 677. Phường thiếu là Đặc khu Côn Đảo (~8,7°N), nằm ngoài hộp bao đất liền của truy vấn Overpass, nên 0 dòng. `nap-duong.mjs`
+thêm `BBOX_RIENG`; chạy lại cùng ngày: Côn Đảo 65 dòng, TP.HCM 37.146 dòng, đủ 168/168 phường. Từ điển chỉ có tên đường / hẻm; chưa có chợ, trường, khu dân cư, tên chung cư ngoài `projects` (ghi ở OPEN cũ, không đổi
+lượt này).
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZF-01 / 01b | dài nói riêng → `length_m`, fact `chieu_dai`; lượt sau ngang → diện tích | cả hai đỏ |
+| ZZZZZF-02 / 02b | AI `ten_duong` "Phạm Xích Long" / "Lê Văn Sĩ" khác chữ khách → street giữ chữ khách | cả hai đỏ |
+| ZZZZZF-03 | hai căn thêm cùng Quận 5, mỗi căn một đường → street đúng từng căn, không mượn phường | đỏ |
+| ZZZZZF-04 / 04a / 04b / 04c | "4x16 cháu ghi rồi" bỏ; câu lệnh soát có sổ ghi lượt; "sổ hồng riêng em lưu rồi" (chủ nhà nói lượt trước, lượt này không ghi) bỏ; "hẻm 4m em ghi rồi" giữ | 04b, 04c đỏ khi tắt nhánh `ghi_nhan`; 04a đỏ khi không truyền sổ ghi |
+| ZZZZZE-01 / 01b | thêm: câu lệnh soát có khối CHÍNH SÁCH | đỏ khi bỏ `FEES` |
+
+Ngoài e2e:
+- `kiem-bang-chung.mjs` ZZZZZF-K1…K3; `van-tra-loi.mjs` ZZZZZF-V1 / V2.
+- Phát lại thêm 4 kỳ vọng, đỏ trên code cũ, đạt trên code mới: lớn tuổi `length_m` 16 sau lượt 3; nói nhiều street "Phan Xích Long";
+  môi giới street hai căn thêm.
+- Một lượt e2e lúc tắt-thử có AOND-F1b đỏ một lần, chạy lại hai lần đều đạt. Ca đó không dính bản sửa này; ghi lại để theo dõi.
+
+e2e **1238/1238**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

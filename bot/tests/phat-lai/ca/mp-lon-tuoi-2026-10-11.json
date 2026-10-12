@@ -906,6 +906,13 @@
    "cot": "area_m2",
    "bang": 64,
    "ghi_chu": "SRS-5.1zzzzze: «4 mét rộng 16 mét sâu» → AI diện tích 64 (tích hai số trong cụm) được ghi"
+  },
+  {
+   "sau_luot": 3,
+   "loai": "cot",
+   "cot": "length_m",
+   "bang": 16,
+   "ghi_chu": "SRS-5.1zzzzzf: «chiều sâu thì 16 mét» khi chưa có ngang → dài 16 vào cột (fact chieu_dai), không bị bỏ"
   }
  ]
 }

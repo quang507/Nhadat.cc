@@ -982,5 +982,13 @@
    ]
   }
  ],
- "ky_vong": []
+ "ky_vong": [
+  {
+   "sau_luot": 4,
+   "loai": "cot",
+   "cot": "street",
+   "mau": "^Phan Xích Long$",
+   "ghi_chu": "SRS-5.1zzzzzf: khách gõ «hẻm Phan Xích Long», AI chốt tin trả «Phạm Xích Long» → cột street giữ chữ khách"
+  }
+ ]
 }

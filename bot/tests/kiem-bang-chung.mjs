@@ -1128,6 +1128,20 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
       c.length === 2 && c[0].gia === "6 tỷ 5" && c[1].gia === "5 tỷ" && /Nguyễn Trãi/.test(c[0].goc) && /An Dương Vương/.test(c[1].goc) && !/An Dương Vương/.test(c[0].goc), JSON.stringify(c));
   }
 }
+// SRS-5.1zzzzzf: dài nói riêng → fact chieu_dai; tên đường theo chữ khách.
+{
+  const a1 = docAiChinh([{ khoa: "dai", gia_tri: "16", trich_dan: "chiều sâu thì 16 mét", can: null }], { property_type: "nha_pho", deal: "ban" });
+  ok("ZZZZZF-K1 (ca gốc) chỉ có dài 16 → ghi chieu_dai 'dài 16m', không còn 'bỏ: không có chỗ ghi'",
+    a1.ghi.some((g) => g.question === "chieu_dai" && g.answer === "dài 16m") && !a1.bo.some((b) => b.khoa === "dai"), JSON.stringify(a1));
+  const a2 = docAiChinh([{ khoa: "ngang", gia_tri: "4", trich_dan: "4x16", can: null }, { khoa: "dai", gia_tri: "16", trich_dan: "4x16", can: null }], { property_type: "nha_pho", deal: "ban" });
+  ok("ZZZZZF-K2 đối chứng ngang + dài → 'dien_tich 4x16', không chieu_dai, dài không nằm trong 'bỏ'",
+    a2.ghi.some((g) => g.question === "dien_tich" && g.answer === "4x16") && !a2.ghi.some((g) => g.question === "chieu_dai") && !a2.bo.some((b) => b.khoa === "dai"), JSON.stringify(a2));
+  const t1 = docAiChinh([{ khoa: "ten_duong", gia_tri: "Phạm Xích Long", trich_dan: "hẻm Phan Xích Long", can: null }], null);
+  const t2 = docAiChinh([{ khoa: "ten_duong", gia_tri: "Lê Văn Sĩ", trich_dan: "đường Lê Văn Sỹ", can: null }], null);
+  const t3 = docAiChinh([{ khoa: "ten_duong", gia_tri: "Nguyễn Trãi", trich_dan: "hem nguyen trai", can: null }], null);
+  ok("ZZZZZF-K3 tên đường AI viết khác chữ khách → lấy chữ khách ('Phan Xích Long', 'Lê Văn Sỹ'); khách gõ không dấu, AI thêm dấu → giữ bản AI",
+    t1.tenDuong === "Phan Xích Long" && t2.tenDuong === "Lê Văn Sỹ" && t3.tenDuong === "Nguyễn Trãi", JSON.stringify([t1.tenDuong, t2.tenDuong, t3.tenDuong]));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 
