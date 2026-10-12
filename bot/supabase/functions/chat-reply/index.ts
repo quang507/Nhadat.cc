@@ -2405,7 +2405,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const duong = (duongBiet ?? "").trim() || (l.street ?? "").trim() || tenDuong(l.location_raw ?? "");
       const quanBiet = l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true ? l.district : null;
       const hoiXacNhan = async (goiY: GoiYPhuong, noiDuong: string): Promise<string | null> => {
-        const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY } });
+        const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY, phuong_lua_chon: false } });
         if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(phuong goi y vi tri)", error.message); return null; }
         return cauXacNhanPhuong(cauHoiMau("phuong@goi_y", cachGoiNguoi).replace("đường {duong}", "{duong}"), cachGoiNguoi, noiDuong, goiY.phuong, goiY.quan);
       };
@@ -2446,17 +2446,24 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const cac = phuongCuaDuongTrongQuan((dd ?? []) as Array<{ phuong: string | null; quan_cu: string | null }>, l.district);
         if (cac.length === 1) {
           const goiY = { phuong: cac[0], quan: l.district, duong: ten };
-          const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY } });
+          const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY, phuong_lua_chon: false } });
           if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(phuong goi y theo quan)", error.message); return null; }
           return cauXacNhanPhuong(cauHoiMau("phuong@goi_y", cachGoiNguoi), cachGoiNguoi, goiY.duong, goiY.phuong, goiY.quan);
         }
-        if (cac.length >= 2 && cac.length <= 3) return cauChonPhuong(cachGoiNguoi, ten, cac);
+        // SRS-5.1zzzzzi: cất các phường vừa kể (`phuong_lua_chon`) — khách chọn bằng thứ tự / mô tả ("cái thứ 2") thì AI đọc theo câu
+        // bot vừa hỏi, code chỉ nhận khi phường AI nói nằm trong đúng danh sách này.
+        if (cac.length >= 2 && cac.length <= 3) {
+          const ds = cac.slice(0, 3);
+          const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_lua_chon: ds, phuong_goi_y: false } });
+          if (error) await ghiLoi(client, "chat-reply ghi_boc_tach(phuong lua chon)", error.message);
+          return cauChonPhuong(cachGoiNguoi, ten, ds);
+        }
         return null;
       }
       const goiY = await traPhuongTuDuong(duong);
       if (!goiY) return null;
       if ("nhieuNoi" in goiY) return cauNhieuNoiPhuong(cachGoiNguoi, goiY.duong, goiY.nhieuNoi);
-      const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY } });
+      const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY, phuong_lua_chon: false } });
       if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(phuong goi y)", error.message); return null; }
       return cauXacNhanPhuong(cauHoiMau("phuong@goi_y", cachGoiNguoi), cachGoiNguoi, goiY.duong, goiY.phuong, goiY.quan);
     };
@@ -2467,10 +2474,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
      */
     const capNhatQuanTuPhuong = async (listingId: string, goiY: GoiYPhuong | null, dapAnPhuong: string, textGoc: string = dapAnPhuong): Promise<string | null> => {
       const { data: cu } = await client.from("listings").select("district, boc_tach").eq("id", listingId).maybeSingle();
-      const bt = (cu?.boc_tach ?? {}) as { quan_mac_dinh?: unknown; phuong_goi_y?: unknown };
+      const bt = (cu?.boc_tach ?? {}) as { quan_mac_dinh?: unknown; phuong_goi_y?: unknown; phuong_lua_chon?: unknown };
       // 20260917a: quận trống (không còn mặc định Quận 5) cũng là "chưa rõ" như cờ cũ.
       const chuaQuan = !cu?.district || bt.quan_mac_dinh === true;
-      const p: Record<string, unknown> = bt.phuong_goi_y ? { phuong_goi_y: false } : {};
+      const p: Record<string, unknown> = { ...(bt.phuong_goi_y ? { phuong_goi_y: false } : {}), ...(bt.phuong_lua_chon ? { phuong_lua_chon: false } : {}) };
       let quan = goiY?.quan ?? null;
       let tenChuan: string | null = goiY ? goiY.phuong : null;
       // 30/09/2026: chốt với bảng `wards` trước — "phường an hội tây quận gò vấp" ra đúng Phường An Hội Tây + quận Gò Vấp.
@@ -6627,6 +6634,20 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const nhanGoiY = !!goiYPhuong && !chonQuanTin &&
           (await gatLuot(() => laDongY(dapAn)) || (!!goiYPhuong.doi_quan && nhacTenQuan(dapAn, goiYPhuong.quan)));
         if (goiYPhuong && nhanGoiY) { dapAn = goiYPhuong.phuong; nhanGoiYPhuong = true; }
+        // SRS-5.1zzzzzi (12/10/2026): bot vừa kể 2–3 phường của con đường ("…thuộc Phường An Đông, Phường Chợ Quán hay Phường Chợ Lớn"),
+        // khách chọn "cái thứ 2" → ô phường ghi nguyên văn "cái thứ 2", bot đáp "em chưa tìm thấy phường cái thứ 2". AI đọc câu bot vừa hỏi
+        // nên biết "cái thứ 2" là phường nào; code nhận khi phường đó qua cửa `phuongCot` và NẰM TRONG danh sách bot đã kể, trích dẫn có trong
+        // tin. Không có AI thì không đoán thứ tự bằng từ khoá — câu phường treo như cũ.
+        const luaChon = (btRow?.boc_tach as { phuong_lua_chon?: unknown } | null)?.phuong_lua_chon;
+        if (!nhanGoiYPhuong && Array.isArray(luaChon) && luaChon.length && laCheDoAi && bongAi) {
+          const kqLc = await bongAi;
+          const quanLc = pendingReq.listings?.district ?? null;
+          const chon = kqLc?.ket ? (kqLc.truong ?? [])
+            .filter((t) => t.khoa === "phuong" && trichCoTrongTin(t.trich_dan ?? "", text))
+            .map((t) => { const pc = phuongCot(String(t.gia_tri ?? ""), quanLc); return pc ? tenDayDu(pc) : null; })
+            .find((ten) => !!ten && luaChon.includes(ten)) : null;
+          if (chon && quanLc) { goiYPhuong = { phuong: chon, quan: quanLc, duong: "" }; dapAn = chon; nhanGoiYPhuong = true; }
+        }
         // SRS-5.1zk (bắn thử thu-dc4-08: hỏi phường, khách "nhà ở 77 hẻm 3m Xô Viết Nghệ Tĩnh" → địa chỉ luật giữ "3m"): chế độ
         // `ai` — địa chỉ trong câu trả lời câu phường lấy của AI (bỏ bề rộng), tên đường AI ghi cột street; luật chỉ khi AI hỏng.
         const kqAiPhuong = laCheDoAi && bongAi ? await bongAi : null;
