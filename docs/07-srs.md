@@ -3639,6 +3639,56 @@ Ngoài e2e:
 
 e2e **1238/1238**.
 
+
+### SRS-5.1zzzzzg · Test Zalo của chủ dự án: "2 chiều" thành hẻm 2m, "3 tầng có lửng" bị đoán, ý thêm trùng, giá in "16 tỏi" (12/10/2026)
+
+`[nguồn: chủ dự án test Zalo 09–12/10/2026 (tin nhà phố Trương Đình Hội, Phường Phú Định), dán nguyên hội thoại: "ổn chưa ta"; đối chiếu `listings` + `listing_facts` của tin đó]`
+
+**Ca gốc.** Bản nháp in "Bán nhà mặt tiền 2m đường Trương Đình Hội …, giá 16 tỏi", "🏗 trệt + lửng + 1 lầu", "📝 Thêm: rộng thoải mái · đường lớn 2 chiều em rộng thoải mái".
+Khách nói: "mặt tiền là đường trương đình hội, đường lớn 2 chiều em rộng thoải mái", "3 tầng có lửng em ơi", "16 tỏi em". DB: `alley_width_m` = 2, fact
+`do_rong_hem` = "nhà mặt tiền đường Trương Đình Hội, đường lớn 2 chiều" (luật ghi nguyên câu), `ket_cau` lượt chốt = "trệt + lửng + 1 lầu", `price_vnd` đúng 16 tỷ.
+Hai tin ngày 10/10 ("mặt tiền 8m em", "sâu 20 nở hậu 9m") không có trong `messages`: bridge chưa đăng nhập Zalo hôm đó, không phải lỗi bot.
+
+**Lớp lỗi (1) — số đo lấy SỐ ĐẦU TIÊN trong chữ, không đòi đơn vị.** Nhánh `do_rong_hem` / `do_rong_duong` của `listing_facts_sync_cols` lấy `[0-9]+` đầu
+tiên của câu trả lời; bộ kiểm bằng chứng (`kiemGiaTri` / `kiemGiaTriNhe`) cũng lấy số đầu tiên cho mọi ô số đo mét. "2 chiều", "3 xe máy" là số đếm.
+- **Sửa:** `soDoMet` (kiem-bang-chung.ts) — số kèm m / mét, hoặc số trơn không có chữ đứng sau; dùng cho `ngang`, `dai`, `no_hau`, `do_rong_hem`,
+  `do_rong_duong`, `cach_mat_tien`. Migration `20261012b`: nhánh độ rộng SQL cùng luật (thử trên DB 12 câu mẫu, kể cả "hẻm 45 Nguyễn Trãi rộng 4m" → 4,
+  bản cũ ra 45). Mock e2e chép cùng luật.
+- **Chỗ khác cùng lớp:** nhánh `chieu_dai` (20261012a) và `mat_tien` đọc số từ câu đã chuẩn hoá "Nm" do code viết, không từ chữ khách, nên không dính.
+  Bộ đọc tiền `docTien` không đọc "16 toi" / "16 cu" (không dấu) trong khi `TIEN_CD` nhận: còn, chưa sửa lượt này, vì phải đổi cả `parse_vnd` + `tien.json`.
+
+**Lớp lỗi (2) — đọc câu KỂ bằng bộ đọc câu ĐÁP có/không.** `docTraLoiLung` sinh ra để đọc câu đáp "N tấm đó có tính cả gác lửng không"; nhánh trong
+`kiemDeXuat` dùng nó cho mọi cụm có số tầng + lửng, nên chữ "có" của "3 tầng **có** lửng" (nhà có lửng) thành "có, tính cả lửng" → trệt + lửng + 1 lầu. Cùng câu đó,
+SQL `boc_thong_so` lại đọc lửng NGOÀI số tầng (trệt + lửng + 2 lầu); và "4 tầng tính cả lửng" SQL ra trệt + lửng + 3 lầu, ngược với `ketCauTheoLung`. Hai tầng
+hiểu một câu theo hai cách, lượt chốt tin đè cách này lên cách kia. Câu hỏi lửng lại không bao giờ được hỏi vì kết cấu đã có chữ "lửng".
+- **Sửa:** `DEM_LUNG_RO` + `lungChuaRoDem` (khop-cau-tra-loi.ts): "N tầng/tấm" + lửng mà không nói tính / gồm / thêm / ngoài / riêng → mơ hồ. Nhánh `kiemDeXuat`
+  chỉ đổi kết cấu khi cụm nói rõ; `soTamCanHoiLung` và `cauHoiLung` hỏi câu lửng cả khi kết cấu đã có lửng nếu lời khách mơ hồ; `lung_goi_y.co_lung` để câu
+  đáp "không" hiểu là lửng ngoài (trừ "không có lửng" nói rõ). Migration `20261012b`: `boc_thong_so` đọc "tính cả / gồm / bao gồm lửng" là lửng trong.
+- **Chỗ khác cùng lớp:** câu đáp có/không khác (`laDongY`, `laCauCoKhong`) đã đọc câu bot vừa hỏi (`kiemTraLoiCau`, SRS-5.1zzzzzc); soát hết là việc V2
+  còn treo.
+
+**Lớp lỗi (3) — "trùng" so bằng chuỗi bằng nhau.** Lượt chốt tin bỏ ý thêm khi bằng đúng chuỗi một ý AI đã ghi; "đường lớn 2 chiều em rộng thoải mái" khác chuỗi
+"rộng thoải mái" nên thêm dòng thứ hai.
+- **Sửa:** so cùng ý (`trungY` qua `boKeRieng`) với ý thêm AI đã ghi, giữ cả phép bằng chuỗi (cụm toàn hư từ như "đang ở" `trungY` không bắt). Ý chữ khách
+  ghi tay không tính: đó có thể là rác lượt chốt đang sửa (SRS-5.1zzzd).
+- **Chỗ khác cùng lớp:** ý thêm từng lượt đã so cùng ý (`laBoSungTrung`).
+
+**Lớp lỗi (4) — bảng đơn vị hiển thị chép tay, lệch bảng đơn vị đọc.** `donViGiaDep` (bộ in giá một nguồn) tự liệt kê đơn vị, thiếu "tỏi" có dấu và "củ" mà
+`TIEN_CD` / `docTien` đều đọc, nên "16 tỏi" in nguyên lên tiêu đề và dòng giá dù `price_vnd` đúng.
+- **Sửa:** `donViGiaDep` đủ đơn vị của `TIEN_CD`; `bot/tests/don-vi-hien-thi.mjs` sinh ca từ chính `TIEN_CD` nên thêm đơn vị đọc mà quên bộ in là đỏ.
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZG-01 / 01b / 01c | "đường lớn 2 chiều" (ca gốc), "hẻm 3 xe máy tránh nhau" (mới) → không bề rộng; "hẻm 4m" → 4 | 01b đỏ khi bỏ luật số đo ở mock (= SQL). Ca gốc đi đường luật ghi nguyên câu mà mock không tái hiện đúng; luật SQL kiểm bằng truy vấn trên DB |
+| ZZZZZG-02 / 02b (+a) | "3 tầng có lửng", "nhà 4 tấm có gác lửng" → bot hỏi lửng, không ghi đoán; đáp "không em" → trệt + lửng + 2 lầu; "có, tính luôn lửng" → trệt + lửng + 2 lầu | cả bốn đỏ khi bỏ hỏi lửng mơ hồ; 02a đỏ khi bỏ `co_lung` |
+| ZZZZZG-03 | lượt chốt đọc ý trùng ý đã ghi → không thêm dòng | đỏ |
+| ZZZZZG-04 | "16 tỏi" → bản nháp "16 tỷ" | đỏ |
+
+Ngoài e2e: `kiem-bang-chung.mjs` ZZZZZG-K1…K4 (K2b đỏ khi bỏ `soDoMet`, K3 đỏ khi bỏ cổng `DEM_LUNG_RO`); `don-vi-hien-thi.mjs` (đỏ 10/45 khi bỏ bản sửa).
+e2e **1247/1247**. Không bắn production (chủ dự án 12/10: tiền API "tốn thế hết tiền rồi") — mọi kiểm ở đây offline.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -13,7 +13,7 @@
 import { docTien, giaTheoM2, TIEN_KD } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import { type CanTrongTin, trungY } from "./khop-cau-tra-loi.ts";
-import { cumPhongNguTheoTang, cungHoFact, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
+import { cumPhongNguTheoTang, cungHoFact, DEM_LUNG_RO, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, tenPhuongCot, phuongChuan, phuongSoCuTrongCau, phuongTrongTrich, phuongTuTenCu, quanTrongCau, viTriGhiDuoc } from "./khop-phuong.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
@@ -23,6 +23,19 @@ const boDau = (s: string): string =>
 /** Bản so khớp: bỏ dấu, ký hiệu thành khoảng trắng (giữ số thập phân, "/", "x"). */
 export const chuanSo = (s: string): string =>
   boDau(s).replace(/(\d),(\d)/g, "$1.$2").replace(/²/g, "2").replace(/[^a-z0-9./ ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * SRS-5.1zzzzzg (test Zalo 12/10: "mặt tiền là đường Trương Đình Hội, đường lớn 2 chiều" → độ rộng 2m, tin in "mặt tiền 2m"): số
+ * của ô SỐ ĐO MÉT phải là số đo — kèm m / mét, hoặc số trơn không có chữ đứng sau. "2 chiều", "3 xe" là số đếm, không phải mét.
+ * Bản cũ lấy SỐ ĐẦU TIÊN trong giá trị. SQL `listing_facts_sync_cols` nhánh độ rộng cùng luật (`20261012b`).
+ */
+const KHOA_SO_DO_M = new Set(["ngang", "dai", "no_hau", "do_rong_hem", "do_rong_duong", "cach_mat_tien"]);
+export function soDoMet(v: string): RegExpMatchArray | null {
+  return chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2")
+    .match(/(?<![\d.])\d+(?:\.\d+)?(?![\d.])(?=\s*(?:m|met)(?![a-z])|(?!\s*[a-z]))/);
+}
+const soCuaO = (khoa: string, v: string): RegExpMatchArray | null =>
+  KHOA_SO_DO_M.has(khoa) ? soDoMet(v) : chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
 
 export const KHOA_TIEN = ["gia", "tien_coc", "thu_nhap_thue"] as const;
 export const KHOA_SO = [
@@ -445,7 +458,7 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ng
     }
     case "dien_tich": case "ngang": case "dai": case "no_hau": case "do_rong_hem": case "do_rong_duong":
     case "cach_mat_tien": case "so_phong_ngu": case "so_wc": case "tang": {
-      const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
+      const m = soCuaO(d.khoa, v);
       if (!m) return "khong_phai_so";
       const n = Number(m[0]);
       if (laSoDemKhoang(d.khoa, v)) return "so_dem_la_khoang";
@@ -604,7 +617,7 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string,
       return kiemGiaTri(d, tin, viTri, kdCumSua, ngu);
     case "dien_tich": case "ngang": case "dai": case "no_hau": case "do_rong_hem": case "do_rong_duong":
     case "cach_mat_tien": case "so_phong_ngu": case "so_wc": case "tang": {
-      const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
+      const m = soCuaO(d.khoa, v);
       if (!m) return "khong_phai_so";
       const n = Number(m[0]);
       if (laSoDemKhoang(d.khoa, v)) return "so_dem_la_khoang";
@@ -730,7 +743,9 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {})
     // ghi kết cấu tính ra bằng cùng phép của câu hỏi lửng (`ketCauTheoLung`); một ô ket_cau, không ghi thêm so_tang lệch nghĩa.
     if (KIEM_NHE && (d.khoa === "so_tang" || d.khoa === "ket_cau")) {
       const cumL = d.trich_dan ?? "";
-      const nL = soTangTrongDapLung(cumL), dapL = nL ? docTraLoiLung(cumL) : null;
+      // SRS-5.1zzzzzg: chỉ khi cụm nói RÕ lửng trong / ngoài số tầng ("tính cả lửng", "lửng thêm nữa"). "3 tầng có lửng" — chữ "có" là
+      // nhà CÓ lửng, không phải "có, tính cả" của câu đáp — `docTraLoiLung` sinh ra để đọc câu ĐÁP câu hỏi lửng, không đọc câu kể.
+      const nL = DEM_LUNG_RO.test(chuanSo(cumL)) ? soTangTrongDapLung(cumL) : null, dapL = nL ? docTraLoiLung(cumL) : null;
       if (nL && (dapL === "co" || dapL === "them") && trichCoTrongTin(cumL, tin)) {
         if (!dat.some((x) => x.khoa === "ket_cau" || x.khoa === "so_tang")) dat.push({ ...d, khoa: "ket_cau", gia_tri: ketCauTheoLung(nL, dapL).floors_text, giu_gia_tri: true });
         continue;

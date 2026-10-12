@@ -833,7 +833,8 @@ class RpcCall {
         // listing_facts_sync_cols + boc_thong_so (rút gọn): đủ để điểm FR-177 đo được.
         // 20/09/2026: đáp án mặt tiền dạng "ngang 4m dài 16m" (boc_thong_so thật đọc hai chiều) — mock từng parseFloat cả câu → NaN.
         if (a.p_question === "mat_tien") { const mt = /(?:ngang|mat tien|mặt tiền|mt)?\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (mt) l.frontage_m = parseFloat(mt[1].replace(",", ".")); const dm = /(?:dài|dai|dọc|doc|x)\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (dm) l.length_m = parseFloat(dm[1].replace(",", ".")); if (l.frontage_m != null && l.length_m != null && l.area_m2 == null) l.area_m2 = Math.round(l.frontage_m * l.length_m * 10) / 10; }
-        if (a.p_question === "do_rong_hem") { const m = /(\d+(?:[.,]\d+)?)/.exec(a.p_answer); if (m) l.alley_width_m = parseFloat(m[1].replace(",", ".")); if (/xe hơi|xe hoi/i.test(a.p_answer)) l.access_type = l.access_type ?? "hem_xe_hoi"; }
+        // 20261012b: độ rộng chỉ nhận số đo (kèm m / mét, hoặc số trơn không có chữ đứng sau), cùng SQL listing_facts_sync_cols.
+        if (a.p_question === "do_rong_hem") { const m = /(?:^|[^\d.,])(\d+(?:[.,]\d+)?)(?:\s*(?:m|mét|met)(?![\p{L}])|(?![\d.,])(?!\s*\p{L}))/u.exec(a.p_answer); if (m) l.alley_width_m = parseFloat(m[1].replace(",", ".")); if (/xe hơi|xe hoi/i.test(a.p_answer)) l.access_type = l.access_type ?? "hem_xe_hoi"; }
         // ─── SRS-5.1zzzv (08/10/2026, chủ dự án chat thử …hua2: "trên kia nói hẻm xe hơi xong xuống dưới nó hỏi hẻm xe hơi"):
         // các nhánh `listing_facts_sync_cols` (schema.sql) mà DB giả chưa chép — trang chat thử chạy trên DB giả nên ô AI đã ghi
         // không tới cột, bản nháp / điểm tin hỏi lại. Chép đúng nhánh thật; `bot/tests/mock-trigger-du.mjs` đỏ khi trigger có nhánh

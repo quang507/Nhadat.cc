@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-12 08:56 (giờ VN)
+-- Sinh lúc: 2026-10-12 11:27 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -2239,6 +2239,12 @@ begin
       if j->>'floors' is null and k ~ '(cap 4|nha c4|\mc4\M)' then j := j || jsonb_build_object('floors', 1); end if;
     else
       j := j || jsonb_build_object('floors', n_lau + 1);
+    end if;
+    -- 20261012b (SRS-5.1zzzzzg): "4 tầng tính cả lửng" — lửng nằm TRONG số tầng → trệt + lửng + 2 lầu (floors = 3, không tính lửng), cùng
+    -- phép `ketCauTheoLung` (TS). Bản cũ cộng lửng ra ngoài: trệt + lửng + 3 lầu — hai tầng hiểu ngược nhau một câu.
+    if co_lung and n_lau is null and (j->>'floors')::int > 1
+       and k_phu ~ '(tinh ca|tinh luon|gom ca|gom luon|bao gom)\s*(?:(?:gac|tang)\s*)?lung' then
+      j := j || jsonb_build_object('floors', (j->>'floors')::int - 1);
     end if;
     if j->>'floors' is not null then
       parts := array[]::text[];
@@ -4578,7 +4584,9 @@ begin
     update listings set direction = btrim(v_txt), specs_source = bac
      where id = new.listing_id and (direction is null or de);
   elsif new.question in ('do_rong_hem', 'do_rong_duong') and not (j ? 'alley_width_m') then
-    v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
+    -- 20261012b: số đo (kèm m / mét, hoặc số trơn không có chữ đứng sau) — "đường lớn 2 chiều" không ra 2m.
+    v_num := nullif((regexp_match(replace(public.bo_dau(lower(v_txt)), ',', '.'),
+      '(?:^|[^0-9.])([0-9]+(?:[.][0-9]+)?)(?:\s*(?:m|met)(?![a-z])|(?![0-9.])(?!\s*[a-z]))'))[1], '')::numeric;
     if v_num is not null and v_num between 1 and 40 then
       update listings set alley_width_m = v_num,
              -- 20261001a: "đường nhựa 6m" (độ rộng ĐƯỜNG trước nhà / đất) là mặt tiền đường, không phải hẻm xe tải.
