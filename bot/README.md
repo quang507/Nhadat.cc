@@ -200,6 +200,11 @@ dính, script đã xử lý:
 - Còn phải làm tay sau khi dựng: Vault (`ANTHROPIC_API_KEY`, `BRIDGE_SECRET`…), `nap-duong.mjs`, `thu-du-an.mjs`,
   deploy 9 function (`deploy-bot.yml` — lần đầu lấy `verify_jwt` theo bảng ở đầu file này), `dong-bo-prompt --day`,
   biến môi trường Vercel, `.env` bridge.
+- **Đăng nhập Google của web** (bắt 12/10/2026: web báo "Unsupported provider: provider is not enabled"): cấu hình Auth
+  là CÀI ĐẶT project, không nằm trong `schema.sql` nên dựng lại là mất. Bên Google Cloud thêm redirect URI
+  `https://<ref>.supabase.co/auth/v1/callback` vào OAuth client cũ (đã "In production") và tạo secret mới, cất vào GitHub
+  secret `GOOGLE_OAUTH_CLIENT_SECRET`; rồi chạy `dang-nhap-google.yml` với Client ID — nó đặt Google provider + Site URL +
+  Redirect URLs qua Management API, không cần mở dashboard.
 
 Thủ tục tay cũ (giữ để tham chiếu):
 
