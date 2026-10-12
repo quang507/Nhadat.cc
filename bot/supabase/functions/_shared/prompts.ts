@@ -605,6 +605,8 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   dang_luon_thieu: "Dạ tin chỉ còn thiếu {thieu} là lên kệ được {ac}. {Ac} cho em xin {thieu} nha, có là em đăng luôn không hỏi lại.",
   // SRS-5.1zzzzz (khách mô phỏng 11/10: chủ nhà nói không biết phường, bot hỏi lại bốn lần rồi "tin còn thiếu một chút"): thiếu
   // phường để lên kệ mà không tra được (hoặc chủ nhà đã nói không biết) → nói đúng thứ thiếu và CHỖ tìm, một lần.
+  // SRS-5.1zzzzze (chủ dự án chọn (b)): khách không biết phường → nói thẳng một lần, giữ tin, không hỏi lại.
+  dang_giu_thieu_phuong: "Dạ tin cần có phường mới lên kệ được {ac} ạ. Em giữ tin ở đây, khi nào {ac} biết phường (trên sổ hồng hay hoá đơn điện nước) thì nhắn em một tiếng là em đăng liền.",
   dang_luon_thieu_phuong: "Dạ tin chỉ còn thiếu phường là lên kệ được {ac}. Phường có ghi trên sổ hồng (dòng địa chỉ thửa đất) hoặc hoá đơn điện nước đó {ac}, {ac} xem giúp em rồi nhắn em, có là em đăng luôn không hỏi lại.",
   // SRS-5.1zzy: "đăng đi" khi thiếu phường mà tra được phường từ tên đường — {goi_y} là câu xác nhận phường code tra ra.
   dang_luon_goi_y_phuong: "Dạ để em đăng liền. {goi_y} {Ac} gật là tin lên kệ luôn ạ.",

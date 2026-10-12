@@ -371,8 +371,12 @@ export async function bocRaoBangModel(
     }],
   });
   const ket = docLong(DeXuatRaoDoc, r.parsed_output);
+  // SRS-5.1zzzzze (khách mô phỏng lần bảy, môi giới đã có 2 căn: "căn nữa hẻm An Dương Vương 4x10 cấp 4 5 tỷ" → AI đánh `can: 3` cho mọi
+  // ô theo NGỮ CẢNH hội thoại; mọi chỗ đọc (`docAiChinh`, so cột, kiểm lệch) hiểu `can` là số căn TRONG TIN và bỏ căn > 1 → tin mới mở
+  // RỖNG). Tin chỉ có MỘT số căn là tin về một căn: số đó không mang nghĩa chia căn. Chuẩn hoá ở đây, một chỗ, trước mọi nơi đọc.
+  const soCanTrongTin = ket.success ? new Set(ket.data.truong.map((t) => t.can).filter((c) => c != null)).size : 0;
   // Câu AI nói "đã trả lời" kèm giá trị mà truong chưa có khoá đó → thành một đề xuất thường (code kiểm trích dẫn + giá trị như mọi ô).
-  const truongDu = ket.success ? [...ket.data.truong.map((t) => ({ ...t })),
+  const truongDu = ket.success ? [...ket.data.truong.map((t) => (soCanTrongTin <= 1 ? { ...t, can: null } : { ...t })),
     ...(ket.data.khong_can_hoi ?? [])
       .filter((k) => typeof k.gia_tri === "string" && k.gia_tri.trim() && (MOI_KHOA as readonly string[]).includes(k.khoa) && !ket.data.truong.some((t) => t.khoa === k.khoa))
       .map((k) => ({ khoa: k.khoa, gia_tri: String(k.gia_tri).trim(), trich_dan: k.trich_dan, can: null }))] : [];

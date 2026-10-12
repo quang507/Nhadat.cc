@@ -461,7 +461,10 @@ export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null
       : `Dạ ngoài ${phi} thì bên em không thu thêm khoản nào ạ. Thuế, phí sang tên là theo quy định nhà nước, em không tư vấn con số được, ${ac} hỏi bên công chứng giúp em nha.`);
   } else if (phi && (chuDe === "phi" || (dung("dich_vu") && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)))) {
     // Câu phí CHƯA có con số (vai chưa rõ) thì vẫn nói lại để nơi gọi nối câu hỏi vai — hỏi vai mới là cách trả lời đúng lần hai.
-    ra.push(botDaNoi.includes(phi) && /\d/.test(phi) ? `Dạ bên em chỉ có đúng khoản phí đó thôi ạ, ngoài ra không thu thêm gì.` : `Dạ ${phi} ạ.`);
+    // SRS-5.1zzzzze (khách mô phỏng lần bảy: "phí 1% kia lấy từ bên bán hay bên mua?" → "Dạ bên em chỉ có đúng khoản phí đó thôi ạ"):
+    // câu soạn sẵn chọn theo CHỦ ĐỀ nên trả lời một câu khác câu khách hỏi. Con số đã nói rồi thì khách đang hỏi điều KHÁC về phí (ai
+    // trả, khi nào thu, còn gì nữa) — để model trả lời theo luật phí (lượt soát nhận luật phí làm nguồn), không ghép câu soạn sẵn.
+    if (!(botDaNoi.includes(phi) && /\d/.test(phi))) ra.push(`Dạ ${phi} ạ.`);
   }
   if (dung("dich_vu", "khac") && /\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
     ra.push(`Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`);

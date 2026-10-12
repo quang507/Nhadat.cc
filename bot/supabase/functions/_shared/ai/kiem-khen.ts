@@ -37,8 +37,8 @@ const KetSoat = z.object({ nhan_xet: z.array(NhanXet) });
 export type NhanXetLLM = z.infer<typeof NhanXet>;
 const FORMAT = dinhDangLong(KetSoat);
 
-const LUAT = `SOÁT LỜI BOT GỬI CHỦ NHÀ — bot chỉ được KHẲNG ĐỊNH điều có NGUỒN: lời chủ nhà, thông tin đã ghi, hoặc dữ liệu tra cứu của
-hệ thống. Kiến thức riêng của người viết KHÔNG phải nguồn (tên phường của một con đường, giá khu vực, quy hoạch, dự án…).
+const LUAT = `SOÁT LỜI BOT GỬI CHỦ NHÀ — bot chỉ được KHẲNG ĐỊNH điều có NGUỒN: lời chủ nhà, thông tin đã ghi, dữ liệu tra cứu của
+hệ thống, hoặc CHÍNH SÁCH CỦA BÊN EM (phí bên em, ai trả, khi nào thu — khối đó là chính sách thật, nói đúng nó là có nguồn). Kiến thức riêng của người viết KHÔNG phải nguồn (tên phường của một con đường, giá khu vực, quy hoạch, dự án…).
 Đọc lời bot, liệt kê MỌI câu / vế KHẲNG ĐỊNH đặc điểm căn nhà hoặc khu vực, ĐỊA DANH (đường / hẻm thuộc phường, quận nào; gần chỗ
 nào), giá / thị trường, pháp lý, quy hoạch, dự án, hay khen dựa trên một đặc điểm (hẻm sâu, ô tô vào tận nhà, gần chợ, khu yên tĩnh,
 xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "khách chuộng …").
@@ -50,7 +50,7 @@ xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "kh�
   với hua_khong_lam = true, can_cu = null.
 - LIỆT KÊ cả câu nói TRẠNG THÁI TIN ("em vừa đăng tin rồi ạ", "tin mình lên sóng rồi", "bài đang chạy") với noi_trang_thai_tin = true,
   can_cu = null — code đối chiếu trạng thái thật của tin.
-- can_cu: cụm chép NGUYÊN VĂN từ LỜI CHỦ NHÀ, THÔNG TIN ĐÃ GHI hoặc DỮ LIỆU TRA CỨU nói ĐÚNG điều được khẳng định — gần giống thì không tính
+- can_cu: cụm chép NGUYÊN VĂN từ LỜI CHỦ NHÀ, THÔNG TIN ĐÃ GHI, DỮ LIỆU TRA CỨU hoặc CHÍNH SÁCH CỦA BÊN EM nói ĐÚNG điều được khẳng định — gần giống thì không tính
   ("hxh" là hẻm xe hơi, KHÔNG phải "hẻm sâu"; "4x15" không phải "nở hậu"). Không có thì null.
 - danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ ("khu Hà Huy Giáp đất vàng", "khu đó bán được lắm", "giá
   khu này đang lên", "quận 7 đang sốt") — bot không có số liệu thị trường nên câu đó luôn bị bỏ; tên khu chủ nhà nói KHÔNG phải căn
@@ -95,6 +95,8 @@ export async function soatNhanXetBangModel(
   daGhi = "",
   doiTuong: "chu_nha" | "nguoi_mua" = "chu_nha",
   duLieuTra = "",
+  /** SRS-5.1zzzzze: chính sách thật của bên em (luật phí) — nguồn hợp lệ cho câu bot nói về phí / ai trả. */
+  chinhSach = "",
 ): Promise<{ nhanXet: NhanXetLLM[]; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
@@ -103,7 +105,7 @@ export async function soatNhanXetBangModel(
     system: [{ type: "text", text: doiTuong === "nguoi_mua" ? LUAT_MUA : LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
       role: "user",
-      content: `${doiTuong === "nguoi_mua" ? "LỜI KHÁCH MUA" : "LỜI CHỦ NHÀ"}:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}${duLieuTra ? `DỮ LIỆU TRA CỨU:\n${duLieuTra.slice(0, 800)}\n` : ""}LỜI BOT:\n${loiBot.slice(0, 800)}`,
+      content: `${doiTuong === "nguoi_mua" ? "LỜI KHÁCH MUA" : "LỜI CHỦ NHÀ"}:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}${duLieuTra ? `DỮ LIỆU TRA CỨU:\n${duLieuTra.slice(0, 800)}\n` : ""}${chinhSach ? `CHÍNH SÁCH CỦA BÊN EM:\n${chinhSach.slice(0, 1800)}\n` : ""}LỜI BOT:\n${loiBot.slice(0, 800)}`,
     }],
   });
   const k = docLong(KetSoat, r.parsed_output);
