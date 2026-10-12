@@ -49,7 +49,7 @@ jobs:
             curl -sS --fail-with-body "$API" -H "Authorization: Bearer $TOKEN" \
               | jq '{site_url, uri_allow_list, external_google_enabled, external_google_client_id}'
           }
-          echo "== Trước:"; TRUOC=$(xem); echo "$TRUOC"
+          TRUOC=$(xem); echo "::notice title=Trước::$(echo "$TRUOC" | jq -c .)"
 
           SITE_URL="${SITE_URL%/}"
           case "$SITE_URL" in https://*) ;; *) echo "::error::site_url phải bắt đầu bằng https://"; exit 1 ;; esac
@@ -68,10 +68,10 @@ jobs:
 
           MA=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH "$API" \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$BODY")
-          echo "PATCH → HTTP $MA"
+          echo "::notice title=PATCH::HTTP $MA"
           case "$MA" in 2*) ;; *) echo "::error::Supabase từ chối (HTTP $MA)"; exit 1 ;; esac
 
-          echo "== Sau:"; SAU=$(xem); echo "$SAU"
+          SAU=$(xem); echo "::notice title=Sau::$(echo "$SAU" | jq -c .)"
           if [ -n "$CLIENT_ID" ] && [ "$(echo "$SAU" | jq -r .external_google_enabled)" != "true" ]; then
             echo "::error::PATCH trả 2xx nhưng Google vẫn chưa bật"; exit 1
           fi
