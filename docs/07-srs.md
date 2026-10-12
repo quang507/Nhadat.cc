@@ -3754,7 +3754,7 @@ không làm đường thành hẻm.
 (nhãn chính là giá trị của ô → điền ô khi còn trống), thổ cư và nội thất cùng một bảng.
 
 **(9) Cột `street` = tên dự án.** Lớp lỗi: trigger `listings_boc_thong_so` điền street bằng `boc_ten_duong(location_raw)`, mà với căn hộ location_raw là TÊN DỰ ÁN.
-Sửa: migration `20261012c` bỏ street khi chữ đọc ra trùng tên dự án tin đang gắn. Kiểm `bot/tests/sql/street-ten-du-an.sql` (đỏ khi chưa áp migration).
+Sửa: migration `20261012c` bỏ street khi chữ đọc ra trùng tên dự án tin đang gắn (đã áp production 12/10 qua `apply-migration.yml`, `schema.sql` sinh lại). Kiểm `bot/tests/sql/street-ten-du-an.sql` (đỏ khi chưa áp migration).
 
 **(10) Người bán mới "hạng Vàng".** Đã soát: hạng = trung bình điểm tin (`diem_nguoi_ban` → `hang_theo_diem`, ≥ 80 là Vàng); một tin 85/100 là Vàng đúng công thức
 SRS-5.1zzf. Không phải lỗi; đổi công thức là quyết định của chủ dự án.
