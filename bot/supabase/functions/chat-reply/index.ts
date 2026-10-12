@@ -83,7 +83,7 @@ import { docHoiLai, type HoiLaiDoc, locGiaTriHoSo, trichCoTrongTin } from "../_s
 import { chonDiaDanh, coChuPhuong, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, phuongTrungTenQuan, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTienIchQuanh, timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
-import { cauKhoangCachKhongNguon, chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiModel } from "../_shared/ai/tro-ly.ts";
+import { cauKhoangCachKhongNguon, chayTroLyMua, DAU_RA_CONG_CU, doiLenhCuoiTroLy, LENH_CUOI_JSON, type PhanHoiModel } from "../_shared/ai/tro-ly.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, gonGiaTriFact, laChiDonViHanhChinh, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laThaCamXuc, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, docTraLoiConBan, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
@@ -135,6 +135,9 @@ const cauHoiLaiDuPhong = (chuDe: string | null | undefined, ac: string): string 
 const CHI_DAN_CHU_DE: Record<string, string> = {
   thi_truong: " Đây là câu hỏi về THỊ TRƯỜNG (giá khu vực, dễ bán không, nên rao giá nào): hệ thống CHƯA có số liệu giao dịch khu vực — nói thật là bên em chưa có số liệu chốt đủ chắc để báo, KHÔNG đưa bất kỳ con số nào, KHÔNG nói lại giá căn mình như câu trả lời, KHÔNG hứa sẽ gửi số liệu.",
   phi: " Đây là câu hỏi về TIỀN phải trả cho bên em: trả lời theo luật phí — không thu đồng nào trước, phí chỉ thu khi giao dịch thành công (con số theo luật phí, chưa rõ chủ nhà hay môi giới thì không nói số); KHÔNG nói phải nhờ người phụ trách.",
+  // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-thue): "khi nao co khach thi bao minh nha" → AI xếp dich_vu → "câu này em nhờ anh chị phụ trách"
+  // + việc ❓ cho admin, trong khi chính bot vừa hứa "có khách quan tâm là em báo liền". Việc bên em LÀM với tin là thứ hệ thống có câu trả lời.
+  quy_trinh: " Chủ nhà nhờ / hỏi việc bên em SẼ LÀM với tin: nhờ báo khi có khách thì nhận lời ngắn — có khách quan tâm là em báo liền; bao lâu bán được thì nói thật tuỳ giá và khu vực, KHÔNG hứa số ngày; tin lên kệ là bên em rao ngay. KHÔNG nói phải nhờ người phụ trách.",
   dich_vu: " Đây là câu hỏi về CÁCH BÊN EM LÀM VIỆC: phí / đăng tin / gửi ảnh trả lời theo hướng dẫn hệ thống; bao lâu bán được thì nói thật là tuỳ giá và khu vực, tin lên kệ là bên em rao ngay và báo khi có khách quan tâm — KHÔNG hứa số ngày.",
   ve_bot: " Đây là câu hỏi về BOT: nói thật em là trợ lý AI của AI Ơi Nhà Đất, việc cần người thật có anh chị phụ trách.",
   // SRS-5.1zzzzy (khách mô phỏng 11/10: bác hỏi "cái chữ 'pháp lý' là sao cháu" → "Dạ tin ghi pháp lý sổ hồng riêng ạ"): hỏi NGHĨA
@@ -645,6 +648,11 @@ const GIONG_RE_KD = /giong (giong )?(vay|nay|kieu nay|nhu vay|the nay)|tuong tu|
 // chốt lịch) không khớp — chỉ khớp khi khách xin SỐ CỦA BÊN EM hay đòi gọi.
 // 20/09/2026 (bắn thật mau-y-C): khách mua "cho mình xin số chủ nhà đi" — đường đi là qua người phụ
 // trách (FR-173), không đưa SĐT chủ nhà qua chat (DH-02). Bản trước chỉ nói "chưa có căn nào khớp".
+/** Nhãn tìm kiếm mà chính là giá trị của một ô tin (nhãn → [ô, giá trị ghi]) — gắn nhãn thì điền ô đó khi ô còn trống (FR-236, SRS-5.1zzzzzh). */
+export const NHAN_LA_O: Record<string, [string, string]> = {
+  tho_cu_100: ["tho_cu", "100%"],
+  noi_that_full: ["noi_that", "full nội thất"],
+};
 const XIN_SO_CHU_RE = /\b(?:xin|cho|lay|gui|co|inbox)\b[^.?!]{0,25}\b(?:so|sdt|so dien thoai|zalo|lien he)\b[^.?!]{0,20}\b(?:chu nha|chu|nguoi ban|chinh chu|ben ban)\b|\bso\s+(?:dt\s+|dien thoai\s+)?(?:cua\s+)?chu\s*(?:nha)?\b|\blien he\s+(?:truc tiep\s+)?(?:voi\s+)?chu nha\b/;
 const VOICE_RE_KD = /goi dien|goi (cho|lai) (em|anh|chi|toi|minh|tui)|\balo\b(?=[^.!?]*\b(?:duoc|dc|khong|ko|goi|nghe|may)\b)|\bvoice\b|\bcall\b|goi zalo|goi video|noi chuyen (dien thoai|qua dien thoai)|dien thoai cho (em|anh|chi|toi)|so (dien thoai|dt) (cua )?(em|be|ben em|ben minh|shop)/;
 // Khách chấm sao sau buổi xem (FR-65): "4 sao", "3/5", "chấm 4", "5 điểm".
@@ -1509,9 +1517,14 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   const cauMauDaSua = (k: string, loai?: string | null): boolean => CAU_MAU_DB.has(k) || (!!loai && CAU_MAU_DB.has(`${k}@${loai}`));
   /** Dòng ĐÃ BIẾT về căn cho model (khuôn demo AOND): chỉ cột đã có, viết kiểu nói — model không được đọc lại số này. */
   const daBietNgan = (l: { property_type?: string | null; street?: string | null; location_raw?: string | null; ward?: string | null; district?: string | null;
-    floors_text?: string | null; bedrooms?: number | null; price_vnd?: number | string | null; area_m2?: number | string | null; legal_status?: string | null } | null | undefined): string => {
+    floors_text?: string | null; bedrooms?: number | null; price_vnd?: number | string | null; area_m2?: number | string | null; legal_status?: string | null;
+    deal?: string | null } | null | undefined): string => {
     if (!l) return "";
     const p: string[] = [];
+    // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-thue): khách nói "cho thuê căn hộ" từ lượt đầu, lượt hai bot hỏi "Anh chị định bán hay cho thuê
+    // căn này vậy?" — dòng ĐÃ BIẾT không có bán / thuê nên model tưởng chưa biết. Điều đã biết phải có mặt trong ĐÃ BIẾT.
+    if (l.deal === "cho_thue") p.push("cho thuê");
+    else if (l.deal === "ban") p.push("bán");
     if (l.property_type) p.push(loaiDoc(l.property_type));
     // SRS-5.1zzzzj: địa chỉ qua MỘT nguồn in (`diaChiHienThi`) — model chép lại chữ nào thì khách đọc chữ đó, nên không đưa chữ khách gõ thô.
     const dc = diaChiHienThi({ location_raw: l.location_raw ?? l.street, street: l.street, ward: l.ward, district: l.district });
@@ -2258,7 +2271,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // "tân thạnh" với Phường Tân Thành (Phú Mỹ) và ghi phường đó, trong khi xã CŨ Tân Thạnh Đông nay là Xã Phú Hòa Đông. Bộ dò chung
       // `phuongNhacTrongCau` (tên mới + tên cũ, tên dài trùm tên ngắn) là chủ của "câu nhắc phường nào": bảng `wards` khớp ra một
       // phường mà bộ chung đọc ra phường KHÁC → theo bộ chung. Bảng `wards` vẫn lo chữ gõ đảo / sai một ký tự bộ chung không đọc.
-      const tpBang = timPhuongTrongCau(tin, dsPhuongTuDien);
+      // SRS-5.1zzzzzh: khớp GẦN ĐÚNG (đảo chữ / sai một ký tự) chỉ tin được khi khách đang trả lời câu PHƯỜNG — ở câu khác, chữ gần giống
+      // tên phường thường là tên đường ("Trần Hưng" ≈ "Tân Hưng"). Gần đúng ngoài câu phường → không ghi (bot sẽ hỏi phường).
+      const tpTho = timPhuongTrongCau(tin, dsPhuongTuDien);
+      const tpBang = tpTho && (!tpTho.ganDung || cauDangHoi === "phuong") ? tpTho : null;
       const pnChung = tpBang ? phuongNhacTrongCau(tin) : null;
       const pn = pnChung && pnChung.ten_day_du !== tpBang?.phuong.ten_day_du ? pnChung : null;
       const tp = pn ? null : tpBang;
@@ -2272,7 +2288,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       }
       if (!l) return null;
       const quanMacDinh = (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
-      const quanBiet = l.district && !quanMacDinh ? String(l.district) : null;
+      // SRS-5.1zzzzzh: quận khách nói NGAY TRONG CÂU này cũng là quận đã biết ("… quận 5" cùng lượt — cột quận chưa kịp ghi).
+      const quanCot = l.district && !quanMacDinh ? String(l.district) : null;
+      const quanBiet = quanCot ?? bocQuan(boDau(tin), tin);
       let ten = pn?.ten_day_du ?? tp?.phuong.ten_day_du ?? null;
       let quanPhuong = pn?.quan_cu ?? tp?.phuong.quan_cu ?? null;
       if (tron) {
@@ -2280,7 +2298,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const dd = await giaiDiaDanh(tron.ten, { tienTo: tron.tienTo, cauHoi, quanBiet });
         if (!dd || dd.nhom === "duong") return null;
         if (dd.nhom === "quan") {
-          if (quanBiet) return null;
+          if (quanCot) return null;
           const { error: qErr } = await client.from("listings").update({ district: dd.ten }).eq("id", listingId);
           if (qErr) { await ghiLoi(client, "chat-reply cap nhat quan (dia danh)", qErr.message); return null; }
           const { error: bErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { quan: dd.ten, quan_mac_dinh: false } });
@@ -2300,6 +2318,20 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (error) { await ghiLoi(client, "chat-reply ghi_fact_listing(phuong tu dien)", error.message); return null; }
       if (boQua) return null;
       console.log("chat-reply: phuong tu dien", pn ? "(bo chung)" : tp?.khop ?? tron?.ten, "→", ten);
+      return ten;
+    };
+    // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-thue): "căn hộ Sunrise City quận 7" — căn đã gắn dự án trong kho, kho có phường của dự án,
+    // vậy mà bot hỏi phường bốn lần và bảo khách "xem trên sổ hồng". Phường của căn trong dự án là phường của DỰ ÁN: lấy từ kho (qua cửa
+    // chuẩn `tenPhuongCot`, tên cũ → tên mới), không hỏi khách. Tin đã có phường thì thôi (không đè lời chủ nhà).
+    const phuongTuDuAn = async (listingId: string | null | undefined, da: { ward?: string | null; district?: string | null } | null | undefined,
+      wardDangCo: string | null | undefined): Promise<string | null> => {
+      if (!listingId || wardDangCo || !da?.ward) return null;
+      const ten = tenPhuongCot(da.ward, da.district ?? null);
+      if (!ten) return null;
+      const { error, boQua } = await ghiFact(client, { p_listing_id: listingId, p_question: "phuong", p_answer: ten, p_source: "du_an_kho" });
+      if (error) { await ghiLoi(client, "chat-reply phuong tu du an", error.message); return null; }
+      if (boQua) return null;
+      console.log("chat-reply: phuong tu kho du an →", ten);
       return ten;
     };
 
@@ -3113,15 +3145,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         if (fErr) await ghiLoi(client, "chat-reply ghi_fact_listing(nhan)", fErr.message);
         // FR-236 (bắn thật lx-43, 28/09): "sổ hồng riêng full thổ cư" chỉ thành NHÃN, ô thổ cư vẫn trống → điểm tin báo thiếu
         // "thổ cư bao nhiêu" và bot gợi ý hỏi lại thứ khách vừa nói. Nhãn thổ cư 100% điền ô thổ cư — chỉ khi ô còn trống.
-        if (them.includes("tho_cu_100")) {
-          const { data: tc, error: tcErr } = await client.from("listing_facts").select("id").eq("listing_id", lid).eq("question", "tho_cu").limit(1);
-          if (tcErr) await ghiLoi(client, "chat-reply doc tho_cu", tcErr.message);
-          else if (!(tc ?? []).length) {
-            const { error: tgErr } = await ghiFact(client, {
-              p_listing_id: lid, p_question: "tho_cu", p_answer: "100%", p_source: "seller_chat",
-            });
-            if (tgErr) await ghiLoi(client, "chat-reply ghi_fact_listing(tho_cu 100)", tgErr.message);
-          }
+        // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-thue): "full noi that, view ho boi" → nhãn "full nội thất", ô nội thất trống, bot vẫn
+        // coi nội thất là chưa biết. Cùng lớp với thổ cư: nhãn mà CHÍNH LÀ giá trị của một ô thì điền ô đó — một bảng `NHAN_LA_O`, không vá từng nhãn.
+        for (const [maNhan, [o, giaTri]] of Object.entries(NHAN_LA_O)) {
+          if (!them.includes(maNhan)) continue;
+          const { data: co, error: coErr } = await client.from("listing_facts").select("id").eq("listing_id", lid).eq("question", o).limit(1);
+          if (coErr) { await ghiLoi(client, `chat-reply doc ${o}`, coErr.message); continue; }
+          if ((co ?? []).length) continue;
+          const { error: gErr } = await ghiFact(client, { p_listing_id: lid, p_question: o, p_answer: giaTri, p_source: "seller_chat" });
+          if (gErr) await ghiLoi(client, `chat-reply ghi_fact_listing(${o} tu nhan)`, gErr.message);
         }
       } catch (e) {
         await ghiLoi(client, "chat-reply gan nhan", e);
@@ -4082,6 +4114,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
                   if (da) {
                     const { error: daUp } = await client.from("listings").update({ project_id: da.id, unit_status: "con_ban", last_confirmed_at: new Date().toISOString(), ...(da.district && !moi.district ? { district: da.district } : {}) }).eq("id", moi.id);
                     if (daUp) await ghiLoi(client, "chat-reply gan manh(gan du an)", daUp.message);
+                    else await phuongTuDuAn(moi.id, da, null);
                     if (!vt) vt = da.location_raw ? `${da.name}, ${da.location_raw}` : da.name;
                   }
                 }
@@ -4479,7 +4512,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // nhập) — không có trong kho thì không bịa. Chỉ gọi `match_projects` khi câu
     // có dấu hiệu tên dự án, kẻo mỗi tin chủ nhà tốn thêm một vòng DB (FR-171 h).
     type DuAnKho = {
-      id: string; name: string; developer?: string | null; district?: string | null;
+      id: string; name: string; developer?: string | null; district?: string | null; ward?: string | null;
       location_raw?: string | null; amenities?: unknown; description?: string | null; status_text?: string | null;
     };
     const coDauHieuDuAn = /\b(du an|chung cu|can ho|khu|city|plaza|residence|residences|tower|towers|park|garden|riverside|home|homes|villa|villas|ny'?ah|sunrise|vinhomes|masteri|akari|carina)\b/.test(tKD);
@@ -4488,7 +4521,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         ? client.rpc("match_projects", { p_text: text }).select(COT_DU_AN).then((r) => ((r.data ?? []) as DuAnKho[]).slice(0, 1))
         : Promise.resolve([] as DuAnKho[]),
       pendingReq?.listings?.project_id
-        ? client.from("projects").select("id, name, developer, district, location_raw, amenities, description, status_text, specs")
+        ? client.from("projects").select("id, name, developer, district, ward, location_raw, amenities, description, status_text, specs")
           .eq("id", pendingReq.listings.project_id).maybeSingle().then((r) => (r.data ? [r.data as DuAnKho] : []))
         : Promise.resolve([] as DuAnKho[]),
     ]);
@@ -4538,6 +4571,14 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const { error: gdErr } = await client.from("listings").update({ project_id: duAnNoi[0].id })
           .eq("id", pendingReq.listing_id).is("project_id", null);
         if (gdErr) await ghiLoi(client, "chat-reply gan du an", gdErr.message);
+        else if (pendingReq.listings) pendingReq.listings.project_id = duAnNoi[0].id;
+      }
+      // SRS-5.1zzzzzh: căn đã / vừa gắn dự án mà chưa có phường → phường của dự án. Câu phường đang treo thì không chen (lời khách lượt này
+      // đang trả lời câu đó; lượt sau sẽ có phường trước khi chọn câu kế).
+      if (pendingReq?.listings && pendingReq.question !== "phuong") {
+        const daCuaTin = duAnCanHoi[0] ?? (pendingReq.listings.project_id === duAnNoi[0]?.id ? duAnNoi[0] : null);
+        const tenP = await phuongTuDuAn(pendingReq.listing_id, daCuaTin, pendingReq.listings.ward);
+        if (tenP) pendingReq.listings.ward = tenP;
       }
     }
 
@@ -5269,6 +5310,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           if (da) {
             const { error: daUpErr } = await client.from("listings").update({ project_id: da.id, unit_status: "con_ban", last_confirmed_at: new Date().toISOString(), ...(da.district ? { district: da.district } : {}) }).eq("id", moi.id);
             if (daUpErr) await ghiLoi(client, "chat-reply nhieu can(du an)", daUpErr.message);
+            else await phuongTuDuAn(moi.id, da, null);
             if (!vtCan) vtCan = da.location_raw ? `${da.name}, ${da.location_raw}` : da.name;
           }
         }
@@ -7531,7 +7573,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // thnh") cũng là đơn vị hành chính — không ghi chữ thô vào vị trí.
         // SRS-5.1zzzzd: cùng một hàm với mọi chỗ ghi ô vị trí — bỏ kích thước ("10x50"), còn lại chỉ là hành chính thì không ghi.
         if (pendingReq.question === "vi_tri" && dapAnGhi) dapAnGhi = viTriGhiDuoc(dapAnGhi) ?? dapAnGhi;
-        const viTriChiHanhChinh = pendingReq.question === "vi_tri" && (!viTriGhiDuoc(dapAnGhi) || chiLaDonViHanhChinh(dapAnGhi) || (!!phuongTuDien && !!tenDiaDanhTron(dapAnGhi)));
+        // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-dat): "đất ở đường Vườn Thơm, xã Bình Lợi, Bình Chánh" → AI đọc vị trí "đường Vườn Thơm",
+        // nhưng vì câu có phường (`phuongTuDien`) mà "Vườn Thơm" là một tên trơn, vị trí bị coi là "chỉ hành chính" và không ghi — bot hỏi lại
+        // đường. Tên trơn chỉ là hành chính khi nó CHÍNH LÀ phường vừa nhận ra (và khách không gõ "đường" trước nó).
+        const tronViTri = phuongTuDien ? tenDiaDanhTron(dapAnGhi) : null;
+        const tronLaPhuong = !!tronViTri && tronViTri.tienTo !== "duong" && boDau(String(phuongTuDien)).includes(boDau(tronViTri.ten));
+        const viTriChiHanhChinh = pendingReq.question === "vi_tri" && (!viTriGhiDuoc(dapAnGhi) || chiLaDonViHanhChinh(dapAnGhi) || tronLaPhuong);
         if (viTriChiHanhChinh) console.log("chat-reply: vi tri chi co don vi hanh chinh, khong ghi");
         const { error: factErr, boQua: factBo } = viTriChiHanhChinh ? { error: null, boQua: false } : await ghiFact(client, {
           p_listing_id: pendingReq.listing_id,
@@ -7760,7 +7807,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // cuối làm tin tự lên kệ) — nhưng đọc cùng lúc với câu kế tiếp, và danh
       // sách câu còn treo suy ra từ `ds` đã có (FR-171 h: 3 vòng → 1).
       const [{ data: lstNow }, { data: nextFactsTho }, { data: daHetHan }] = await Promise.all([
-        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, boc_tach, property_type, street, location_raw, floors_text, bedrooms, price_vnd, area_m2, legal_status")
+        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, ward, deal, boc_tach, property_type, street, location_raw, floors_text, bedrooms, price_vnd, area_m2, legal_status")
           .eq("id", pendingReq.listing_id).maybeSingle(),
         client.from("listing_missing_facts").select("fact_key, priority, nhom")
           .eq("listing_id", pendingReq.listing_id).order("priority").limit(12),
@@ -8443,6 +8490,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // gì. Vào sổ rồi mới đi tiếp (FR-152).
       if (newLstErr) {
         await ghiLoi(client, "chat-reply tao tin rao", newLstErr.message);
+      }
+      // SRS-5.1zzzzzh: căn rao trong dự án có trong kho → phường của dự án (cùng quận mới lấy; khách đã nói phường thì giữ lời khách).
+      if (newLst && duAn && (!dongTin.district || !duAn.district || cungQuan(String(dongTin.district), String(duAn.district)))) {
+        await phuongTuDuAn(newLst.id, duAn, (dongTin as { ward?: string | null }).ward ?? (tinRongId ? pendingReq?.listings?.ward : null));
       }
       if (newLst) {
         tinTrongLuot = newLst.id; // SRS-5.1zzzzk: tin đang nói trong lượt (lưới trạng thái ở đường ra đối chiếu đúng tin này)
@@ -9778,7 +9829,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           (xemThemHinh
             ? "\nKhách VỪA XIN XEM THÊM HÌNH căn bot gửi lượt trước - hệ thống tự gửi 4 tấm kế, em chỉ nói ngắn 'dạ em gửi tiếp nè', KHÔNG hứa đi xin chủ nhà.\n"
             : "") +
-          `\nSoạn lượt trả lời tiếp theo của EM và cập nhật hồ sơ:` },
+          // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-mua): "cho mình xin số chủ nhà" → hệ thống gửi câu giải thích soạn sẵn, model cũng tự giải
+          // thích lần nữa bằng chữ khác ("bên em chăm sóc khách qua Zalo… cộng tác viên sẽ liên hệ") — hai bong bóng một ý. Ý này có MỘT chủ.
+          (XIN_SO_CHU_RE.test(tKD)
+            ? "\nKhách VỪA XIN SỐ CHỦ NHÀ: hệ thống ĐÃ gửi riêng câu giải thích (không gửi số qua chat, người phụ trách dẫn đi xem) — em KHÔNG giải thích lại chuyện số / liên hệ, chỉ nối tiếp bằng đúng MỘT câu hỏi nhu cầu còn thiếu (hoặc không nói gì thêm).\n"
+            : "") +
+          LENH_CUOI_JSON },
         ],
       }],
     };
@@ -9800,7 +9856,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
             thamSo: {
               model: MODEL, max_tokens: 1024, output_config: { effort: "low" },
               system: [{ ...k0, text: k0.text.replace(DAU_RA_JSON, DAU_RA_CONG_CU) }, { ...k1, text: k1.text.replace(HOI_LAI_NOI_DO, HOI_LAI_NOI_DO_TRO_LY) }],
-              messages: thamSoMua.messages,
+              // SRS-5.1zzzzzh (bắn production 12/10): lệnh cuối "…và cập nhật hồ sơ:" của đường JSON mời model VIẾT phần hồ sơ ra chữ —
+              // ở chế độ trợ lý chữ đó đi thẳng tới khách ("Cập nhật hồ sơ: Khách đang chần chừ… Lý do không hỏi tiếp: …"). Việc ghi là
+              // gọi công cụ, nên lệnh cuối chỉ đòi lời nhắn gửi khách.
+              messages: doiLenhCuoiTroLy(thamSoMua.messages),
             },
             loiKhach: loiKhachMua,
             doc: docCongCuMua,

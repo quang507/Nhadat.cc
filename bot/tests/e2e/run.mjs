@@ -10682,6 +10682,120 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzzh (12/10/2026, test Zalo chủ dự án + bắn production 3 kịch bản): sửa từ gốc nhóm lỗi địa chỉ / lời bot.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocH = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laYH = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const rongH = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null },
+    dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, doc_lai: null, khong_biet: null };
+  let n = 0;
+  const dungH = (cauTreo, botNoi, tin) => {
+    fresh((d) => { seedKho(d); d.t.wards = napPhuongThat().map((w) => ({ ...w })); });
+    const uid = `thu-zh-${++n}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb", seller_type_source: "admin" }).data;
+    const L = db().insert("listings", { code: `BDS-ZH-${n}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", can_chu_duyet: true, boc_tach: { _thong_so_ai: true }, ...tin }).data;
+    s.active_listing_id = L.id;
+    if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+    const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-12T03:00:00Z" }).data;
+    if (botNoi) db().insert("messages", { conversation_id: c.id, sender: "bot", body: botNoi, created_at: new Date().toISOString() });
+    return { uid, L };
+  };
+  const goiH = async (uid, text, ai = null) => {
+    globalThis.__model = { parse: (p) => (laBocH(p) || laYH(p)) ? (ai ? { ...rongH, ...ai } : (() => { throw new Error("AI im"); })()) : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text });
+    return (r.body?.replies ?? []).join(" | ");
+  };
+  const lrH = (L) => db().t.listings.find((x) => x.id === L.id);
+  const factH = (L, q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && (!q || f.question === q)).map((f) => `${f.question}=${f.answer}`);
+  const treoH = (L) => db().t.info_requests.filter((x) => x.listing_id === L.id && x.status === "pending").map((x) => x.question);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+  globalThis.__khongNhoCauHinh = true;
+
+  // (0) Phường đoán GẦN ĐÚNG từ tên đường: "hẻm 120 Trần Hưng Đạo quận 5" — "Trần Hưng" sai một chữ với "Tân Hưng" (Q7 cũ). Ngoài câu
+  // phường, khớp gần đúng không được ghi phường. Cách nói mới: "120/5 Trần Hưng Đạo" (số nhà xẹc).
+  for (const [ma, cau] of [["00 (ca gốc)", "hẻm 120 Trần Hưng Đạo quận 5"], ["00b (cách nói mới)", "nhà 120/5 tran hung dao q5 nha em"], ["00d (không nói quận)", "hẻm 120 trần hưng đạo"], ["00e (không số nhà, không quận)", "nhà ở trần hưng đạo"]]) {
+    const { uid, L } = dungH("vi_tri", "Nhà mình ở đường nào vậy anh?", { property_type: "nha_pho" });
+    const cumD = /tr[aầ]n h[uư]ng [dđ][aạ]o/i.exec(cau)[0];
+    await goiH(uid, cau, { truong: [T("duong", "Trần Hưng Đạo", cumD), ...(/q(?:uận )?5/i.test(cau) ? [T("quan", "Quận 5", /q(?:uận )?5/i.exec(cau)[0])] : [])],
+      tra_loi: { co_tra_loi: true, gia_tri: cau, trich_dan: cau } });
+    const w = lrH(L).ward;
+    check(`ZZZZZH-${ma} «${cau}» (đang hỏi vị trí) → KHÔNG ghi phường Tân Hưng (gần đúng từ tên đường)`, !/Tân Hưng/.test(w ?? "") && !factH(L, "phuong").some((f) => /Tân Hưng/.test(f)),
+      JSON.stringify({ w, f: factH(L) }));
+  }
+  // Đối chứng: đang hỏi PHƯỜNG thì gõ sai một chữ vẫn nhận (TDP / DD-02 giữ nguyên).
+  {
+    const { uid, L } = dungH("phuong", "Nhà mình phường nào vậy anh?", { property_type: "nha_pho", district: "Quận 7" });
+    await goiH(uid, "tan hungg");
+    check("ZZZZZH-00c (đối chứng) đang hỏi phường, «tan hungg» → Phường Tân Hưng", /Tân Hưng/.test(lrH(L).ward ?? ""), JSON.stringify({ w: lrH(L).ward, f: factH(L) }));
+  }
+  // (2) Tên đường trơn trong câu có phường: "đất ở đường Vườn Thơm, xã Bình Lợi, Bình Chánh" → vị trí "Vườn Thơm" PHẢI ghi (bản trước: câu có
+  // phường + "Vườn Thơm" là tên trơn → coi là "chỉ hành chính", bot hỏi lại đường). Cách nói mới: "lô đất đường Láng Le Bàu Cò xã Tân Nhựt".
+  for (const [ma, cau, duong, phuong, quan] of [
+    ["02 (ca gốc)", "đất ở đường Vườn Thơm, xã Bình Lợi, Bình Chánh", "Vườn Thơm", "xã Bình Lợi", "Bình Chánh"],
+    ["02b (cách nói mới)", "lô đất đường Láng Le Bàu Cò xã Tân Nhựt huyện Bình Chánh", "Láng Le Bàu Cò", "xã Tân Nhựt", "huyện Bình Chánh"]]) {
+    const { uid, L } = dungH("vi_tri", "Lô đất mình ở đường nào vậy anh?", { property_type: "dat" });
+    const rep = await goiH(uid, cau, { truong: [T("duong", duong, `đường ${duong}`), T("ten_duong", duong, `đường ${duong}`), T("phuong", phuong.replace(/^xã/, "Xã"), phuong), T("quan", "Huyện Bình Chánh", quan)],
+      tra_loi: { co_tra_loi: true, gia_tri: `đường ${duong}`, trich_dan: `đường ${duong}` } });
+    check(`ZZZZZH-${ma} «${cau}» → vị trí ghi «${duong}», câu vị trí đóng, không hỏi lại đường`,
+      factH(L, "vi_tri").some((f) => f.includes(duong)) && !treoH(L).includes("vi_tri") && !/ở đường nào/.test(rep), JSON.stringify({ f: factH(L), treo: treoH(L), rep }));
+  }
+  // (4) Bán / cho thuê có trong dòng ĐÃ BIẾT gửi model (bản trước thiếu → model hỏi lại "anh chị định bán hay cho thuê căn này vậy?").
+  {
+    const { uid } = dungH("gia", "Căn hộ cho thuê giá bao nhiêu một tháng vậy anh?", { property_type: "chung_cu", deal: "cho_thue", district: "Quận 7" });
+    let lenh = "";
+    globalThis.__model = { parse: (p) => (laBocH(p) || laYH(p)) ? { ...rongH, truong: [T("so_wc", "2", "2wc")] } : OUT(),
+      create: (p) => { lenh += JSON.stringify(p.messages ?? p); return "Dạ vâng ạ. Căn mình ở tầng mấy vậy anh?"; } };
+    await send({ external_user_id: uid, text: "2wc nha em" });
+    const daBiet = /ĐÃ BIẾT về căn[^\\]*?\(để hiểu, không đọc lại\): ([^\\]*)/.exec(lenh)?.[1] ?? "";
+    check("ZZZZZH-04 tin cho thuê → dòng ĐÃ BIẾT gửi model có 'cho thuê' (model không hỏi lại bán hay thuê)", /cho thuê/.test(daBiet), daBiet || lenh.slice(0, 300));
+  }
+  // (4b) Căn hộ đã gắn dự án trong kho, chưa có phường → phường lấy từ kho dự án (tên cũ → tên mới qua tenPhuongCot), không hỏi khách.
+  // Cách nói mới: dự án ngoài quận cũ khác (Sunrise Riverside, Nhà Bè).
+  for (const [ma, ten, quan, phuongKho, mong] of [
+    ["04b (ca gốc)", "Sunrise City", "Quận 7", "Phường Tân Hưng", /Tân Hưng/],
+    ["04c (cách nói mới)", "Sunrise Riverside", "Huyện Nhà Bè", "Xã Phước Kiển", /Nhà Bè/]]) {
+    fresh((d) => { seedKho(d); d.t.wards = napPhuongThat().map((w) => ({ ...w })); });
+    const pj = db().insert("projects", { name: ten, slug: ten.toLowerCase().replace(/ /g, "-"), district: quan, ward: phuongKho, amenities: [], description: "" }).data;
+    const uid = `thu-zh-${++n}`;
+    const sl = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb", seller_type_source: "admin" }).data;
+    const L = db().insert("listings", { code: `BDS-ZH-${n}`, seller_id: sl.id, deal: "cho_thue", status: "cho_thong_tin", can_chu_duyet: true, boc_tach: { _thong_so_ai: true },
+      property_type: "chung_cu", district: quan, project_id: pj.id, location_raw: ten }).data;
+    sl.active_listing_id = L.id;
+    db().insert("info_requests", { listing_id: L.id, question: "tang", status: "pending" });
+    db().insert("conversations", { seller_id: sl.id, channel: "zalo_personal_test", started_at: "2026-10-12T03:00:00Z" });
+    const rep = await goiH(uid, "tầng 12 anh", { truong: [T("tang", "12", "tầng 12")], tra_loi: { co_tra_loi: true, gia_tri: "tầng 12", trich_dan: "tầng 12" } });
+    check(`ZZZZZH-${ma} căn hộ ${ten} (kho có phường ${phuongKho}) → phường của tin lấy từ kho, bot không hỏi phường`,
+      mong.test(lrH(L).ward ?? "") && !treoH(L).includes("phuong") && !/phường/.test(rep.split(" | ").at(-1) ?? ""), JSON.stringify({ w: lrH(L).ward, treo: treoH(L), rep }));
+  }
+  // (5) "khi nào có khách thì báo mình nha" → việc bên em LÀM với tin (quy_trinh): không chuyển người, không việc ❓ cho admin.
+  for (const [ma, cau] of [["05 (ca gốc)", "khi nao co khach thi bao minh nha"], ["05b (cách nói mới)", "có ai hỏi thì nhắn anh liền nhé em"]]) {
+    const { uid } = dungH("phuong", "Căn hộ mình ở phường nào vậy anh?", { property_type: "chung_cu", deal: "cho_thue", district: "Quận 7" });
+    const truoc = db().t.reminders.filter((x) => x.kind === "escalation").length;
+    const rep = await goiH(uid, cau, { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "quy_trinh" } });
+    const nhac = db().t.reminders.filter((x) => x.kind === "escalation").length - truoc;
+    check(`ZZZZZH-${ma} «${cau}» (AI: quy_trinh) → không 'nhờ anh chị phụ trách', không việc ❓`, nhac === 0 && !/phụ trách/.test(rep), JSON.stringify({ nhac, rep }));
+  }
+  // (7) "đường trước đất rộng 6m xe tải vô được" → không phải hẻm.
+  {
+    const { uid, L } = dungH("do_rong_duong", "Đường trước đất mình rộng bao nhiêu mét vậy anh?", { property_type: "dat", district: "Huyện Bình Chánh" });
+    await goiH(uid, "đường trước đất rộng 6m xe tải vô được", { truong: [T("do_rong_duong", "6", "đường trước đất rộng 6m"), T("loai_duong_vao", "hem_xe_tai", "xe tải vô được")],
+      tra_loi: { co_tra_loi: true, gia_tri: "6m", trich_dan: "đường trước đất rộng 6m" } });
+    check("ZZZZZH-07 đất 'đường trước rộng 6m xe tải vô được' → access_type không phải hẻm", !String(lrH(L).access_type ?? "").startsWith("hem"),
+      JSON.stringify({ at: lrH(L).access_type, aw: lrH(L).alley_width_m, f: factH(L) }));
+  }
+  // (8) Nhãn "full nội thất" là giá trị của ô nội thất → ô nội thất được điền (cùng bảng NHAN_LA_O với "thổ cư 100%").
+  for (const [ma, cau] of [["08 (ca gốc)", "full noi that, view ho boi"], ["08b (cách nói mới)", "để lại hết nội thất cho khách thuê luôn"]]) {
+    const { uid, L } = dungH("tang", "Căn hộ mình ở tầng mấy vậy anh?", { property_type: "chung_cu", deal: "cho_thue", district: "Quận 7" });
+    await goiH(uid, cau, { kien_thuc: [] });
+    check(`ZZZZZH-${ma} «${cau}» → ô nội thất có giá trị`, factH(L, "noi_that").length > 0, JSON.stringify(factH(L)));
+  }
+  globalThis.__khongNhoCauHinh = false;
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));

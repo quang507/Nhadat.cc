@@ -160,8 +160,24 @@ export const DAU_RA_CONG_CU =
   "Khách nhờ TRA CỨU (quanh khu X có trường / chợ / bệnh viện gì; căn mã nào chi tiết ra sao) thì gọi công cụ ĐỌC trước, " +
   "trả lời đúng theo kết quả; kết quả nói không có dữ liệu thì nói thật, KHÔNG tự kể tên nơi chốn hay khoảng cách. " +
   "Công cụ GHI: viết lời nhắn cho khách VÀ gọi công cụ trong CÙNG một lượt. Công cụ có trich_dan thì trích phải COPY " +
-  "nguyên văn lời khách — khách chưa nói thì đừng gọi.";
+  "nguyên văn lời khách — khách chưa nói thì đừng gọi. " +
+  // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-mua): sau lượt gọi ghi_ho_so_mua, lời cuối chỉ còn "Dạ anh chị. Em ghi nhận rồi ạ." — không phản
+  // hồi điều khách vừa nói, không hỏi gì, cuộc chat chết; lượt khách muốn dừng thì model lại viết ghi chú nội bộ ra lời.
+  "Lời nhắn là lời NÓI VỚI KHÁCH: phản hồi đúng điều khách vừa nói, hồ sơ còn thiếu thì kết bằng MỘT câu hỏi nhu cầu còn thiếu (khách " +
+  "muốn dừng / suy nghĩ thêm thì chào ngắn, không hỏi). KHÔNG viết ghi chú, tóm tắt hồ sơ hay lý do của em vào lời nhắn.";
 
+// SRS-5.1zzzzzh: lệnh cuối tin user của nhánh mua — đường JSON đòi "cập nhật hồ sơ" (ra trường JSON); chế độ trợ lý chỉ đòi lời nói với khách.
+export const LENH_CUOI_JSON = `\nSoạn lượt trả lời tiếp theo của EM và cập nhật hồ sơ:`;
+export const LENH_CUOI_TRO_LY = `\nSoạn lời nhắn gửi khách (chỉ lời nói với khách — không viết ghi chú, hồ sơ hay lý do); việc cần ghi thì gọi công cụ.`;
+/** Thay lệnh cuối của tin user (đường JSON) bằng lệnh cho chế độ trợ lý — giữ nguyên mọi phần khác. */
+export function doiLenhCuoiTroLy<T extends { content: Array<Record<string, unknown>> }>(messages: T[]): T[] {
+  return messages.map((m) => ({
+    ...m,
+    content: m.content.map((c) => (typeof c.text === "string" && c.text.endsWith(LENH_CUOI_JSON)
+      ? { ...c, text: c.text.slice(0, -LENH_CUOI_JSON.length) + LENH_CUOI_TRO_LY }
+      : c)),
+  }));
+}
 const LY_DO_TRICH = "trich_dan không có trong lời khách — KHÔNG ghi. Chỉ ghi điều khách đã nói, trích đúng nguyên văn.";
 const LY_DO_GIA_TRI = "gia_tri có chữ khách KHÔNG nói — chỉ dùng chữ của khách (viết lại có dấu được), không thêm ý.";
 // Kiểm giá trị chữ nằm ở tầng tiền định (`kiem-bang-chung.ts`) — đường JSON cũ dùng chung. Xuất lại cho bài kiểm cũ.
@@ -309,8 +325,15 @@ function boLoiDanMarkdown(doan: string): string {
     .filter((d) => !/^\s*(?:[-*_]\s*){3,}$/.test(d))
     .map((d) => d.replace(/^\s*#{1,6}\s+/, "").replace(/\*\*([^*]*)\*\*/g, "$1").replace(/__([^_]*)__/g, "$1"))
     .join("\n").trim();
-  return /:\s*$/.test(s) && !/\n/.test(s) && s.length <= 80 ? "" : s;
+  if (/:\s*$/.test(s) && !/\n/.test(s) && s.length <= 80) return "";
+  // SRS-5.1zzzzzh (bắn production 12/10): "Cập nhật hồ sơ:\nKhách đang chần chừ… Lý do không hỏi tiếp: …" — đoạn mở bằng NHÃN NỘI BỘ
+  // (hồ sơ / ghi chú / lý do / cập nhật / note) là ghi chép của model về khách, không phải lời nói với khách: bỏ cả đoạn. Từng dòng
+  // nhãn nội bộ lẫn trong đoạn khác cũng bỏ. Gốc đã sửa ở lệnh cuối (`doiLenhCuoiTroLy`); đây là lưới khi model vẫn viết.
+  const dong = s.split("\n");
+  if (NHAN_NOI_BO.test(boDauNhe(dong[0]))) return "";
+  return dong.filter((d) => !NHAN_NOI_BO.test(boDauNhe(d))).join("\n").trim();
 }
+const NHAN_NOI_BO = /^\s*(?:[-•]\s*)?(?:cap nhat ho so|ho so(?: khach| mua)?|ghi chu(?: noi bo)?|ly do(?: [^:]{0,40})?|note|profile|noi bo)\s*:/;
 /** Chữ model → bong bóng: tách theo dòng trống, tối đa 2 (bong bóng thừa gộp vào bong bóng cuối). */
 export function thanhBongBong(s: string): string[] {
   const ds = s.split(/\n\s*\n/).map((x) => boLoiDanMarkdown(x.trim())).filter(Boolean);

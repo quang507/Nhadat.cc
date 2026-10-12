@@ -111,11 +111,18 @@ export function laONguyenVan(loai: string | null | undefined, question: string):
  * Cụm NGUYÊN VĂN trong `tin` ứng với bản so khớp `kdCum` (đầu ra `chuanSo`): quét cửa sổ theo từ, cửa sổ nào `chuanSo`
  * ra đúng `kdCum` thì trả đoạn gốc (gọt ký hiệu hai đầu). Không có → null (nơi gọi dùng trích dẫn của model).
  */
-/** Bỏ khỏi cụm các mảnh (giữa dấu phẩy / chấm phẩy) mà luật nhận ra là fact của ô KHÁC họ với `cauHoi`; còn lại trống thì giữ cụm. */
+/**
+ * Bỏ khỏi cụm các mảnh (giữa dấu phẩy / chấm phẩy) mà luật nhận ra là fact của ô KHÁC `cauHoi`; còn lại trống thì giữ cụm.
+ * SRS-5.1zzzzzh (test Zalo 12/10: hỏi pháp lý, "sổ hồng riêng, anh đứng tên" → ô pháp lý ghi cả "anh đứng tên"): bản trước giữ mảnh
+ * CÙNG HỌ (`cungHoFact` — họ dùng để biết một câu có phải câu trả lời không), mà đứng tên / thế chấp / hoàn công cùng họ pháp lý
+ * nhưng là Ô RIÊNG. Cắt giá trị thì chỉ giữ mảnh của đúng ô này, hoặc mảnh cùng nhóm GHÉP thành một giá trị (địa chỉ, kích thước).
+ */
+const GHEP_MOT_GIA_TRI: string[][] = [["vi_tri", "phuong"], ["dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "mat_tien"]];
 export function gotManhOKhac(cauHoi: string, cum: string): string {
   const manh = cum.split(/\s*[,;]\s*/).filter(Boolean);
   if (manh.length < 2) return cum;
-  const giu = manh.filter((m) => { const f = nhanDienFact(m); return !f || f.question === "bo_sung" || cungHoFact(f.question, cauHoi); });
+  const cungGiaTri = (k: string) => k === cauHoi || GHEP_MOT_GIA_TRI.some((n) => n.includes(k) && n.includes(cauHoi));
+  const giu = manh.filter((m) => { const f = nhanDienFact(m); return !f || f.question === "bo_sung" || cungGiaTri(f.question); });
   return giu.length && giu.length < manh.length ? giu.join(", ") : cum;
 }
 /** Số trơn đứng NGAY sau cụm địa chỉ trong tin ("45 Thạnh Lộc" + " 41 quận 12" → "41"); có đơn vị / dấu "/" / chữ x thì không. */
@@ -764,6 +771,14 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {})
       const giaTri = so && d.gia_tri && !new RegExp(`\\b${so}$`).test(d.gia_tri.trim()) ? `${d.gia_tri.trim()} ${so}` : d.gia_tri;
       dat.push({ ...d, gia_tri: giaTri, ...(kdDung ? { trich_dan_sua: kdDung } : {}), ...(goc ? { cum_goc: goc } : {}) });
     }
+  }
+  // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-dat): "đường trước đất rộng 6m xe tải vô được" → AI ghi do_rong_duong 6 VÀ loai_duong_vao
+  // hem_xe_tai; bản tin in "Đường vào: hẻm xe tải 6m" cho lô đất mặt đường. Hai đề xuất của CÙNG lượt tự mâu thuẫn: bề rộng là của
+  // ĐƯỜNG, loại lại nói HẺM, trong khi khách không nhắc hẻm. Xe gì vào được là sức chứa của con đường, không làm nó thành hẻm → bỏ loại hẻm.
+  const iLoai = dat.findIndex((d) => d.khoa === "loai_duong_vao" && d.gia_tri.trim().startsWith("hem"));
+  if (iLoai >= 0 && dat.some((d) => d.khoa === "do_rong_duong") && !dat.some((d) => d.khoa === "do_rong_hem") && !/\b(?:hem|hxh|hxm|hxt|kiet|ngo)\b/.test(kdTin)) {
+    bo.push({ ...dat[iLoai], ly_do: "duong_truoc_khong_phai_hem" });
+    dat.splice(iLoai, 1);
   }
   return { dat, bo };
 }

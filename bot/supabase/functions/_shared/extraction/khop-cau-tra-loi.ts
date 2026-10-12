@@ -2532,12 +2532,12 @@ function sai1(a: string, b: string): boolean {
   }
   return sai + (a.length - i) + (b.length - j) <= 1;
 }
-export function timPhuongTrongCau(cau: string, ds: PhuongDs[]): { phuong: PhuongDs; khop: string } | null {
+export function timPhuongTrongCau(cau: string, ds: PhuongDs[]): { phuong: PhuongDs; khop: string; ganDung: boolean } | null {
   const tu = boDau(cau ?? "").replace(/[,;.]/g, " , ").replace(/[^a-z0-9,\s]/g, " ").split(/\s+/).filter(Boolean);
   if (!tu.length) return null;
   // Tên phường mới trùng tên QUẬN cũ ("Gò Vấp", "Bình Thạnh", "Phú Nhuận") — không có chữ "phường" đi trước thì là quận.
   const tenQuan = new Set(ds.map((p) => boDau(String(p.quan_cu ?? "")).replace(/^(quan|huyen|thi xa|thanh pho)\s+/, "").trim()).filter(Boolean));
-  let tot: Array<{ p: PhuongDs; muc: number; khop: string }> = [];
+  let tot: Array<{ p: PhuongDs; muc: number; khop: string; ganDung: boolean }> = [];
   for (const p of ds) {
     const pt = boDau(p.ten ?? "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
     const n = pt.length;
@@ -2561,20 +2561,22 @@ export function timPhuongTrongCau(cau: string, ds: PhuongDs[]): { phuong: Phuong
       if (!nhanPhuong && tenQuan.has(ptNoi)) continue;
       if (/^(quan|q|huyen|tp|thanh)$/.test(truoc)) continue;
       // Ngay sau "đường / phố", hay ngay sau số nhà đầu câu → tên ĐƯỜNG.
-      const laDuong = !nhanPhuong && (/^(duong|d|pho)$/.test(truoc) || (/^\d/.test(truoc) && (i - 1 === 0 || !/^(duong|d|hem|kiet|ngo|so)$/.test(truoc2))));
+      // SRS-5.1zzzzzh (test Zalo 12/10: "hẻm 120 Trần Hưng Đạo quận 5" → "Trần Hưng" sai một chữ thành phường Tân Hưng): sau "hẻm / kiệt /
+      // ngõ / số N" vẫn là TÊN ĐƯỜNG (hẻm của đường đó). Chỉ "đường N" (đường đánh số, "đường 59 Tây Thông Hội") mới cho chữ sau là phường.
+      const laDuong = !nhanPhuong && (/^(duong|d|pho)$/.test(truoc) || (/^\d/.test(truoc) && (i - 1 === 0 || !/^(duong|d)$/.test(truoc2))));
       if (laDuong) continue;
       // Đảo chữ / sai chữ: phải đứng sau một RANH GIỚI (đầu câu, dấu phẩy, số, "phường", "ở"…) — "Phú Thọ Hòa" không thành
       // "Thới Hòa" chỉ vì đuôi "thọ hòa" gần giống.
       const ranhGioi = !truoc || truoc === "," || /^\d/.test(truoc) || /^(phuong|xa|p|f|o|tai|thuoc|khu|ben|gan)$/.test(truoc);
       if (muc < 3 && !ranhGioi) continue;
-      tot.push({ p, muc: muc + (nhanPhuong ? 1 : 0), khop: noi });
+      tot.push({ p, muc: muc + (nhanPhuong ? 1 : 0), khop: noi, ganDung: muc < 3 });
     }
   }
   if (!tot.length) return null;
   const max = Math.max(...tot.map((t) => t.muc));
   tot = tot.filter((t) => t.muc === max);
   const ten = new Set(tot.map((t) => t.p.ten));
-  return ten.size === 1 ? { phuong: tot[0].p, khop: tot[0].khop } : null;
+  return ten.size === 1 ? { phuong: tot[0].p, khop: tot[0].khop, ganDung: tot[0].ganDung } : null;
 }
 
 /**

@@ -47,6 +47,12 @@ ca("xã vĩnh lộc b", null);                  // tên CŨ (Vĩnh Lộc B) — 
 ca("bán nhà 50m2 giá 6 tỷ", null);
 ca("3 phòng ngủ", null);
 ca("có lửng nha em", null);
+// SRS-5.1zzzzzh (test Zalo 12/10): sau "hẻm / số nhà N" là TÊN ĐƯỜNG — "Trần Hưng" sai một chữ với phường Tân Hưng (Q7 cũ) không được khớp.
+ca("hẻm 120 Trần Hưng Đạo quận 5", null);
+ca("hẻm 120 trần hưng đạo", null);
+ca("kiệt 45 tran hung dao", null);         // cách nói mới chưa bắn
+ca("ngõ 12 Tân Hưng", null);               // sau "ngõ N" vẫn là tên đường, kể cả trùng tên phường
+ca("đường 59 Tây Thông Hội", "Phường Thông Tây Hội"); // "đường N" (đường đánh số) thì chữ sau vẫn là phường (AI3 giữ nguyên)
 
 console.log(hong ? `\nPHƯỜNG TRONG CÂU: ${hong}/${tong} CA HỎNG` : `\nPHƯỜNG TRONG CÂU: ${tong}/${tong} CA ĐẠT`);
 if (hong) process.exit(1);
