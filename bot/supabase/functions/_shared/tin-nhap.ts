@@ -24,6 +24,7 @@ import { tenNhan, tenNhanKhongTrung } from "./extraction/nhan.ts";
 import { donViGiaDep, vndThanhChu } from "./extraction/luat-tien.ts";
 import { laBoSungTrung, trungY } from "./extraction/khop-cau-tra-loi.ts";
 import { diaChiHienThi, duongGiuaCau, duongHienThi, ghepDiaChi } from "./extraction/hien-thi-dia-chi.ts";
+import { dangChoThue } from "./extraction/re-nhanh.ts";
 
 /** FR-241 j: hiện trạng sử dụng gõ không dấu ("dang o", "de trong") → có dấu; chữ có dấu / cụm lạ giữ nguyên. */
 const HIEN_TRANG_KD: Array<[RegExp, string]> = [
@@ -77,7 +78,11 @@ export type ThamSoNhap = {
   lai: boolean;
   /** 24/09/2026: chủ nói "đăng đi" và tin đã lên kệ — tiêu đề "đã lên kệ", KHÔNG hỏi duyệt lại. */
   daDang?: boolean;
-  cauTD: (khoa: string, o?: Record<string, string | number | null | undefined>) => string;
+  /** SRS-5.1zzzzzl: tiêu đề chủ nhà gửi lúc duyệt (`boc_tach.tieu_de_khach`, đã qua kiểm trích dẫn) — in thay tiêu đề bot viết. */
+  tieuDeKhach?: string | null;
+  /** SRS-5.1zzzzzl: câu khen AI viết (đã qua `khenHopLe` + lượt soát) — mở đầu bong bóng thứ hai. */
+  khen?: string | null;
+  cauTD:(khoa: string, o?: Record<string, string | number | null | undefined>) => string;
 };
 
 export const LOAI_VI: Record<string, string> = {
@@ -152,7 +157,50 @@ function rongDuongVao(l: Pick<TinNhapRow, "alley_width_m">, fact: (k: string) =>
   return m && a === Number(l.alley_width_m) ? `${so(a)}-${so(m[2].replace(",", "."))}m` : `${so(l.alley_width_m)}m`;
 }
 
-export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): string {
+/** "Phường Bình Hưng Hòa" → "Bình Hưng Hòa"; "Phường 3" → "P.3" — tên khu vực trong tiêu đề "Chỉ X tỷ … tại …". */
+function tenKhuVuc(s: string | null | undefined): string | null {
+  const t = (s ?? "").trim();
+  if (!t) return null;
+  if (/^(?:phuong|quan)\s*0*\d{1,2}$/.test(boDau(t))) return gonHanhChinh(t);
+  return t.replace(/^(?:phường|quận|xã|thị trấn|huyện|thành phố|tp\.?)\s+/iu, "").trim() || t;
+}
+
+// Cụm "ô tô tận cửa" chủ nhà tự viết — tiêu đề lấy NGUYÊN chữ khách (không dịch "hẻm xe hơi" thành "tận cửa": hẻm xe hơi chưa chắc
+// xe vào tới cửa).
+const O_TO_TAN_CUA = /(?:ô\s*tô|oto|xe\s+hơi)\s+(?:vào\s+|đỗ\s+|đậu\s+)?(?:tận|tới|trước)\s+(?:cửa|nhà)/iu;
+
+/**
+ * SRS-5.1zzzzzl (chủ dự án 13/10/2026: "Em sẽ rao như vậy nhé. Chỉ 7.6 tỉ ô tô tận cửa"): điểm mạnh đặt sau giá trong tiêu đề — chỉ lấy
+ * từ dữ liệu khách đã nói: cụm "ô tô tận cửa" nguyên văn trong fact, không có thì loại đường vào mặt tiền / hẻm xe hơi. Không đoán.
+ */
+function diemManhTieuDe(l: TinNhapRow, facts: FactNhap[]): string | null {
+  for (const f of [...facts, { question: "vi_tri", answer: l.location_raw ?? null }]) {
+    const m = f.answer ? O_TO_TAN_CUA.exec(f.answer) : null;
+    if (m) return m[0].toLocaleLowerCase("vi").replace(/\s+/g, " ");
+  }
+  return l.access_type === "mat_tien" || l.access_type === "hem_xe_hoi" ? DUONG_VAO_TIEU_DE[l.access_type] : null;
+}
+
+/**
+ * TIÊU ĐỀ bản nháp. SRS-5.1zzzzzl (chủ dự án chọn "Cả hai"): tin bán có giá → "Chỉ {giá} {điểm mạnh} tại {phường}, {quận}"; chủ nhà
+ * gửi tiêu đề riêng (`tieuDeKhach`, đã qua kiểm trích dẫn) thì in đúng câu đó. Tin cho thuê / chưa có giá giữ kiểu tin lẻ mogi.
+ */
+export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null, facts: FactNhap[] = [], tieuDeKhach?: string | null): string {
+  const tdk = (tieuDeKhach ?? "").replace(/\s+/g, " ").trim();
+  if (tdk) return tdk;
+  const giaBan = l.deal !== "cho_thue" ? giaHienThi(l)?.replace(/\s*\(?\s*(?:còn\s+)?(?:thương lượng|tl|còn bớt|fix|cố định)\b.*$/iu, "").trim() : null;
+  if (giaBan) {
+    const loaiChen = l.property_type && l.property_type !== "nha_pho" ? ` ${LOAI_TIEU_DE[l.property_type] ?? ""}`.trimEnd() : "";
+    const dm = diemManhTieuDe(l, facts);
+    const kv = [...new Set([tenKhuVuc(l.ward), tenKhuVuc(l.district)].filter((x): x is string => !!x))].join(", ");
+    // Cột `gap` chỉ hiện ở tiêu đề (dòng thông số không có) — giữ "cần bán gấp" như tiêu đề kiểu cũ.
+    return `Chỉ ${giaBan}${loaiChen}${dm ? ` ${dm}` : ""}${l.gap === true ? " cần bán gấp" : ""}${kv ? ` tại ${kv}` : ""}`.replace(/\s+/g, " ").trim();
+  }
+  return tieuDeTinLe(l, fact);
+}
+
+/** Tiêu đề kiểu tin lẻ mogi (tin cho thuê / chưa có giá): một dòng, gộp thứ đáng tiền, KẾT bằng giá. */
+export function tieuDeTinLe(l: TinNhapRow, fact: (k: string) => string | null): string {
   const thue = l.deal === "cho_thue";
   // Tách CỤM bằng dấu phẩy, đúng thứ tự người ta đọc một tin rao: chỗ nào →
   // bao nhiêu m² → nhà thế nào → giấy tờ → giá. Nhét hết vào một chuỗi dài
@@ -213,7 +261,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
  * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
  */
 export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
-  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang } = t;
+  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
   // "thuê tối thiểu thuê tối thiểu 3 năm". So theo TỪNG CHỮ của nhãn.
@@ -240,7 +288,7 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   };
 
   dong.push(cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de", { loai: loaiDoc(l.property_type) }));
-  dong.push(tieuDeTin(l, fact));
+  dong.push(tieuDeTin(l, fact, facts, tieuDeKhach));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.
   const dc = diaChiHienThi(l);
@@ -262,13 +310,14 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
       }`,
     );
   }
+  // SRS-5.1zzzzzl (chủ dự án 13/10: "Ko ghi ngang ghi mặt tiền, Mặt tiền đi chung với tiện ích" — chọn "Gộp chung một dòng"): bề ngang
+  // in là "mặt tiền Nm" ở dòng 🏫 Tiện ích; dòng diện tích còn diện tích, dài, nở hậu, thổ cư, hình dạng.
+  const matTien = l.frontage_m ? `mặt tiền ${so(l.frontage_m)}m` : nhan("mặt tiền", fact("mat_tien"));
   them("📐", "Diện tích", [
     l.area_m2 != null && l.area_m2 !== ""
       ? `${so(l.area_m2)}m²`
       : (fact("dien_tich") ?? fact("dien_tich_dat") ?? fact("dien_tich_tim_tuong")),
-    l.frontage_m && l.length_m
-      ? `ngang ${so(l.frontage_m)}m x dài ${so(l.length_m)}m`
-      : (l.frontage_m ? `ngang ${so(l.frontage_m)}m` : fact("mat_tien") ? `ngang ${fact("mat_tien")}` : l.length_m ? `dài ${so(l.length_m)}m` : null),
+    l.length_m ? `dài ${so(l.length_m)}m` : null,
     l.rear_width_m ? `nở hậu ${so(l.rear_width_m)}m` : fact("no_hau") ? `nở hậu ${fact("no_hau")}` : null,
     nhan("thổ cư", fact("tho_cu")),
     fact("hinh_dang"),
@@ -317,7 +366,13 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   // 24/09/2026 (chủ dự án: "Tiền thuê ghi vào"): tin BÁN đang cho thuê in tiền thuê mỗi tháng (cột đã đọc ra số,
   // không in nguyên câu chat) + hạn hợp đồng. Toà nhà / kho xưởng in trong khối khai thác bên dưới.
   const tienThue = Number(l.rent_income_vnd ?? 0) > 0 ? `${vndThanhChu(Number(l.rent_income_vnd))}/tháng` : null;
-  if (!thue && loai !== "toa_nha" && loai !== "kho_xuong") {
+  // SRS-5.1zzzzzl (test Zalo 13/10: khách "đang ở không cho thuê" → bản nháp vẫn in "💵 Đang cho thuê: hợp đồng đang ở không cho thuê"):
+  // dòng này chỉ in khi nhà ĐANG cho thuê theo cùng một chủ với bảng rẽ nhánh (`dangChoThue`, ô hien_trang_su_dung quyết), không vì ô
+  // hợp đồng có chữ.
+  const choThueThat = fact("hien_trang_su_dung")
+    ? dangChoThue({ loai, deal: l.deal ?? null, facts, rent_income_vnd: l.rent_income_vnd, aiDoc: true })
+    : Number(l.rent_income_vnd ?? 0) > 0 || !!fact("han_hop_dong_thue");
+  if (!thue && loai !== "toa_nha" && loai !== "kho_xuong" && choThueThat) {
     them("💵", "Đang cho thuê", [tienThue, nhan("hợp đồng", fact("han_hop_dong_thue"))]);
   }
   if (loai === "toa_nha" || loai === "kho_xuong") {
@@ -377,7 +432,11 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   } else {
     them("🏢", "Phí", [nhan("phí QL", fact("phi_quan_ly")), nhan("gửi xe", fact("phi_gui_xe"))]);
   }
-  them("🏫", "Tiện ích gần", [fact("tien_ich_gan")]);
+  // SRS-5.1zzzzzl: một dòng "🏫 Tiện ích: mặt tiền 6m · gần trường mầm non · chợ · công viên" — danh sách khách liệt kê bằng dấu phẩy
+  // tách thành từng mục (chữ khách, không thêm bớt).
+  const tienIch = (fact("tien_ich_gan") ?? "").split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean)
+    .map((x, i) => i === 0 ? thuongDau(x).replace(/^Gần(?=\s)/u, "gần") : x);
+  them("🏫", "Tiện ích", [matTien, ...tienIch]);
   // FR-211: nhãn tìm kiếm — khách mua lọc được ("yên tĩnh", "gần chợ"…).
   // 25/09/2026: nhãn mà các dòng trên đã nói ("sân thượng" trong kết cấu) không in lặp.
   them("🏷", "Nhãn", [l.nhan?.length ? tenNhanKhongTrung(l.nhan, dong.join("\n")) || null : null]);
@@ -385,6 +444,8 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   them("💡", "Phù hợp", [fact("tiem_nang") ?? fact("muc_dich") ?? fact("nganh_hang_phu_hop")]);
   if (soAnh) dong.push(`📷 ${soAnh} ảnh`);
   const hetThan = dong.length;
+  // SRS-5.1zzzzzl: câu khen (AI viết, đã soát) mở đầu bong bóng thứ hai; không có thì thôi.
+  if (khen?.trim()) dong.push(khen.trim());
   // Điểm đầy đủ đi CUỐI, chung một dòng với lời gợi ý — để trên câu mở thì tin
   // rao mở đầu bằng một con số nội bộ, không giống tin rao.
   // Gamification (chủ dự án 12/09: "để kích thích người ta đưa nhiều thông tin
@@ -397,6 +458,8 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
       ? cauTD("nhap_goi_y_tron", { diem, thieu: thieu.join(" và ") })
       : cauTD("nhap_goi_y", { diem, thieu: thieu.slice(0, 2).join(" và ") }),
   );
+  // SRS-5.1zzzzzl (chủ dự án 13/10: "Điểm càng cao công ty càng ưu tiên chào bán"): khoá riêng — khoá điểm cũ có thể đã sửa ở DB.
+  dong.push(cauTD("nhap_uu_tien"));
   if (!daDang) dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
   // FR-178: không đọc mã tin cho khách — mã chỉ ở web, CTV, admin.
   // 24/09/2026 (chủ dự án): lời hứa báo lại người rao đứng SAU CÙNG. Tin đã lên kệ (daDang) thì câu

@@ -35,6 +35,9 @@ const YLuot = z.object({
   // SRS-5.1zzzzz (11/10/2026, khách mô phỏng: "ko biết cụ thể đường, chỉ biết xã thôi" → luật ghi địa chỉ = "Ko biết cụ thể đường";
   // "chị không biết phường nào" → bot hỏi phường bốn lần): lời KHÔNG BIẾT điều bot vừa hỏi là ý của hội thoại, đi lượt nhỏ này.
   khong_biet: z.string().nullable().describe("Chủ nhà nói KHÔNG BIẾT / không nhớ / không rõ điều bot VỪA HỎI (cả câu hỏi hay phần chính của nó): chép NGUYÊN VĂN cụm đó ('ko biết cụ thể đường', 'chị không rõ phường nào'). Biết phần khác mà không biết phần được hỏi thì vẫn chép cụm không biết. Có trả lời được câu đang hỏi, hay không biết chuyện KHÁC → null."),
+  // SRS-5.1zzzzzl (test Zalo 13/10: bot gửi bản nháp, chủ nhà "Tiêu đề như vầy hay hơn nè: Chỉ với 7,6 tỷ ô tô tận cửa tại Bình Hưng Hòa
+  // Bình Tân" → bot coi là gật, đăng luôn). Góp ý / đưa TIÊU ĐỀ là sửa bản nháp, không phải duyệt — ý của hội thoại, đi lượt nhỏ này.
+  tieu_de: z.string().nullable().describe("Chủ nhà ĐƯA / đề xuất câu TIÊU ĐỀ cho tin rao ('tiêu đề như vầy hay hơn: …', 'đặt tít là …', hay gửi một câu tiêu đề ngay sau bản nháp): chép NGUYÊN VĂN chỉ câu tiêu đề, bỏ phần dẫn ('Chỉ với 7,6 tỷ ô tô tận cửa tại Bình Hưng Hòa Bình Tân'). Không có → null."),
   // 03/10/2026 (bộ đo X04, SRS-5.1zt): "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ" — câu vừa bán vừa mua chỉ vào nhánh bán,
   // khuôn bóc tách tin bán không có chỗ cho nhu cầu mua nên vế mua rơi. Vế mua là ý của NGƯỜI, đi lượt nhỏ này.
   mua_kem: z.object({
@@ -57,7 +60,8 @@ có GẬT với điều bot vừa nói không. Đọc theo NGHĨA, có viết t�
   bot hỏi / gợi ý (phường, tên đường, nghĩa chữ viết tắt), với bản nháp tin, hoặc với lời hẹn của bot.
 - dong_y_dang: gật VÀ bảo đăng tin: "ok đăng đi", "cứ đăng như này trước", "triển luôn em", "lên tin luôn".
 - khong_dong_y: "không phải", "sai rồi", "không đúng", "chưa", "khoan đã".
-- khong_noi: tin chỉ đưa thông tin căn nhà, hỏi lại bot, kể chuyện khác, hoặc không rõ.
+- khong_noi: tin chỉ đưa thông tin căn nhà, hỏi lại bot, kể chuyện khác, hoặc không rõ. Góp ý SỬA bản nháp / đưa TIÊU ĐỀ khác
+  ("tiêu đề như vầy hay hơn: …", "đổi tít thành …") là khong_noi — chưa duyệt; câu tiêu đề vào tieu_de.
 Gật ở VẾ ĐẦU rồi nói thêm ("đúng rồi em, phường 2 quận 5"; "ok em, mà giá 9 tỷ 8") vẫn là dong_y — trích đúng cụm gật.
 dong_y_trich phải chép NGUYÊN VĂN từ TIN chủ nhà, không lấy từ câu bot.
 
@@ -116,6 +120,8 @@ export type YLuotLLM = {
   khongBiet?: string | null;
   /** SRS-5.1zzzu: tin không dấu viết lại có dấu (nơi gọi kiểm `docLaiHopLe`). null / undefined = không có. */
   docLai?: string | null;
+  /** SRS-5.1zzzzzl: câu tiêu đề chủ nhà đưa (nơi gọi kiểm trích dẫn). null = không có; undefined = không trả. */
+  tieuDe?: string | null;
 };
 
 /** Hỏi model ý ngắn của lượt. `ket` null = model trả không đọc được (nơi gọi coi như AI không chạy). Model hỏng thì NÉM. */
@@ -148,6 +154,7 @@ export async function docYLuotBangModel(
     ...("ngung_hang_loat" in o ? { ngungHangLoat: docNHLTho(o.ngung_hang_loat) } : {}),
     ...(str(o.doc_lai) ? { docLai: str(o.doc_lai) } : {}),
     ...("khong_biet" in o ? { khongBiet: str(o.khong_biet) } : {}),
+    ...("tieu_de" in o ? { tieuDe: str(o.tieu_de) } : {}),
   };
   return { ket: dy || yc || "ngung_hang_loat" in o ? ket : null, usage: r.usage };
 }

@@ -940,8 +940,15 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   const kt = (tin, khoa, gt, td) => { datKiemNhe(true); const a = kt1(tin, khoa, gt, td); datKiemNhe(false); const b = kt1(tin, khoa, gt, td); datKiemNhe(cuNhe); return a === b ? a : !a; };
   ok("ZZZP-01 'mặt tiền 4m' → ngang đạt; KHÔNG phải nhà mặt tiền đường; KHÔNG phải bề rộng đường",
     kt("mặt tiền 4m dài 16m", "ngang", "4", "mặt tiền 4m") && !kt("mặt tiền 4m dài 16m", "loai_duong_vao", "mat_tien", "mặt tiền 4m") && !kt("mặt tiền 4m dài 16m", "do_rong_duong", "4", "mặt tiền 4m"), lyDo.join(" "));
-  ok("ZZZP-02 'hẻm 4m' → chỉ bề rộng hẻm (không ngang, không đường)", kt("hẻm 4m", "do_rong_hem", "4", "hẻm 4m") && !kt("hẻm 4m", "ngang", "4", "hẻm 4m") && !kt("hẻm 4m", "do_rong_duong", "4", "hẻm 4m"));
-  ok("ZZZP-03 'đường trước nhà 10m' → bề rộng đường, không phải hẻm", kt("đường trước nhà 10m", "do_rong_duong", "10", "đường trước nhà 10m") && !kt("đường trước nhà 10m", "do_rong_hem", "10", "đường trước nhà 10m"));
+  // SRS-5.1zzzzzl: AI đặt số đo nhầm ô hẻm ↔ đường mà cụm trích nói rõ ô kia → CHUYỂN sang đúng ô (trước đây bỏ mất).
+  const oVe = (tin, khoa, gt, td) => kiemDeXuat([{ khoa, gia_tri: gt, trich_dan: td }], tin).dat.map((d) => d.khoa).join();
+  ok("ZZZP-02 'hẻm 4m' → chỉ bề rộng hẻm (không ngang); AI đặt nhầm ô đường thì chuyển về ô hẻm", kt("hẻm 4m", "do_rong_hem", "4", "hẻm 4m") && !kt("hẻm 4m", "ngang", "4", "hẻm 4m") && oVe("hẻm 4m", "do_rong_duong", "4", "hẻm 4m") === "do_rong_hem");
+  ok("ZZZP-03 'đường trước nhà 10m' → bề rộng đường; AI đặt nhầm ô hẻm thì chuyển về ô đường", kt("đường trước nhà 10m", "do_rong_duong", "10", "đường trước nhà 10m") && oVe("đường trước nhà 10m", "do_rong_hem", "10", "đường trước nhà 10m") === "do_rong_duong");
+  ok("ZZZZZL-K1 bài rao 'Ngõ rộng 6m' AI ghi ô đường → ô hẻm 6; 'Mặt tiền 6m' AI ghi cách mặt tiền → ngang 6",
+    oVe("+ Ngõ rộng 6m, ô tô vào thoải mái.", "do_rong_duong", "6", "Ngõ rộng 6m") === "do_rong_hem" && oVe("+ Mặt tiền 6m, dễ dàng kinh doanh.", "cach_mat_tien", "6", "Mặt tiền 6m") === "ngang");
+  ok("ZZZZZL-K1b (cách nói mới) 'kiệt rộng 3m' ô đường → ô hẻm; đối chứng 'cách mặt tiền 30m' giữ cach_mat_tien; 'mặt tiền 5m' đã có ngang thì không đè",
+    oVe("nhà trong kiệt rộng 3m", "do_rong_duong", "3", "kiệt rộng 3m") === "do_rong_hem" && oVe("nhà cách mặt tiền 30m", "cach_mat_tien", "30", "cách mặt tiền 30m") === "cach_mat_tien" &&
+    kiemDeXuat([{ khoa: "cach_mat_tien", gia_tri: "5", trich_dan: "mặt tiền 5m" }, { khoa: "ngang", gia_tri: "5", trich_dan: "mặt tiền 5m" }], "mặt tiền 5m dài 20").dat.map((d) => d.khoa).join() === "ngang");
   ok("ZZZP-04 (cách nói MỚI) 'nhà mặt tiền hẻm 6m' → hẻm 6m, KHÔNG phải mặt tiền đường", kt("nhà mặt tiền hẻm 6m", "do_rong_hem", "6", "mặt tiền hẻm 6m") && !kt("nhà mặt tiền hẻm 6m", "loai_duong_vao", "mat_tien", "mặt tiền hẻm 6m"));
   ok("ZZZP-05 'nhà mặt tiền đường 8m' → mặt tiền + đường 8m; 'mặt tiền Nguyễn Trãi' → mặt tiền",
     kt("nhà mặt tiền đường 8m", "loai_duong_vao", "mat_tien", "nhà mặt tiền đường 8m") && kt("nhà mặt tiền đường 8m", "do_rong_duong", "8", "mặt tiền đường 8m") && kt("bán nhà mặt tiền Nguyễn Trãi", "loai_duong_vao", "mat_tien", "mặt tiền Nguyễn Trãi"));

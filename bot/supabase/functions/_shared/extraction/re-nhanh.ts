@@ -23,6 +23,8 @@ export type NgCanhReNhanh = {
   area_m2?: number | string | null;
   /** Chữ chủ nhà gõ vài lượt gần đây (không phải fact) — cho luật `kichTin`. */
   lichSu?: string;
+  /** SRS-5.1zzzzzl: AI đã đọc tin này (`boc_tach._thong_so_ai`) — ý "đang cho thuê" chỉ theo ô AI ghi, từ khoá trên chữ không chạy. */
+  aiDoc?: boolean;
 };
 export type CauThem = { fact_key: string; priority: number; nhom: string; giuThuTu?: boolean };
 
@@ -34,6 +36,34 @@ const SO_RIENG = /\b(?:so hong|so do|shr|srh|so rieng|so hong rieng|so do rieng)
 const CHUA_SO = /\b(?:chua co so|chua ra so|cho so|cho ra so|dang lam so|hdmb|hop dong mua ban|vi bang|giay tay|chua so)\b/;
 const SO_CHUNG = /\b(?:so chung|dong so huu|chung so|dung ten chung|so dung chung)\b/;
 const DANG_CHO_THUE = /\b(?:dang cho thue|dang thue|dang kinh doanh|hop dong thue|khach thue|cho [a-z0-9 ]{1,30} thue)\b/;
+// SRS-5.1zzzzzl (test Zalo 13/10: bài rao "Mặt tiền 6m, dễ dàng kinh doanh hoặc cho thuê" → bot hỏi "hợp đồng thuê còn tới khi nào", khách
+// "Nhà mình đang ở không cho thuê" → bot vẫn hỏi doanh thu, bản nháp in "💵 Đang cho thuê"). Lớp lỗi: CODE ĐOÁN Ý TRƯỚC AI — từ khoá trên
+// chữ BỎ DẤU của cả bài rao ("dễ dàng kinh doanh" → "dang kinh doanh") mở nhánh, và lời phủ nhận của khách không đóng được nhánh. Nay: AI
+// đọc trước — ô hien_trang_su_dung (AI đọc theo nghĩa, có trích dẫn) là chủ; tin AI đã đọc (`aiDoc`) mà không có ô đó thì KHÔNG đang cho
+// thuê (trừ khi có tiền thuê đọc ra số). Từ khoá chỉ là lưới đỡ khi AI không chạy, đọc trên chữ có dấu nếu khách gõ có dấu, bỏ ô tiềm năng.
+const DANG_CHO_THUE_DAU = /(?:^|[^\p{L}])(?:đang cho thuê|đang thuê|đang kinh doanh|hợp đồng thuê|khách thuê)(?![\p{L}])|(?:^|[^\p{L}])cho (?:[\p{L}\d]+ ){1,5}thuê(?![\p{L}])/u;
+const CO_DAU = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+const O_TIEM_NANG = new Set(["tiem_nang", "muc_dich", "nganh_hang_phu_hop"]);
+/** Giá trị ô hien_trang_su_dung (AI chọn cụm cho đúng ý "đang ở / đang cho thuê / để trống") có nói đang cho thuê không. */
+function htNoiChoThue(ht: string): boolean {
+  const kd = boDau(ht);
+  if (/\b(?:khong|ko|k|chua)\s+(?:co\s+)?(?:cho\s+)?(?:thue|kinh doanh)\b|\b(?:dang o|de trong|o luon|chu o|tu o)\b/.test(kd)) return false;
+  return DANG_CHO_THUE_DAU.test(ht.toLowerCase()) || /\b(?:cho thue|dang thue|kinh doanh|khach thue)\b/.test(kd);
+}
+/** Tin BÁN đang cho thuê / kinh doanh? Ô hien_trang_su_dung quyết; không có thì tiền thuê, rồi (chỉ khi AI không đọc) từ khoá. */
+export function dangChoThue(c: NgCanhReNhanh): boolean {
+  const ht = c.facts.filter((f) => f.question === "hien_trang_su_dung").map((f) => f.answer ?? "").join(" ").trim();
+  if (ht) return htNoiChoThue(ht);
+  return Number(c.rent_income_vnd ?? 0) > 0 || dangChoThueTheoChu(c);
+}
+/** Như `dangChoThue` nhưng không tính thu nhập thuê (toà CHDV có thu nhập mà không cho một bên thuê). */
+export function dangChoThueTheoChu(c: NgCanhReNhanh): boolean {
+  const ht = c.facts.filter((f) => f.question === "hien_trang_su_dung").map((f) => f.answer ?? "").join(" ").trim();
+  if (ht) return htNoiChoThue(ht);
+  if (c.aiDoc) return false;
+  const chu = c.facts.filter((f) => !O_TIEM_NANG.has(f.question)).map((f) => f.answer ?? "").join(" · ");
+  return CO_DAU.test(chu) ? DANG_CHO_THUE_DAU.test(chu.toLowerCase()) : DANG_CHO_THUE.test(boDau(chu));
+}
 const CO_HAN_HD = /\b(?:den|toi|het han|het)\s*(?:nam\s*)?(?:20\d\d|\d{1,2}\/20\d\d)\b|\b\d+\s*nam\s*nua\b/;
 const NHA_NAT = /\b(?:nha nat|nha cu nat|dap di xay lai|dap xay lai|mua dat tang nha|dat trong|chua xay)\b/;
 const NO_HAU = /\bno hau\b/;
@@ -85,7 +115,7 @@ export const RE_NHANH: Luat[] = [
     // (`quy_hoach@ban` / `dien_tich_khop_so`, nhóm `sau_dang`) — không thêm một lượt trước bản nháp.
     khi: ({ loai, deal, phap, tatCa, c }) =>
       NHA_CO_XAY.includes(loai) && deal !== "cho_thue" && deal !== "ban" && SO_RIENG.test(phap) && !CHUA_SO.test(phap) && !SO_CHUNG.test(phap) &&
-      !/\bhoan cong\b/.test(tatCa) && c.has_completion == null && !DANG_CHO_THUE.test(tatCa) && !(Number(c.rent_income_vnd ?? 0) > 0),
+      !/\bhoan cong\b/.test(tatCa) && c.has_completion == null && !dangChoThue(c),
     sau: ["phap_ly"],
     them: [{ fact_key: "hoan_cong", priority: 16.2, nhom: "co_ban" }],
   },
@@ -148,14 +178,14 @@ export const RE_NHANH: Luat[] = [
     id: "dang_cho_thue",
     ten: "nhà đang cho thuê",
     vi: "Tin BÁN đang cho thuê / kinh doanh = nhà đã hoàn thiện (chủ dự án 24/09) → không hỏi hiện trạng, nội thất, hoàn công; thu: hợp đồng thuê tới khi nào, tiền thuê mỗi tháng",
-    khi: ({ deal, tatCa, c }) => deal !== "cho_thue" && (DANG_CHO_THUE.test(tatCa) || Number(c.rent_income_vnd ?? 0) > 0),
+    khi: ({ deal, c }) => deal !== "cho_thue" && dangChoThue(c),
     sau: ["phap_ly", "hien_trang", "doanh_thu", "kien_thuc", "bo_sung", "tiem_nang"],
     them: [
       // 24/09/2026 (bắn 10 tin): toà nhà CHDV / nhà trọ "đang thu 250 triệu/tháng" là cho thuê TỪNG PHÒNG — không có một
       // hợp đồng thuê chung để hỏi hạn. Chỉ hỏi khi chữ khách nói rõ đang cho (một bên) thuê.
       { fact_key: "han_hop_dong_thue", priority: 16.4, nhom: "co_ban",
         daBiet: (x) => CO_HAN_HD.test(x.tatCa) || /\b(?:tung phong|nhieu phong|khong co hop dong tong)\b/.test(x.tatCa) ||
-          (["toa_nha", "phong_tro"].includes(x.loai) && !DANG_CHO_THUE.test(x.tatCa)) },
+          (["toa_nha", "phong_tro"].includes(x.loai) && !dangChoThueTheoChu(x.c)) },
       { fact_key: "doanh_thu", priority: 16.5, nhom: "co_ban", daBiet: (x) => Number(x.c.rent_income_vnd ?? 0) > 0 || THUE_CO_SO.test(x.tatCa) },
     ],
     // 24/09/2026 (chủ dự án: "đã bảo nhà cho thuê 400tr tháng rồi còn [đòi] thêm tiềm năng sử dụng"): đang cho

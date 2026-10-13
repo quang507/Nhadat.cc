@@ -3856,6 +3856,62 @@ sửa được ở dashboard); `soanTinNhap` = ghép hai phần (một nguồn, 
 `guiBanNhap` (duyệt thường, "đăng đi" lên kệ ngay) gửi hai bong bóng; so "nháp cũ y hệt" vẫn so thân. Kiểm: e2e H5 (bong bóng tin rao không có
 điểm / 👉, bong bóng kế mở bằng "Độ đầy đủ", kết bằng 👉 — đỏ khi gộp lại một bong bóng), `tin-nhap-rao.mjs` HAIBONG-1…3.
 
+### SRS-5.1zzzzzl · Bài rao dài, nhánh cho thuê, tiêu đề / khen / ưu tiên trong bản nháp, xin chấm điểm (13/10/2026)
+
+`[nguồn: test Zalo chủ dự án 13/10/2026 02:38–02:50 UTC, tin Hương Lộ 3 (hội thoại trong DB production); chủ dự án: "Em sẽ rao như vậy nhé. Chỉ 7.6 tỉ ô
+tô tận cửa. Ko ghi ngang ghi mặt tiền, Mặt tiền đi chung với tiện ích. Điểm càng cao công ty càng ưu tiên chào bán. Sao ko sửa soát lại sao bot bóc tách ko dc
+xong. Tin nháp phải có khen nữa … Sau khi giao tiếp mấy phút chị đánh giá cho em là em trả lời tốt chưa"; "sao nó cứ hỏi cho thuê hoài vậy sửa từ gốc đi"; "có nên
+cho ai đọc trước chạy trước rồi code kiểm lại ko"; bốn lựa chọn qua câu hỏi: tiêu đề "Cả hai", mặt tiền "Gộp chung một dòng", khen "AI viết, có soát", xin đánh
+giá "Sau khi tin lên kệ, lưu điểm"]`
+
+**Ca gốc.** Khách dán một bài rao dài: "Mặt tiền 6m, dễ dàng kinh doanh hoặc cho thuê. Ngõ rộng 6m, ô tô vào thoải mái … Gần trường mầm non …, chợ …". Bot ghi
+"cách mặt tiền 6m", hỏi lại hẻm, không ghi tiện ích; mở nhánh "đang cho thuê" (hỏi hợp đồng thuê, doanh thu); khách "Nhà mình đang ở không cho thuê" → câu đó
+vào ô hợp đồng, bot hỏi tiếp doanh thu, bản nháp in "💵 Đang cho thuê"; khách gửi "Tiêu đề như vầy hay hơn nè: Chỉ với 7,6 tỷ ô tô tận cửa tại Bình Hưng Hòa
+Bình Tân" lúc chờ duyệt → bot coi là gật, đăng luôn.
+
+**Lớp lỗi (1): CODE ĐOÁN Ý TRƯỚC AI.** Nhánh "đang cho thuê" mở bằng từ khoá trên chữ BỎ DẤU của cả bài rao ("dễ dàng kinh doanh" → "dang kinh doanh"), và
+lời phủ nhận của khách không có chỗ đóng nhánh. **Sửa:** ô `hien_trang_su_dung` (AI đọc theo nghĩa, có trích dẫn) là chủ của câu hỏi "nhà có đang cho thuê"
+(`dangChoThue` / `dangChoThueTheoChu`, re-nhanh.ts); tin AI đã đọc (`boc_tach._thong_so_ai`, cờ `aiDoc` do `re_nhanh.ts` truyền) mà không có ô đó thì KHÔNG
+đang cho thuê (trừ tiền thuê đọc ra số); từ khoá chỉ chạy khi AI không đọc, trên chữ có dấu nếu khách gõ có dấu, bỏ ô tiềm năng. Luật bóc tách: khách PHỦ NHẬN
+TIỀN ĐỀ câu đang hỏi → `tra_loi` false, ghi `hien_trang_su_dung`, đưa câu vào `khong_can_hoi`. Dòng 💵 của bản nháp đọc cùng chủ (`dangChoThue`), không in vì ô
+hợp đồng có chữ. **Chỗ khác cùng lớp:** luật hoàn công (`!dangChoThue`) và luật toà nhà (`dangChoThueTheoChu`) đã chuyển cùng hàm; các luật rẽ nhánh khác
+(sổ riêng → hoàn công, chưa sổ, nở hậu) vẫn đọc pháp lý / chữ khách bằng từ khoá — chưa đổi lượt này, ghi lại để soát khi có ca.
+
+**Lớp lỗi (2): ô sai vì chữ trùng nghĩa.** "Mặt tiền 6m" trong bài rao là bề ngang, AI ghi `cach_mat_tien`; "ngõ rộng 6m" AI ghi đường. **Sửa:** `kiemDeXuat`
+đổi ô theo chủ đề số đo của cụm trích (`oTheoChuDeSoDo`: hẻm ↔ đường, `cach_mat_tien` không có "cách / ra / tới" → `ngang`); luật bóc tách: "ngõ / kiệt" = hẻm,
+"ô tô vào thoải mái / tận cửa" là loại đường vào (không phải ô tô vào nhà), danh sách "gần A, B, C" vào `tien_ich_gan`, "dễ kinh doanh hoặc cho thuê" là tiềm năng.
+
+**Lớp lỗi (3): ý định duyệt đọc thiếu một loại câu.** Gửi tiêu đề là sửa bản nháp. **Sửa:** `doc-y-luot` thêm `tieu_de` (chép nguyên câu tiêu đề); nhánh duyệt
+kiểm câu đó nằm nguyên văn trong tin (`trichCoTrongTin`) → ghi `boc_tach.tieu_de_khach`, gửi lại bản nháp, câu duyệt vẫn treo — đứng trước mọi nhánh gật.
+
+**Bản nháp (chủ dự án chọn).** Tiêu đề tin bán có giá: "Chỉ {giá} {điểm mạnh} tại {phường}, {quận}" (`tieuDeTin`) — điểm mạnh chỉ từ dữ liệu: cụm "ô tô tận
+cửa" khách viết, không có thì "hẻm xe hơi" / "mặt tiền" theo cột; "cần bán gấp" giữ; tiêu đề khách gửi thì in đúng câu đó; tin cho thuê / chưa giá giữ kiểu tin
+lẻ (`tieuDeTinLe`). Bề ngang in "mặt tiền Nm" đầu dòng "🏫 Tiện ích" cùng các mục khách liệt kê; dòng diện tích bỏ "ngang". Bong bóng hai: câu khen (AI viết
+trên chính bản tin — `ai/khen-nhap.ts`; code kiểm cụm dựa vào + con số — `extraction/khen-hop-le.ts`; lượt soát nhận xét đọc lại, bỏ bất kỳ vế nào thì bỏ cả
+câu; không có câu thay thế), rồi dòng điểm, rồi "Điểm càng cao, công ty càng ưu tiên chào bán." (khoá mới `nhap_uu_tien` — khoá cũ có thể đã sửa ở DB).
+
+**Xin chấm điểm.** Đổi quyết định 22/09 (chỉ xin sau khi bán được): tin lên kệ (duyệt hoặc "đăng đi") mà lượt đó không còn câu hỏi nào khác (dẫn phí, trả lời
+câu hỏi kèm) → bong bóng cuối xin chấm điểm, MỘT lần cho mỗi người rao (`xinChamDiem` xét mọi tin của người đó). Câu trả lời đi đường `danh_gia` cũ (fact
+`danh_gia`, đóng câu); tin không phải điểm thì câu điểm hết hạn, không nuốt câu kế. Chưa từng nói phí thì lượt lên kệ đã có câu dẫn phí → lượt đó không xin điểm
+(một câu hỏi một lượt) — điểm sẽ không được xin cho người rao đó; ghi lại để chủ dự án quyết nếu cần xin ở lượt sau.
+
+**Chi phí / tốc độ.** Bản nháp thêm hai lượt AI nhỏ (viết khen + soát) — chỉ ở lượt gửi bản nháp.
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZL-01 / 01b | tiêu đề khách lúc duyệt ("Tiêu đề như vầy hay hơn nè: …" gốc; "em đặt tít là: …" mới), AI lỡ đọc là gật → chưa duyệt, `tieu_de_khach`, dòng 2 bản nháp là câu khách | đỏ khi bỏ nhánh `tieuDeMoi` |
+| ZZZZZL-01c | đối chứng "ok em đăng đi" + tiêu đề AI không có trong tin → duyệt, không ghi | — |
+| ZZZZZL-02 / 02b | câu khen qua soát mở bong bóng hai + câu ưu tiên; soát bỏ → không mảnh khen nào | 02 đỏ khi `khenChoNhap` trả null |
+| ZZZZZL-03 / 03b / 03c | lên kệ (đã nói phí) → xin điểm, "9 điểm nha em" ghi fact; chưa nói phí → không xin | 03, 03b đỏ khi tắt `xinDiemDuyet` |
+| ZZZZZL-R1 / R1b | bài rao "dễ dàng kinh doanh hoặc cho thuê" (gốc), "có thể cho khách thuê" (mới) → không hỏi hợp đồng / doanh thu | R1b đỏ khi bỏ cổng `aiDoc` |
+| ZZZZZL-R2 / R2b / R2c | "Nhà mình đang ở không cho thuê" (gốc), "ko có ai thuê đâu em, nhà anh ở" (mới), AI không đưa `khong_can_hoi` → câu hợp đồng đóng, không hỏi doanh thu | — |
+| H8e (đổi) | lượt lên kệ: thêm bong bóng thứ ba xin điểm | — |
+
+`tin-nhap-rao.mjs` TIEUDE-1…3, TIENICH-1, UUTIEN-1, KHEN-1/2, RENT-1/2 (RENT-1 đỏ khi bỏ cổng `choThueThat`); `khen-nhap.mjs` KHEN-K1…K7; `kiem-bang-chung.mjs`
+ZZZZZL-K1/K1b, ZZZP-02/03 (đổi: đổi ô thay vì bỏ); `re-nhanh.mjs` ZZZZZL-RN1…RN4. e2e **1286/1286**, `do-boc:nen` không tụt, phát lại 5/5.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

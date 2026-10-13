@@ -174,5 +174,16 @@ ok("MT-07 câu đường trước nhà cho nhà phố nói 'mặt tiền … tr�
 const moiKhoa = [...new Set(RE_NHANH.flatMap((l) => (l.them ?? []).map((t) => t.fact_key)))];
 for (const k of moiKhoa) ok(`câu nhánh '${k}' có câu mẫu + nhãn`, (!!CAU_HOI_MAU[k] || !!CAU_HOI_MAU[`${k}@nha_pho`]) && !!FACT_LABELS[k], k);
 
+// SRS-5.1zzzzzl (test Zalo 13/10): "dễ dàng kinh doanh hoặc cho thuê" là TIỀM NĂNG — bỏ dấu chứa "dang kinh doanh" từng mở nhánh đang cho thuê.
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("bo_sung", "phù hợp cho gia đình hoặc đầu tư · dễ dàng kinh doanh hoặc cho thuê")] }, ["phap_ly"]);
+ok("ZZZZZL-RN1 'dễ dàng kinh doanh hoặc cho thuê' → KHÔNG nhánh đang cho thuê, không hỏi hợp đồng / doanh thu", !keys(r).includes("han_hop_dong_thue") && !keys(r).includes("doanh_thu") && !r.luat.includes("dang_cho_thue"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("tiem_nang", "kinh doanh hay cho thuê đều được"), f("bo_sung", "mặt tiền rộng dễ kinh doanh")] }, ["phap_ly"]);
+ok("ZZZZZL-RN1b (cách nói mới) ô tiềm năng 'kinh doanh hay cho thuê đều được' → không nhánh đang cho thuê", !r.luat.includes("dang_cho_thue"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("hien_trang_su_dung", "đang ở"), f("bo_sung", "trước đây có cho thuê")] }, ["phap_ly"]);
+ok("ZZZZZL-RN2 ô hiện trạng sử dụng 'đang ở' là chủ → không nhánh đang cho thuê", !r.luat.includes("dang_cho_thue"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("hien_trang_su_dung", "đang cho thuê")] }, ["phap_ly"]);
+ok("ZZZZZL-RN3 đối chứng hiện trạng 'đang cho thuê' → vẫn hỏi hạn hợp đồng", keys(r).includes("han_hop_dong_thue"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("bo_sung", "nha dang cho thue 15 trieu")] }, ["phap_ly"]);
+ok("ZZZZZL-RN4 đối chứng không dấu 'dang cho thue' → vẫn nhánh đang cho thuê", r.luat.includes("dang_cho_thue"), JSON.stringify(r));
 console.log(hong ? `\nRẼ NHÁNH: ${hong}/${tong} CA HỎNG` : `\nRẼ NHÁNH: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

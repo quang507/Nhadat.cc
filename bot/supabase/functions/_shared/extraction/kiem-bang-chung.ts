@@ -728,6 +728,13 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {})
       if (mo) { viTri = mo.viTri; kdDung = mo.cum; }
     }
     if (viTri < 0) { bo.push({ ...d, ly_do: "trich_dan_khong_co_trong_tin" }); continue; }
+    // SRS-5.1zzzzzl (test Zalo 13/10, bài rao dán sẵn: "Mặt tiền 6m" → AI cach_mat_tien 6; "Ngõ rộng 6m" → AI do_rong_duong 6, bị bỏ → bot hỏi
+    // lại hẻm dù bài rao đã nói). Số đo AI đặt nhầm ô mà cụm trích nói RÕ một chuyện khác (cùng bộ phân loại `chuDeSoDo` đang chặn ở dưới)
+    // → chuyển sang đúng ô đó thay vì bỏ mất, khi ô đó chưa có đề xuất khác.
+    {
+      const moi = oTheoChuDeSoDo(d.khoa, kdDung ?? kdCum);
+      if (moi && !(deXuat ?? []).some((x) => x?.khoa === moi)) d = { ...d, khoa: moi };
+    }
     // 30/09/2026 (bắn thật lx-ban-a): "hẻm 45 Nguyễn Trãi" → AI ghi độ rộng hẻm 45m, bản nháp in "Đường vào: 45m".
     // 45 là SỐ HẺM (số nhà), không phải bề rộng — số có trong câu nên kiểm số lọt.
     if (d.khoa === "do_rong_hem" && laSoHemKhongPhaiDoRong(tin, d.gia_tri)) { bo.push({ ...d, ly_do: "so_hem_khong_phai_do_rong" }); continue; }
@@ -1694,8 +1701,19 @@ export function docKhongCanHoi(
 
 /** Loại đường vào nói RÕ trong chuỗi đã chuẩn hoá: "may" / "hoi" / "tai"; không rõ hoặc nhiều loại → null. */
 /** SRS-5.1zzzp: số đo gán vào ô mà cụm trích nói rõ chuyện KHÁC → lý do bỏ; dùng ở CẢ kiểm đủ lẫn kiểm nhẹ (production). */
+/** SRS-5.1zzzzzl: ô số đo đúng theo chủ đề cụm trích khi AI đặt nhầm ô (null = giữ ô AI chọn). */
+export function oTheoChuDeSoDo(khoa: string, kd: string): string | null {
+  const c = chuDeSoDo(kd);
+  if (khoa === "do_rong_duong" && c.hem && !c.duong && !c.ngang) return "do_rong_hem";
+  if (khoa === "do_rong_hem" && c.duong && !c.hem && !c.ngang) return "do_rong_duong";
+  if (khoa === "cach_mat_tien" && c.ngang && !c.hem && !c.duong && !NOI_CACH.test(kd)) return "ngang";
+  return null;
+}
+/** "cách / ra / tới / xa / gần … mặt tiền" — khoảng cách tới đường lớn, không phải chiều ngang. */
+const NOI_CACH = /\b(?:cach|ra|toi|xa|gan|di bo)\b/;
 function soDoSaiChuDe(khoa: string, kd: string): string | null {
   const c = chuDeSoDo(kd);
+  if (khoa === "cach_mat_tien" && c.ngang && !NOI_CACH.test(kd)) return "cach_mat_tien_nhung_trich_noi_ngang";
   if (khoa === "do_rong_hem" && !c.hem && (c.duong || c.ngang)) return "rong_hem_nhung_trich_noi_chuyen_khac";
   if (khoa === "do_rong_duong" && !c.duong && (c.hem || c.ngang)) return "rong_duong_nhung_trich_noi_chuyen_khac";
   if ((khoa === "ngang" || khoa === "no_hau") && !c.ngang && (c.hem || c.duong)) return "ngang_nhung_trich_noi_duong_hem";
