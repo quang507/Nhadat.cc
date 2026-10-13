@@ -59,3 +59,28 @@ import { tieuDeHopLe } from "../supabase/functions/_shared/extraction/khen-hop-l
   ok3("TD-5 null / rỗng → null", tieuDeHopLe(null, TIN) === null && tieuDeHopLe("", TIN) === null);
 }
 
+
+// SRS-5.1zzzzzz (chủ dự án 13/10/2026: "Chọn lọc các tiện ích trong tin dự án để đưa ra ý ngon nghẻ"): AI chọn ≤ 4 tiện ích + viết gọn; code kiểm.
+import { tienIchNoiBatHopLe } from "../supabase/functions/_shared/extraction/khen-hop-le.ts";
+{
+  const ok3 = (ten, dk, ct = "") => { console.log(`${dk ? "✓" : "✗"} ${ten}${dk || !ct ? "" : `\n    ${ct}`}`); if (!dk) process.exitCode = 1; };
+  const Y = ["sân trước và giếng trời sân sau", "Thông ra ĐT 835D chỉ 200 mét", "Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút", "UBND xã và trạm y tế ~ 2 - 3 phút",
+    "Hệ thống trường học các cấp ~ 10 phút", "Khu công nghiệp Cầu Tràm ~ 10 phút", "Chợ Bình Chánh ~ 20 phút", "Vinhomes Hưng Long Bình Chánh ~ 20 phút", "cao tốc Bến Lức - Long Thành"];
+  const r = tienIchNoiBatHopLe([
+    { goc: "Thông ra ĐT 835D chỉ 200 mét", gon: "ra ĐT 835D 200m" },
+    { goc: "Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút", gon: "chợ Rạch Kiến, Phước Vân 3–5 phút" },
+    { goc: "Khu công nghiệp Cầu Tràm ~ 10 phút", gon: "KCN Cầu Tràm 10 phút" },
+    { goc: "cao tốc Bến Lức - Long Thành", gon: "cao tốc Bến Lức - Long Thành" },
+    { goc: "Hệ thống trường học các cấp ~ 10 phút", gon: "trường học các cấp 10 phút" },
+  ], Y);
+  ok3("TICH-1 (ca gốc KDC Cầu Tràm) 5 ý AI chọn → nhận 4 đầu, chữ gọn giữ tên riêng + số; 'KCN' nhận vì gốc có 'Khu công nghiệp'",
+    r.length === 4 && r.map((x) => x.in).join(" · ") === "ra ĐT 835D 200m · chợ Rạch Kiến, Phước Vân 3–5 phút · KCN Cầu Tràm 10 phút · cao tốc Bến Lức - Long Thành", JSON.stringify(r));
+  const r2 = tienIchNoiBatHopLe([{ goc: "Chợ Bình Chánh ~ 20 phút", gon: "chợ Bình Chánh 5 phút" }, { goc: "Vinhomes Hưng Long Bình Chánh ~ 20 phút", gon: "Vinhomes Hưng Long sầm uất" },
+    { goc: "Siêu thị Co.opmart", gon: "Co.opmart" }], Y);
+  ok3("TICH-2 gon đổi số (20 → 5) → in ý gốc; gon thêm nhận định 'sầm uất' → in ý gốc; goc không có trong danh sách (bịa) → bỏ",
+    r2.length === 2 && r2[0].in === "Chợ Bình Chánh ~ 20 phút" && r2[1].in === "Vinhomes Hưng Long Bình Chánh ~ 20 phút", JSON.stringify(r2));
+  const r3 = tienIchNoiBatHopLe([{ goc: "chợ rạch kiến hoặc chợ phước vân ~ 3 - 5 phút", gon: "chợ Rạch Kiến 3–5 phút" }, { goc: "Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút", gon: "chợ Phước Vân" }], Y);
+  ok3("TICH-3 goc chép lệch hoa thường / dấu vẫn khớp (so bỏ dấu); ý trùng chọn hai lần chỉ nhận một", r3.length === 1 && r3[0].in === "chợ Rạch Kiến 3–5 phút", JSON.stringify(r3));
+  ok3("TICH-4 gon có tên riêng KHÔNG có trong gốc ('Aeon Mall') → in ý gốc", tienIchNoiBatHopLe([{ goc: "Chợ Bình Chánh ~ 20 phút", gon: "chợ Bình Chánh, Aeon Mall 20 phút" }], Y)[0]?.in === "Chợ Bình Chánh ~ 20 phút");
+  ok3("TICH-5 không có / rỗng → []", tienIchNoiBatHopLe(null, Y).length === 0 && tienIchNoiBatHopLe([], Y).length === 0);
+}

@@ -11445,6 +11445,33 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     check("ZZZZZL-02b soát bỏ câu khen (không căn cứ) → bong bóng hai mở bằng dòng điểm, không còn mảnh khen nào",
       j >= 0 && /^Độ đầy đủ/.test(b2.replies[j + 1] ?? "") && !(b2.replies ?? []).some((x) => x.includes("giới thiệu chi tiết")), JSON.stringify(b2.replies));
   }
+  // SRS-5.1zzzzzz (chủ dự án 13/10: "Chọn lọc các tiện ích trong tin dự án để đưa ra ý ngon nghẻ"): bài rao KDC 9 ý tiện ích → cùng lượt khen AI
+  // chọn ≤ 4 ý + viết gọn, code kiểm (`tienIchNoiBatHopLe`) → dòng 🏫 chỉ in 4 ý đó; DB vẫn giữ đủ 9 fact; AI không chọn → in đủ như cũ.
+  {
+    const Y = ["Thông ra ĐT 835D chỉ 200 mét", "Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút", "UBND xã và trạm y tế ~ 2 - 3 phút", "Hệ thống trường học các cấp ~ 10 phút",
+      "Khu công nghiệp Cầu Tràm ~ 10 phút", "Chợ Bình Chánh ~ 20 phút", "Vinhomes Hưng Long Bình Chánh ~ 20 phút", "cao tốc Bến Lức - Long Thành"];
+    const NB = [{ goc: Y[0], gon: "ra ĐT 835D 200m" }, { goc: Y[1], gon: "chợ Rạch Kiến, Phước Vân 3–5 phút" }, { goc: Y[4], gon: "KCN Cầu Tràm 10 phút" },
+      { goc: Y[7], gon: "cao tốc Bến Lức - Long Thành" }, { goc: Y[5], gon: "chợ Bình Chánh 20 phút" }];
+    for (const [ma, chon, mong] of [["01 (ca gốc)", NB, true], ["01b (đối chứng, AI không chọn)", [], false]]) {
+      const { uid, L } = choDuyet();
+      db().t.listing_facts = db().t.listing_facts.filter((f) => !(f.listing_id === L.id && f.question === "tien_ich_gan"));
+      for (const y of Y) db().insert("listing_facts", { listing_id: L.id, question: "bo_sung", answer: y, source: "ai_kiem" });
+      globalThis.__model = {
+        parse: (p) => laYL(p) ? { ...rongL, tieu_de: "Chỉ 7,6 tỷ hẻm xe hơi Chợ Lớn" } : laBocL(p) ? rongL
+          : laKhenL(p) ? { khen: null, dua_tren: [], tien_ich: Y, tien_ich_noi_bat: chon } : laSoatL(p) ? { nhan_xet: [] } : OUT(),
+        create: () => "Dạ vâng ạ.",
+      };
+      const r = await send({ external_user_id: uid, text: "Tiêu đề: Chỉ 7,6 tỷ hẻm xe hơi Chợ Lớn" });
+      const nhap = (r.body?.replies ?? []).find((x) => x.startsWith("📋")) ?? "";
+      const ti = nhap.split("\n").find((x) => x.startsWith("🏫")) ?? "";
+      const duDb = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "bo_sung").length === Y.length;
+      check(`ZZZZZZ-${ma} bài rao 8 ý tiện ích → dòng 🏫 ${mong ? "chỉ 4 ý AI chọn, chữ gọn, không UBND / Vinhomes" : "in đủ 8 ý như cũ"}; DB vẫn đủ 8 fact`,
+        duDb && (mong
+          ? ti.includes("ra ĐT 835D 200m") && ti.includes("KCN Cầu Tràm 10 phút") && ti.includes("cao tốc Bến Lức - Long Thành") && !/UBND|Vinhomes|Chợ Bình Chánh/.test(ti) && ti.split(" · ").length <= 5
+          : Y.every((y) => ti.includes(y))),
+        JSON.stringify({ ti, duDb, nhap: nhap.slice(0, 500) }));
+    }
+  }
   // SRS-5.1zzzzzn: ý thêm AI xếp vào "Quy mô" (theo nghĩa, cùng lượt khen) → lên dòng 🏗 Quy mô; ý khác (còn mới, hiện trạng) ở 📝 Thêm;
   // ý AI đưa mà KHÔNG có trong danh sách ý thêm (bịa) → không in.
   for (const [ma, ys, qm, coQM, coThem] of [

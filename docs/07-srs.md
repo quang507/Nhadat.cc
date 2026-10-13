@@ -4339,6 +4339,34 @@ thất, giá 5 tỷ"), K2…K2g (địa chỉ từ ý thêm, "ở hẻm 45 Nguy�
 ZZZZZY-02 (địa chỉ ghi, không bo_sung, câu đóng), ZZZZZY-03 (tìm theo nghĩa bật mà không nhúng, không gợi ý "Trương Định"), ZZZZZY-04 ("Hối" → "Hội");
 `vi-du-boc-rao.mjs` (trần 14700). Hoàn một trong năm chỗ sửa là đỏ đúng ca đó.
 
+### SRS-5.1zzzzzz · Tiện ích trong tin dự án: AI chọn lọc 3–4 ý đáng khoe, viết gọn; code kiểm (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026: "Chọn lọc các tiện ích trong tin dự án để đưa ra ý ngon nghẻ nhé"; tiếp SRS-5.1zzzzzw (bài rao KDC Cầu Tràm 9 tiện ích)]`
+
+**Ca gốc.** Sau SRS-5.1zzzzzw bản nháp giữ ĐỦ tiện ích của bài rao dự án / khu dân cư: dòng 🏫 in 8–9 ý nguyên văn ("Chợ Rạch Kiến hoặc Chợ
+Phước Vân ~ 3 - 5 phút · UBND xã và trạm y tế ~ 2 - 3 phút · Hệ thống trường học các cấp ~ 10 phút · …") — đủ nhưng rối, người mua không thấy
+điểm đáng chú ý. Chủ dự án muốn tin rao chỉ khoe vài ý "ngon nghẻ".
+
+**Nguyên tắc.** Ghi ĐỦ và in CHỌN LỌC là hai việc: DB vẫn giữ mọi ý (`bo_sung`, zzzzzw); chỉ dòng 🏫 trên tin là chọn. Chọn theo NGHĨA là việc
+của AI, không phải danh sách từ khoá; chữ in lên tin thì code kiểm từng ý như mọi lời model khác (không bịa tên, không bịa số, không nhận định).
+
+**Sửa.** (1) `_shared/ai/khen-nhap.ts`: cùng lượt model khen bản nháp (không thêm lượt gọi) thêm `tien_ich_noi_bat[]` = `{goc, gon}` — khi Ý THÊM có
+≥ 4 ý tiện ích, chọn tối đa 4 ý đáng khoe nhất (chợ / trường / bệnh viện / siêu thị lớn / trục đường, cao tốc / KCN; gần nhất trước; bỏ ý mờ như
+UBND, trạm y tế), `goc` chép nguyên văn một dòng Ý THÊM, `gon` ≤ 10 chữ giữ đúng tên riêng + con số. (2) `extraction/khen-hop-le.ts`
+`tienIchNoiBatHopLe`: `goc` phải là đúng một ý trong danh sách ứng viên (so bỏ dấu); `gon` ≤ 60 ký tự, không "?", không gạch dài, mọi con số và
+mọi chữ viết hoa (tên riêng, viết tắt KCN / BV / TT…) có trong `goc`, không chữ nhận định (sầm uất, tiện lợi, đắc địa, đẹp, rộng…); `gon` không qua →
+in `goc`; tối đa 4, bỏ trùng. (3) `chat-reply` `khenChoNhap` trả `tienIchNoiBat` (ý được chọn cũng tính là tiện ích); `tin-nhap.ts` dòng 🏫: có
+danh sách chọn lọc → chỉ in các ý đó bằng chữ gọn (sau mặt tiền và tiện ích khách liệt kê ở ô `tien_ich_gan`); không có (AI không chạy, dưới 4
+ý, hay ý chọn không nằm trong ý thêm của tin) → in đủ như zzzzzw.
+
+**Chỗ khác cùng lớp.** Dòng 📝 Thêm và 🏗 Quy mô vẫn in đủ — chỉ tiện ích mới dài hàng chục ý. Mô tả web đọc fact, không đổi. Tên dự án / tiện
+ích từ kho `projects.amenities` đi đường khối DỰ ÁN cho model, không qua dòng 🏫.
+
+**Kiểm.** `khen-nhap.mjs` TICH-1…5 (ca KDC Cầu Tràm: nhận 4, chữ gọn "KCN Cầu Tràm 10 phút"; gon đổi số / thêm "sầm uất" / tên riêng lạ → in gốc;
+goc bịa → bỏ; lệch dấu vẫn khớp; trùng chỉ một); `tin-nhap-rao.mjs` TIENICH-CHON-1…3 (dòng 🏫 đúng 4 ý gọn, không ý nào rơi xuống Thêm; không
+danh sách → in đủ; ý chọn không có trong tin → in đủ); e2e ZZZZZZ-01 / 01b (bản nháp thật qua lượt khen, DB vẫn đủ 8 fact). Tắt (1) hay (3) → e2e
+01 đỏ; tắt (2) → TICH-2/4 đỏ.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

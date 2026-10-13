@@ -46,7 +46,7 @@ import {
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { soatNhanXetBangModel } from "../_shared/ai/kiem-khen.ts";
 import { vietKhenNhapBangModel } from "../_shared/ai/khen-nhap.ts";
-import { cauDuAnCoNguon, khenHopLe, loiNhanGiayToHopLe, tieuDeHopLe } from "../_shared/extraction/khen-hop-le.ts";
+import { cauDuAnCoNguon, khenHopLe, loiNhanGiayToHopLe, tienIchNoiBatHopLe, tieuDeHopLe } from "../_shared/extraction/khen-hop-le.ts";
 import { gopDuAnTrung, tienIchDuAnSach } from "../_shared/extraction/du-an-kho.ts";
 import { docYLuotBangModel, type YLuotLLM } from "../_shared/ai/doc-y-luot.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
@@ -2904,8 +2904,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
      * bản tin vừa dựng, code kiểm cụm dựa vào + số (`khenHopLe`), rồi lượt soát nhận xét đọc lại: soát bỏ bất kỳ vế nào, hay soát không
      * chạy được, thì bỏ cả câu khen. Chỉ chế độ `ai`; không có câu khen thay thế.
      */
-    const khenChoNhap = async (banTin: string, yThem: string[] = []): Promise<{ khen: string | null; quyMo: string[]; tienIch: string[]; tieuDeAi: string | null }> => {
-      if (!anthropicS || !laCheDoAi) return { khen: null, quyMo: [], tienIch: [], tieuDeAi: null };
+    type KhenNhap = { khen: string | null; quyMo: string[]; tienIch: string[]; tienIchNoiBat: Array<{ goc: string; in: string }>; tieuDeAi: string | null };
+    const khenChoNhap = async (banTin: string, yThem: string[] = []): Promise<KhenNhap> => {
+      if (!anthropicS || !laCheDoAi) return { khen: null, quyMo: [], tienIch: [], tienIchNoiBat: [], tieuDeAi: null };
       try {
         const kq = await vietKhenNhapBangModel(anthropicS as unknown as Parameters<typeof vietKhenNhapBangModel>[0], MODEL, banTin, cachGoi, yThem);
         await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
@@ -2913,17 +2914,19 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // SRS-5.1zzzzzo: so lỏng (`chuanY`: bỏ dấu, bỏ "có" đầu) — AI hay chép thiếu chữ "có"; trả lại đúng chữ ý thêm gốc.
         const khopY = (ds: string[]) => yThem.filter((y) => ds.some((q) => chuanY(q) === chuanY(y)));
         const quyMo = khopY(kq.quyMo);
-        const tienIch = khopY(kq.tienIch).filter((y) => !quyMo.includes(y));
+        // SRS-5.1zzzzzz: tiện ích AI chọn lọc để khoe (≤ 4, chữ gọn) — code kiểm từng ý; ý được chọn cũng là tiện ích.
+        const tienIchNoiBat = tienIchNoiBatHopLe(kq.tienIchNoiBat, yThem.filter((y) => !quyMo.includes(y)));
+        const tienIch = [...new Set([...khopY(kq.tienIch), ...tienIchNoiBat.map((x) => x.goc)])].filter((y) => !quyMo.includes(y));
         // SRS-5.1zzzzzr: tiêu đề AI qua kiểm số + chữ cấm; không qua thì tiêu đề máy.
         const tieuDeAi = tieuDeHopLe(kq.tieuDe, banTin);
         const k = khenHopLe(kq.khen, kq.duaTren, banTin);
-        if (!k) return { khen: null, quyMo, tienIch, tieuDeAi };
+        if (!k) return { khen: null, quyMo, tienIch, tienIchNoiBat, tieuDeAi };
         const loiChu = [...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n");
         const sach = await soatNhanXet(k, loiChu, banTin);
-        return { khen: nhanXetAiXong && sach === k ? k : null, quyMo, tienIch, tieuDeAi };
+        return { khen: nhanXetAiXong && sach === k ? k : null, quyMo, tienIch, tienIchNoiBat, tieuDeAi };
       } catch (e) {
         await ghiLoi(client, "chat-reply khen ban nhap", e);
-        return { khen: null, quyMo: [], tienIch: [], tieuDeAi: null };
+        return { khen: null, quyMo: [], tienIch: [], tienIchNoiBat: [], tieuDeAi: null };
       }
     };
     // 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds … cần AI hiểu"): câu trong bảng theo loại mà AI thấy KHÔNG áp dụng cho

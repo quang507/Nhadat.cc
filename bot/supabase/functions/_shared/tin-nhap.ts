@@ -94,6 +94,11 @@ export type ThamSoNhap = {
   quyMo?: string[];
   /** SRS-5.1zzzzzo: ý thêm AI xếp là tiện ích / xung quanh (chỉ nhận ý có trong danh sách ý thêm) → dòng 🏫 Tiện ích. */
   tienIch?: string[];
+  /**
+   * SRS-5.1zzzzzz: tiện ích AI CHỌN LỌC (tối đa 4, đã qua `tienIchNoiBatHopLe`): `goc` = ý thêm gốc, `in` = chữ in gọn. Có danh sách này thì dòng
+   * 🏫 chỉ in các ý được chọn (thay cho toàn bộ ý thêm xếp tiện ích); không có (AI không chạy / dưới 4 ý) → in đủ như cũ. DB vẫn giữ đủ mọi ý.
+   */
+  tienIchNoiBat?: Array<{ goc: string; in: string }>;
   cauTD:(khoa: string, o?: Record<string, string | number | null | undefined>) => string;
 };
 
@@ -273,7 +278,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
  * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
  */
 export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
-  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, tieuDeAi, khen, quyMo, tienIch: tienIchAi, tieuDeDau } = t;
+  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, tieuDeAi, khen, quyMo, tienIch: tienIchAi, tienIchNoiBat, tieuDeDau } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
   // "thuê tối thiểu thuê tối thiểu 3 năm". So theo TỪNG CHỮ của nhãn.
@@ -354,7 +359,8 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   // lên chỗ quy mô, còn mới, hiện đang ở đưa xuống chỗ mô tả thêm"): dòng "Quy mô" = số tầng / phòng / WC / sân… + ý thêm AI xếp là không gian
   // (`quyMo`, chỉ nhận ý có đúng trong danh sách ý thêm); tình trạng nhà + hiện trạng sử dụng xuống dòng "Thêm".
   const laQuyMo = new Set((quyMo ?? []).map(chuanY));
-  const laTienIch = new Set((tienIchAi ?? []).map(chuanY));
+  // SRS-5.1zzzzzz: ý AI chọn lọc cũng là tiện ích (kể cả khi AI quên xếp nó vào `tien_ich`).
+  const laTienIch = new Set([...(tienIchAi ?? []), ...(tienIchNoiBat ?? []).map((x) => x.goc)].map(chuanY));
   const boSungQuyMo = boSung.filter((x) => laQuyMo.has(chuanY(x)));
   const boSungTienIch = boSung.filter((x) => !boSungQuyMo.includes(x) && laTienIch.has(chuanY(x)));
   const boSungThem = boSung.filter((x) => !boSungQuyMo.includes(x) && !boSungTienIch.includes(x));
@@ -462,7 +468,11 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   // tách thành từng mục (chữ khách, không thêm bớt).
   const tienIch = (fact("tien_ich_gan") ?? "").split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean)
     .map((x, i) => i === 0 ? thuongDau(x).replace(/^Gần(?=\s)/u, "gần") : x);
-  them("🏫", "Tiện ích", [matTien, ...tienIch, ...boSungTienIch.filter((x) => !tienIch.some((y) => chuanY(y) === chuanY(x)))]);
+  // SRS-5.1zzzzzz (chủ dự án 13/10: "Chọn lọc các tiện ích trong tin dự án để đưa ra ý ngon nghẻ"): có danh sách AI chọn lọc (đã kiểm) → ý thêm
+  // tiện ích chỉ in các ý được chọn, bằng chữ gọn; ý không chọn vẫn nằm trong DB (fact `bo_sung`), không lên dòng này. Không có → in đủ như cũ.
+  const chonLoc = (tienIchNoiBat ?? []).filter((x) => boSungTienIch.some((b) => chuanY(b) === chuanY(x.goc)));
+  const yThemIn = chonLoc.length ? chonLoc.map((x) => x.in) : boSungTienIch;
+  them("🏫", "Tiện ích", [matTien, ...tienIch, ...yThemIn.filter((x) => !tienIch.some((y) => chuanY(y) === chuanY(x)))]);
   // FR-211: nhãn tìm kiếm — khách mua lọc được ("yên tĩnh", "gần chợ"…).
   // 25/09/2026: nhãn mà các dòng trên đã nói ("sân thượng" trong kết cấu) không in lặp.
   them("🏷", "Nhãn", [l.nhan?.length ? tenNhanKhongTrung(l.nhan, dong.join("\n")) || null : null]);

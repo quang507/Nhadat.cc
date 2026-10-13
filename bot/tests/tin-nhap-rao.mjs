@@ -330,5 +330,25 @@ console.log(`\n${dat} đạt · ${hong} hỏng`);
   const b2 = soanTinNhap({ l: NHA_PHO.l, facts: [...f0, { question: "bo_sung", answer: "cách trường cấp 2 khoảng 300m" }], diem: 80, thieu: [], soAnh: 0, lai: false, cauTD, tienIch: ["cách trường cấp 2 khoảng 300m"] });
   la("TIENICH-AI-2 (cách nói mới) 'cách trường cấp 2 khoảng 300m' → 🏫 Tiện ích, không ở 📝 Thêm", /🏫 Tiện ích:.*cách trường cấp 2 khoảng 300m/u.test(b2) && !/📝 Thêm:.*trường cấp 2/u.test(b2), b2);
 }
+
+// SRS-5.1zzzzzz (chủ dự án 13/10/2026: "Chọn lọc các tiện ích trong tin dự án để đưa ra ý ngon nghẻ"): bài rao KDC 9 ý → dòng 🏫 chỉ in các ý
+// AI chọn (đã kiểm), chữ gọn; không có danh sách chọn (AI không chạy / dưới 4 ý) → in đủ như cũ; DB vẫn đủ 9 ý.
+{
+  const f0 = NHA_PHO.facts.filter((f) => f.question !== "bo_sung" && f.question !== "tien_ich_gan");
+  const Y = ["Thông ra ĐT 835D chỉ 200 mét", "Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút", "UBND xã và trạm y tế ~ 2 - 3 phút", "Hệ thống trường học các cấp ~ 10 phút",
+    "Khu công nghiệp Cầu Tràm ~ 10 phút", "Chợ Bình Chánh ~ 20 phút", "Vinhomes Hưng Long Bình Chánh ~ 20 phút", "cao tốc Bến Lức - Long Thành", "sân trước và giếng trời sân sau"];
+  const facts = [...f0, ...Y.map((y) => ({ question: "bo_sung", answer: y }))];
+  const chon = [{ goc: Y[0], in: "ra ĐT 835D 200m" }, { goc: Y[1], in: "chợ Rạch Kiến, Phước Vân 3–5 phút" }, { goc: Y[4], in: "KCN Cầu Tràm 10 phút" }, { goc: Y[7], in: "cao tốc Bến Lức - Long Thành" }];
+  const b = soanTinNhap({ l: NHA_PHO.l, facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD, tienIch: Y.slice(0, 8), quyMo: [Y[8]], tienIchNoiBat: chon });
+  const ti = b.split("\n").find((x) => x.startsWith("🏫")) ?? "";
+  la("TIENICH-CHON-1 (ca gốc) 9 ý, AI chọn 4 → dòng 🏫 chỉ 4 ý chữ gọn, không UBND / Chợ Bình Chánh / Vinhomes; không ý nào rơi xuống 📝 Thêm",
+    ti === "🏫 Tiện ích: mặt tiền 4m · ra ĐT 835D 200m · chợ Rạch Kiến, Phước Vân 3–5 phút · KCN Cầu Tràm 10 phút · cao tốc Bến Lức - Long Thành" &&
+      !/UBND|Vinhomes|Bình Chánh ~/.test(b) && /🏗 Quy mô:.*sân trước và giếng trời/.test(b), b);
+  const b2 = soanTinNhap({ l: NHA_PHO.l, facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD, tienIch: Y.slice(0, 8), quyMo: [Y[8]] });
+  const ti2 = b2.split("\n").find((x) => x.startsWith("🏫")) ?? "";
+  la("TIENICH-CHON-2 (đối chứng) không có danh sách chọn lọc → in đủ 8 ý tiện ích như cũ", Y.slice(0, 8).every((y) => ti2.includes(y)), ti2);
+  const b3 = soanTinNhap({ l: NHA_PHO.l, facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD, tienIch: Y.slice(0, 8), quyMo: [Y[8]], tienIchNoiBat: [{ goc: "Siêu thị Co.opmart", in: "Co.opmart" }] });
+  la("TIENICH-CHON-3 (đối chứng) ý chọn không có trong ý thêm của tin → coi như không có danh sách, in đủ", Y.slice(0, 8).every((y) => b3.includes(y)) && !/Co\.opmart/.test(b3), b3);
+}
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");

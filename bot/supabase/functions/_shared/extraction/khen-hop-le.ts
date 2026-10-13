@@ -82,3 +82,47 @@ export function tieuDeHopLe(td: string | null | undefined, banTin: string): stri
   if (so(k).some((v) => !coSo.has(v))) return null;
   return k;
 }
+
+/**
+ * SRS-5.1zzzzzz (chủ dự án 13/10/2026: "Chọn lọc các tiện ích trong tin dự án để đưa ra ý ngon nghẻ"): bài rao dự án / khu dân cư liệt kê 7–9
+ * tiện ích, dòng 🏫 in hết thì rối. AI (cùng lượt khen bản nháp) chọn tối đa 4 ý đáng khoe và viết gọn; code kiểm TẤT ĐỊNH từng ý:
+ * `goc` phải là đúng một ý trong danh sách ứng viên (so bỏ dấu, bỏ "có" đầu); `gon` ≤ 60 ký tự, một dòng, không "?", không gạch dài, MỌI con
+ * số trong gon có trong goc, MỌI chữ viết hoa (tên riêng, viết tắt như KCN) trong gon có trong goc (bỏ dấu; "KCN" nhận khi goc có "khu công
+ * nghiệp"), không chữ nhận định / quảng cáo. gon không qua → in goc. Trả danh sách ý ĐÃ CHỌN (goc gốc + chữ in), tối đa 4, theo thứ tự AI xếp.
+ * Dữ liệu DB không đụng — chỉ chọn thứ in lên tin.
+ */
+export function tienIchNoiBatHopLe(
+  ds: Array<{ goc?: string | null; gon?: string | null }> | null | undefined, ungVien: string[],
+): Array<{ goc: string; in: string }> {
+  const bd = (s: string) => s.normalize("NFC").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+  const khoa = (s: string) => bd(s).replace(/[^a-z0-9]+/g, " ").trim().replace(/^(?:nha co|can co|co)\s+/, "");
+  const CAM = /\b(?:sầm uất|tiện lợi|đắc địa|đẳng cấp|tuyệt vời|lý tưởng|thuận tiện|dễ bán|sinh lời|đầu tư|hot|vip|view|đẹp|tốt|rộng)\b/iu;
+  const VIET_TAT: Record<string, string> = { kcn: "khu cong nghiep", tt: "trung tam", bv: "benh vien", th: "truong", st: "sieu thi", ql: "quoc lo", dt: "duong tinh|dt", cc: "chung cu", kdc: "khu dan cu", ubnd: "uy ban" };
+  const so = (x: string) => (x.match(/\d+(?:[.,]\d+)?/g) ?? []).map((v) => v.replace(",", "."));
+  const ra: Array<{ goc: string; in: string }> = [];
+  const daChon = new Set<string>();
+  for (const d of ds ?? []) {
+    const goc0 = (d?.goc ?? "").replace(/\s+/g, " ").trim();
+    if (!goc0) continue;
+    const goc = ungVien.find((u) => khoa(u) === khoa(goc0));
+    if (!goc || daChon.has(khoa(goc))) continue;
+    daChon.add(khoa(goc));
+    let inRa = goc;
+    const gon = (d?.gon ?? "").replace(/\s+/g, " ").trim();
+    if (gon && gon.length <= 60 && !/[?\n—]/.test(gon) && !CAM.test(gon)) {
+      const soGoc = new Set(so(goc));
+      const kdGoc = bd(goc);
+      const soOk = so(gon).every((v) => soGoc.has(v));
+      const tenOk = (gon.match(/\p{Lu}[\p{L}\d]*/gu) ?? []).every((w) => {
+        const k = bd(w);
+        if (kdGoc.includes(k)) return true;
+        const dai = VIET_TAT[k];
+        return !!dai && new RegExp(dai).test(kdGoc);
+      });
+      if (soOk && tenOk) inRa = gon;
+    }
+    ra.push({ goc, in: inRa });
+    if (ra.length >= 4) break;
+  }
+  return ra;
+}
