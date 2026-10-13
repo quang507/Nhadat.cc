@@ -7695,7 +7695,13 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // cũng không né nó (không nói sang ô khác). Câu đó vẫn mở, trả lời chuyện bên lề rồi quay lại nó (r2b) — không chọn câu kế.
         // Chặn trên: đã có hai lượt khách từ lúc mở câu mà chưa trả lời (câu đã hỏi ba lần) → thôi như cũ, để không hỏi dồn.
         const moCau = pendingReq.created_at ?? null;
-        const soLuotTreo = moCau ? lichSuRows.filter((m) => laTinNguoi(m.sender) && !!m.created_at && m.created_at > moCau).length : 0;
+        // SRS-5.1zzzzzza (e2e H7 đỏ sau khi bản nháp thành BA bong bóng): đếm trên `lichSuDai` (40 dòng), không trên cửa sổ 9 dòng
+        // `lichSuRows` — cửa sổ đó đếm cả bong bóng bot, bot nói nhiều bong bóng là lượt khách cũ rơi khỏi cửa sổ và số đếm sai.
+        // Đếm lượt khách TRƯỚC lượt này (tin vừa nhắn đã nằm trong sổ ở dòng mới nhất — bỏ nó, như `lichSuRows` đã bỏ).
+        const soLuotTreo = moCau
+          ? ((lichSuDai ?? []) as Array<{ sender: string; created_at?: string | null }>)
+            .filter((m, i) => !(i === 0 && laTinNguoi(m.sender)) && laTinNguoi(m.sender) && !!m.created_at && m.created_at > moCau).length
+          : 0;
         const luotBenLe = !kq.chuyenSang && !kemLech.length && !daGhiChuLech && kq.loai !== "xung_ho" && kq.loai !== "ack" &&
           (!!hoiNguoc || !!vaiTuNoiLuot) && soLuotTreo < 2;
         // SRS-5.1zzzzz: chủ nhà nói KHÔNG BIẾT điều đang hỏi → thôi câu, kể cả khi họ có nói một phần (chỉ quận / chỉ xã) — hỏi tiếp

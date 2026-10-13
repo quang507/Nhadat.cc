@@ -4392,6 +4392,12 @@ duyệt + 👉 bong bóng riêng (`chat-reply` hai chỗ gửi).
 **Chỗ khác cùng lớp.** Mọi đường đọc `cap_nhat` nay cùng một `dangGhiCua`. Lưới (3) chỉ cho ô giá; sửa diện tích / phường lúc duyệt đi đường AI
 (đã có ô trong danh sách đang ghi).
 
+**Hồi quy bắt ở CI sau khi merge (13/10 tối, e2e H5 / H7).** Bản nháp thành BA bong bóng làm `soLuotTreo` (SRS-5.1zzzzo) đếm sai: nó đếm
+lượt khách trên cửa sổ lịch sử 9 dòng `lichSuRows`, cửa sổ đó đếm cả bong bóng bot, bot nói nhiều bong bóng là lượt khách cũ rơi ra và
+"phí sao em?" lúc chờ duyệt thành lượt bên lề thay vì câu hỏi ngược. Lớp lỗi: ĐẾM LƯỢT KHÁCH trên một cửa sổ cắt theo tổng số dòng.
+Sửa: đếm trên `lichSuDai` (40 dòng). Cùng lớp còn `daNoiPhiRoi()` và `botDaNoiGan()` (đọc 9 dòng / 8 dòng bot) — chưa thấy ca sai,
+để nguyên; thêm bong bóng cố định vào một lượt thì nhớ ba chỗ này. Bài kiểm đỏ khi tắt bản sửa: e2e H7.
+
 **Kiểm.** `tin-nhap-rao.mjs` HAIBONG-1/2 (ba phần), `vi-du-boc-rao.mjs`, `kieu:bot`; bộ e2e chạy ở CI (chủ dự án 13/10: lỗi phát hiện khi test
 thì sửa và deploy thẳng, không chờ e2e).
 
