@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-13 10:17 (giờ VN)
+-- Sinh lúc: 2026-10-13 10:55 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -3248,7 +3248,7 @@ begin
   else
     co_kc := l.floors is not null or coalesce(btrim(l.floors_text), '') <> ''
              or (f ? 'ket_cau') or l.floor is not null or (f ? 'tang')
-             or (l.property_type = 'nha_cap4' and (f ? 'hien_trang'));
+             or l.property_type = 'nha_cap4'; -- 20261013b: nhà cấp 4 là nhà trệt
     co_pn := l.bedrooms is not null or (f ? 'so_phong_ngu');
     d_kc := (case when co_kc then 8 else 0 end) + (case when co_pn then 7 else 0 end);
     if not co_kc then thieu := array_append(thieu, 'mấy tầng'); end if;
