@@ -19,7 +19,7 @@
 // Luật tiền MỘT NGUỒN (tầng bốn, 11/09): trước đây file này chép tay
 // `(ty|ti|toi|trieu|tr)` ở năm chỗ, không chỗ nào biết "toi" + số là TỚI —
 // nên "5 tới 6 tỷ" ghi giá "5 tới 6" (mục D1 review 10/09).
-import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP, docTien } from "./luat-tien.ts";
+import { TIEN_KD, TIEN_CD, CO_TIEN_KD, TIEN_T_KEP, docTien } from "./luat-tien.ts";
 import { TRUOC_LA_SAN, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { laThuanNhan } from "./nhan.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
@@ -2592,4 +2592,26 @@ export function boLoiChaoDau(tin: string): string {
   if (!m) return t;
   const con = t.slice(m[0].length).trim();
   return con.length >= 3 ? con : t;
+}
+
+/**
+ * SRS-5.1zzzzzza (Zalo thật 13/10/2026 16:44–16:53): lúc chờ duyệt, chủ nhà "Điều chỉnh cho mình giá 6,950 tỷ" / "Sửa cho chị giá từ 1,2 tỷ
+ * thành 6,950 tỷ" bốn lần, lượt AI trả rỗng cả bốn, bot chỉ "Dạ em nghe rồi ạ". LƯỚI ĐỠ tất định, chỉ chạy khi AI đã đọc mà không ra ô nào:
+ * câu có động từ SỬA (sửa / điều chỉnh / chỉnh / đổi / cập nhật / thay / để) + chữ "giá" + ít nhất một số tiền → lấy số tiền ĐỨNG SAU "thành /
+ * là / còn / lại / =" nếu có, không thì số tiền CUỐI; khác giá đang ghi thì đó là giá mới. Trả đúng cụm khách gõ; không có → null.
+ */
+export function suaGiaTrongLoi(text: string, giaCu: string | null | undefined): string | null {
+  const t = (text ?? "").normalize("NFC");
+  const kd = boDau(t);
+  if (!/\b(?:sua|dieu chinh|chinh lai|chinh|doi|cap nhat|thay|de lai|de)\b/.test(kd) || !/\bgia\b/.test(kd)) return null;
+  const re = new RegExp(`\\d+(?:[.,]\\d+)?\\s*(?:${TIEN_CD})(?![\\p{L}])(?:\\s*\\d{1,3}(?![\\p{L}\\d/]|\\s*(?:m|phòng|phong|tầng|tang|lầu|lau|x)))?`, "giu");
+  const ds = [...t.matchAll(re)];
+  if (!ds.length) return null;
+  const sau = ds.find((m) => /(?:thành|thanh|là|la|còn|con|lại|lai|=|->|→)\s*$/iu.test(t.slice(Math.max(0, m.index! - 8), m.index!)));
+  const chon = (sau ?? ds[ds.length - 1])[0].trim();
+  const moi = docTien(chon);
+  if (moi == null) return null;
+  const cu = giaCu ? docTien(giaCu) : null;
+  if (cu != null && Math.abs(cu - moi) < 1) return null;
+  return chon;
 }

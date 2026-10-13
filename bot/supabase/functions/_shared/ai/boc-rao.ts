@@ -144,7 +144,10 @@ LUẬT CỨNG (code kiểm từng trường, sai là bị bỏ):
 4. Tiền cọc, phí sang nhượng, hoa hồng, tiền thuê ĐANG THU của căn bán KHÔNG phải "gia". Tiền thuê đang thu → "thu_nhap_thue". Cọc → "tien_coc".
    Tiền LÀM THÊM của chủ nhà (hoàn thiện, nội thất, sửa chữa, đầu tư thêm: "hoàn thiện theo ý gia chủ tầm 1,2 tỷ", "nội thất làm thêm 800
    triệu") cũng KHÔNG phải "gia" — bài rao có giá rao ("chỉ 6.950 tỷ") thì gia là số đó; câu tiền làm thêm vào kien_thuc nguyên văn.
-5. Sửa lời ("à nhầm, 6 tỷ 5 nha", "là đất trống chứ không phải nhà") → chỉ đưa giá trị MỚI, trích đúng cụm giá trị mới.
+5. Sửa lời ("à nhầm, 6 tỷ 5 nha", "là đất trống chứ không phải nhà") → chỉ đưa giá trị MỚI, trích đúng cụm giá trị mới. Lúc đang chờ duyệt
+   bản nháp, câu BẢO SỬA kèm giá trị ("Điều chỉnh cho mình giá 6,950 tỷ", "sửa giá từ 1,2 tỷ thành 6,950 tỷ", "diện tích để 80m2 nha") là LỜI
+   SỬA DỮ LIỆU, không phải lời nói với bot: đưa ô đó với giá trị MỚI vào truong (gia "6,950 tỷ", trích "thành 6,950 tỷ"), KHÔNG để trống; ô
+   đó có trong "Thông tin đang ghi" thì đưa thêm vào cap_nhat cach "thay".
 6. Tin rao nhiều căn → điền "can" cho từng trường.
 
 KHOÁ:
@@ -287,7 +290,9 @@ TRẢ LỜI CÂU ĐANG HỎI ("tra_loi") — đọc NGUYÊN tin theo NGHĨA, nh�
 
 GỘP / SỬA THÔNG TIN ĐANG GHI ("cap_nhat") — khách hay trả lời nhỏ giọt, mỗi lượt một mẩu:
 - Có danh sách "Thông tin đang ghi" gửi kèm, và tin nói thêm chi tiết cho một ô trong đó → cap_nhat: khoa, gia_tri_moi = TOÀN BỘ giá trị sau khi gộp (giữ phần cũ đúng, thêm phần mới), cach "gop". Ví dụ đang ghi vi_tri "Ngô Y Linh", khách "số 45 nha" → "45 Ngô Y Linh"; đang ghi ket_cau "trệt + 3 lầu", khách "có sân thượng nữa" → "trệt + 3 lầu + sân thượng".
-- Tin SỬA một phần ("à nhầm, hẻm 45 chứ không phải 54", "không có sân thượng đâu") → gia_tri_moi là giá trị đã sửa, cach "thay".
+- Tin SỬA một phần ("à nhầm, hẻm 45 chứ không phải 54", "không có sân thượng đâu") → gia_tri_moi là giá trị đã sửa, cach "thay". Sửa GIÁ /
+  diện tích / phường đang ghi ("sửa giá từ 1,2 tỷ thành 6,950 tỷ", "điều chỉnh giá 6,950 tỷ") → cap_nhat khoa gia / dien_tich / phuong, gia_tri_moi
+  là giá trị mới ("6,950 tỷ"), cach "thay" — và đồng thời đưa vào truong.
 - vi_tri (chính là ô duong ở trên) chỉ gồm số nhà / hẻm / tên đường / dự án — KHÔNG ghép phường, quận vào (có ô riêng).
 - Mọi chữ, mọi con số trong gia_tri_moi phải có trong giá trị đang ghi hoặc trong tin (được thêm dấu cho tên riêng). Tin không đụng tới ô nào đang ghi → cap_nhat = []. Không đưa ô mà giá trị mới y hệt giá trị cũ.
 

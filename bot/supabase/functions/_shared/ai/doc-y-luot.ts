@@ -82,9 +82,9 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
 - hoi_noi_dung: xin XEM LẠI / cho xin NỘI DUNG tin đăng, bản tin, bài rao của mình ("cho bác xin nội dung tin đăng của bác", "gửi lại
   tin cho anh coi với", "đưa lại bản tin mà bạn rao đi", "tin đăng ghi sao em", "bài rao của chị như nào"). Hỏi tin đăng Ở ĐÂU →
   hoi_noi_dang; hỏi đăng CHƯA → hoi_trang_thai.
-- xin_sua: bảo SỬA / LÀM LẠI bản nháp hay nói một phần CHƯA ĐÚNG Ý mà KHÔNG đưa giá trị mới và không chỉ ra ý cần bỏ ("sửa lại
-  giúp mình nhé", "phần quy mô vẫn chưa đúng ý mình", "làm lại tiêu đề đi em", "chưa được, sửa lại"). Có giá trị mới ("sửa giá thành 9
-  tỷ") là lời sửa dữ liệu → khong; chỉ ra ý cần bỏ → xin_bo_o.
+- xin_sua: bảo SỬA / LÀM LẠI bản nháp, KHÔNG ĐỒNG Ý / chưa ưng bản nháp, hay nói một phần CHƯA ĐÚNG Ý mà KHÔNG đưa giá trị mới và không
+  chỉ ra ý cần bỏ ("sửa lại giúp mình nhé", "bản nháp trên mình không đồng ý", "chị thấy chưa được", "phần quy mô vẫn chưa đúng ý mình", "làm
+  lại tiêu đề đi em", "chưa được, sửa lại"). Có giá trị mới ("sửa giá thành 9 tỷ") là lời sửa dữ liệu → khong; chỉ ra ý cần bỏ → xin_bo_o.
 - gui_noi_dung_sau: báo nội dung / bài rao / phần cần sửa SẮP GỬI ở tin kế, tin này chưa có nội dung đó ("đăng bán giúp mình với nội
   dung sau", "sửa lại theo nội dung này giúp mình", "em đăng theo bài dưới nhé", "để chị gửi bài rao cho em"). Tin đã kèm luôn nội
   dung (có giá, diện tích, địa chỉ…) → khong.
