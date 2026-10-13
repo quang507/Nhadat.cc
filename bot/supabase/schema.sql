@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-13 10:55 (giờ VN)
+-- Sinh lúc: 2026-10-13 14:31 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -3195,6 +3195,7 @@ declare
   thieu    text[] := '{}';
   mo_ta    text := public.bo_dau(coalesce(l.description, ''));
   la_dat   boolean := l.property_type in ('dat', 'dat_nong_nghiep', 'dat_kinh_doanh');
+  la_thue  boolean := l.deal = 'cho_thue' and not (l.property_type in ('dat', 'dat_nong_nghiep', 'dat_kinh_doanh'));
   tn_biet  boolean;
 begin
   if l.id is null then return null; end if;
@@ -3255,8 +3256,12 @@ begin
     if not co_pn then thieu := array_append(thieu, 'mấy phòng ngủ'); end if;
   end if;
 
-  if l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
-  else thieu := array_append(thieu, 'pháp lý (sổ hồng riêng/chung, hoàn công)'); end if;
+  -- 20261013c: tin cho thuê → điều kiện thuê thay cho sổ; tin bán → chữ "pháp lý (loại sổ, hoàn công)".
+  if la_thue then
+    if (f ? 'tien_coc') or (f ? 'thoi_han_thue') or (f ? 'phap_ly') or l.legal_status is not null or l.property_type = 'phong_tro' then d_pl := 10;
+    else thieu := array_append(thieu, 'điều kiện thuê (cọc, thời hạn)'); end if;
+  elsif l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
+  else thieu := array_append(thieu, 'pháp lý (loại sổ, hoàn công)'); end if;
 
   if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
 
