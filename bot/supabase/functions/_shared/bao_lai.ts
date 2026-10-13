@@ -51,7 +51,12 @@ export const KHONG_BOC = `${DAU_BAO_LAI} Không trích xuất được gì từ 
 export const HIEU_LUOT = `${DAU_BAO_LAI} Hiểu:`;
 /** SRS-5.1zzzzzs (chủ dự án 13/10: "nếu nhận yêu cầu của khách hàng thì ghi ra là đã bóc tách yêu cầu … ghi nhận yêu cầu"): lượt khách
  *  XIN / HỎI về tin của mình → "🤖 Đã bóc tách yêu cầu:" + một dòng "• ghi nhận yêu cầu của {ac}: …", cùng khuôn với dòng dữ liệu. */
-export const BOC_YEU_CAU = `${DAU_BAO_LAI} Đã bóc tách yêu cầu:`;
+// SRS-5.1zzzzzzc (chủ dự án 13/10 tối: "đã trích xuất yêu cầu cho bot thực hiện 'bla bla'" — xác nhận "đúng"): một khuôn cho MỌI lượt
+// khách ra LỆNH (sửa ô lúc duyệt, bỏ ô / ý, tiêu đề của khách, chuyển căn, xin xem lại tin): đầu bong bóng ghi yêu cầu trong ngoặc kép,
+// dưới là các dòng dữ liệu lượt đó (nếu có). Xem `bongYeuCau`.
+export const BOC_YEU_CAU = `${DAU_BAO_LAI} Đã trích xuất yêu cầu cho bot thực hiện:`;
+/** "🤖 Đã trích xuất yêu cầu cho bot thực hiện: "sửa giá"\n• giá: "7 tỷ 5"" — yêu cầu + dòng dữ liệu (nếu có) của lượt. */
+export const bongYeuCau = (yeuCau: string, dong: string[] = []): string => [`${BOC_YEU_CAU} "${yeuCau.replace(/\s+/g, " ").trim()}"`, ...dong].join("\n");
 /** Dấu mở bong bóng lượt ẢNH (không có chữ để trích): "🤖 Đã trích xuất từ ảnh: mặt tiền". */
 export const TU_ANH = `${DAU_BAO_LAI} Đã trích xuất từ ảnh:`;
 const LAM_CHUAN = "làm chuẩn";

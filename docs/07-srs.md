@@ -4423,6 +4423,20 @@ Lượt ảnh khi KHÔNG còn câu chờ nào mà tin đã đủ điểm: chỉ 
 **Kiểm.** e2e `NHAPRUT-01` (nhường lượt lúc soạn nháp → không 📋, câu duyệt đóng, `nhap_rut`), `NHAPRUT-02` (lượt kế gửi 📋 thật, không
 "Bản nháp ở trên" đứng một mình). Tắt bản sửa thì NHAPRUT-01 đỏ (câu duyệt còn pending).
 
+### SRS-5.1zzzzzzc · 🤖 "Đã trích xuất yêu cầu cho bot thực hiện: "<lệnh>"" cho lượt khách ra lệnh (13/10/2026)
+
+**Nguồn.** Chủ dự án 13/10 tối, sau ca sửa giá lúc duyệt (SRS-5.1zzzzzza): "đã trích xuất yêu cầu cho bot thực hiện 'bla bla'", xác nhận "đúng"
+khi hỏi lại là bong bóng 🤖 in yêu cầu khi lượt khách là một LỆNH thay vì chỉ in ô đã ghi.
+
+**Quy tắc (một khuôn).** `bao_lai.ts` `BOC_YEU_CAU` = "🤖 Đã trích xuất yêu cầu cho bot thực hiện:" (đổi chữ đầu của SRS-5.1zzzzzs, dòng
+"• ghi nhận yêu cầu của {ac}: …" giữ). `bongYeuCau(lệnh, dòng[])`: dòng đầu kèm lệnh trong ngoặc kép, dưới là các dòng dữ liệu lượt đó (nếu
+có). Lệnh đọc từ META của chính đường xử lý trong `chat-reply` (không đoán lại chữ khách): `bo_y` → "bỏ ý "…" khỏi tin"; `tieu_de_khach` →
+"dùng tiêu đề {ac} đưa cho bản tin"; `chuyen_can` → "chuyển sang căn <mã>"; `xin_bo_truong` → "bỏ <nhãn ô> đã ghi"; `sua_nhap` + fact lượt →
+"sửa <nhãn các ô> đã ghi" (không fact → "sửa bản tin"); lời sửa FR-164 (`sua_that`) cùng khuôn. Có lệnh thì khuôn này thay "🤖 Đã trích xuất:"; không lệnh thì như cũ.
+
+**Kiểm.** e2e DAM-S1c (chữ đầu mới), `YEUCAU-01` ("à sửa giá 7 tỷ 5 nha em" lúc duyệt → yêu cầu "sửa giá đã ghi" + "• giá: …"),
+`YEUCAU-02` ("em xoá cái hẻm ghi nhầm đi" → "bỏ … đã ghi").
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
