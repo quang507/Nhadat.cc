@@ -750,6 +750,9 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {})
       chuanSo((deXuat ?? []).find((x) => x?.khoa === "loai_bds")?.gia_tri ?? "").replace(/\s+/g, "_") !== "chung_cu") {
       d = { ...d, khoa: "dien_tich_san" };
     }
+    // SRS-5.1zzzzzt (Zalo thật 13/10/2026 13:43, nhà cho thuê Dương Bá Trạc): "ưu tiên khách thuê lâu dài" → AI ghi `thoi_han_su_dung`
+    // (thời hạn sử dụng ĐẤT trên sổ: lâu dài / 50 năm) vì khớp chữ "lâu dài". Cụm nói về THUÊ thì không phải thời hạn sử dụng đất.
+    if (d.khoa === "thoi_han_su_dung" && /\bthue\b/.test(kdDung ?? kdCum)) { bo.push({ ...d, ly_do: "thoi_han_su_dung_khong_phai_thue" }); continue; }
     // 30/09/2026 (bắn thật lx-ban-a): "hẻm 45 Nguyễn Trãi" → AI ghi độ rộng hẻm 45m, bản nháp in "Đường vào: 45m".
     // 45 là SỐ HẺM (số nhà), không phải bề rộng — số có trong câu nên kiểm số lọt.
     if (d.khoa === "do_rong_hem" && laSoHemKhongPhaiDoRong(tin, d.gia_tri)) { bo.push({ ...d, ly_do: "so_hem_khong_phai_do_rong" }); continue; }
@@ -1112,6 +1115,10 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
     // 24/09/2026: "thời hạn thuê tối thiểu" là điều kiện của tin CHO THUÊ; tin BÁN đang có người thuê thì đó là hợp đồng
     // đang chạy (câu hỏi nhánh `han_hop_dong_thue`) — model từng ghi "4 năm" từ "hợp đồng 10 năm cho thuê 4 năm rồi".
     if (d.khoa === "thoi_han_thue" && dong?.deal && dong.deal !== "cho_thue") { bo.push({ ...d, ly_do: "thoi_han_thue_chi_cho_tin_thue" }); continue; }
+    // SRS-5.1zzzzzt: thời hạn sử dụng đất là ô của ĐẤT / kho xưởng — nhà cho thuê không có ô này (13/10: "khách thuê lâu dài" lọt vào).
+    if (d.khoa === "thoi_han_su_dung" && dong?.deal === "cho_thue" && !/^(?:dat|kho_xuong)/.test(dong.property_type ?? "")) {
+      bo.push({ ...d, ly_do: "thoi_han_su_dung_chi_cho_dat" }); continue;
+    }
     switch (d.khoa) {
       case "gia": {
         const t = docTien(v) ?? docTien(d.trich_dan);

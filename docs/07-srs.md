@@ -4141,6 +4141,37 @@ hỏi em) giữ chữ cũ.
 câu treo answered, 🤖 có dòng pháp lý), N10b4 (đối chứng: đã có "sổ hồng riêng" → không ghi đè), DAM-S1c (🤖 "Đã bóc tách yêu cầu: • ghi nhận
 yêu cầu của anh: xin xem lại nội dung tin đăng"). Đỏ khi bỏ khối ghi pháp lý trong nhánh `giay_to` hoặc đổi `BOC_YEU_CAU`.
 
+### SRS-5.1zzzzzt · Câu mở "cần cho thuê" là tin cho thuê; "thuê lâu dài" không phải thời hạn sử dụng đất; "đăng cho mình với nội dung này" khi tin rỗng là sắp gửi, không phải đủ rồi (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 13:35–13:58 (chủ dự án test cho thuê nhà Dương Bá Trạc, Quận 8), tôi tự đọc theo lệnh "tự theo dõi chat nhà"]`
+
+**Ca gốc.** (a) "Mình cần cho thuê nhà" → tin rỗng mở với `deal = ban`, 🤖 "loại: làm chuẩn "BĐS bán""; tới bài rao "Cho thuê nhà nguyên căn…"
+mới đổi. (b) "Điều kiện thuê: cọc 2 tháng, ưu tiên khách thuê lâu dài" → fact `thoi_han_su_dung = ưu tiên khách thuê lâu dài` (ô "thời hạn
+sử dụng đất" của đất / kho xưởng), 🤖 in sai nhãn. (c) "đăng cho mình với nội dung này" lúc tin còn rỗng, bài rao tới 46 giây sau → AI đọc
+`du_roi`, bot "Dạ em thôi hỏi ạ. Tin mình chưa lên kệ được vì còn thiếu giá…, lúc nào có anh chị nhắn em" + 🤖 "Không trích xuất được gì",
+đóng mọi câu treo và đóng dấu `chu_noi_du_at`.
+
+**Lớp lỗi.** (a) Mặc định "bán" khi AI im về loại giao dịch (SRS-5.1zzzx đặt để tránh "xây căn hộ cho thuê") nuốt luôn câu mở đầu nói
+thẳng ý thuê; prompt không có ví dụ câu chào "cần cho thuê". (b) Mô tả ô cho model bằng VÍ DỤ GIÁ TRỊ ("lâu dài / 50 năm") không nói ô
+thuộc loại BĐS nào → model khớp chữ; kiểm bằng chứng không có luật "ô của đất không ghi cho nhà thuê". (c) "Đủ rồi" được xử như nhau với
+tin đã có dữ liệu và tin RỖNG; tin rỗng không có gì để "đủ" hay "đăng", lời đó chỉ có nghĩa "tôi sắp gửi". Yield FR-131 (SRS-5.1zzzzzq) chỉ
+cứu khi tin sau tới trong cùng lượt.
+
+**Sửa.** (a) Prompt `boc-rao.ts` `loai_giao_dich`: câu chào "mình cần cho thuê nhà / em muốn cho thuê căn hộ / có nhà cho thuê" là
+`cho_thue` dù chưa có dữ liệu khác; lưới đỡ `moCauChoThue` (khuôn "cần / muốn / có … cho thuê", không chữ bán) khi AI im, thay cho mặc định
+bán. (b) Prompt: `thoi_han_su_dung` là thời hạn sử dụng ĐẤT trên sổ, chỉ đất / kho xưởng, "khách thuê lâu dài" → kiến thức; `kiemDeXuat` bỏ
+khi cụm trích có chữ "thuê"; `chonDeGhi` bỏ khi tin cho thuê không phải đất / kho xưởng. (c) Nhánh đủ rồi: tin rỗng (`laTinRong`) và tin
+nhắn không có fact → trả "Dạ {ac} gửi nội dung tin qua đây giúp em nha, em đọc rồi soạn lại cho mình ạ." (`sap_gui_noi_dung`), giữ câu treo,
+không đóng dấu; đặt trước cả nhánh bảo đăng vì tin rỗng không đăng được.
+
+**Chỗ khác cùng lớp.** (a) Mặc định bán còn ở `aiManh` chia mảnh (`deal: aiManh.loaiGiaoDich ?? "ban"`) — mảnh là câu rao có dữ liệu, AI
+có chỗ nói, giữ. (b) Các ô "theo loại" khác (`O_NGUYEN_VAN` là bảng nguyên văn, không phải bảng cho phép) — chưa có bảng "ô nào thuộc loại
+nào" cho kiểm bằng chứng; đây là luật đầu, ghi vào OPEN nếu lặp. (c) Nhánh bảo đăng (`chuMuonDang`) với tin rỗng đi sau nhánh này.
+
+**Kiểm.** e2e FR250-E1c/E1d/E1e (cần cho thuê nhà · muốn cho thuê căn hộ · đối chứng cần bán), DAM-S4/S4b (tin rỗng + "đăng cho mình với
+nội dung này" / "đủ rồi em" → mời gửi, câu treo còn, không đóng); `kiem-bang-chung.mjs` ZZZZZT-K1…K1c ("thuê lâu dài", "cho thuê dài hạn 5
+năm", đối chứng "sổ lâu dài" của đất). Đỏ khi bỏ `moCauChoThue`, bỏ luật `thoi_han_su_dung_khong_phai_thue`, hoặc bỏ nhánh tin rỗng.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

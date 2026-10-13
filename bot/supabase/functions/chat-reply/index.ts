@@ -6451,6 +6451,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // 02/10/2026 (bắn thử thu-kb-s10, SRS-5.1zh): chế độ `ai` đọc "ok đăng đi" là `du_roi` — CÙNG tín hiệu với nhánh bảo đăng
       // (`chuMuonDang`) ở dưới, nên nhánh này luôn chặn trước: bot nói "em rao" mà tin không lên kệ. Bảo ĐĂNG (lượt AI nhỏ
       // `dong_y_dang`; luật `laBaoDang` khi AI không chạy) thì nhường cho nhánh đăng.
+      // SRS-5.1zzzzzt (Zalo thật 13/10/2026 13:36: "đăng cho mình với nội dung này" khi tin vừa mở còn RỖNG, nội dung tới 46 giây sau →
+      // AI đọc "đủ rồi", bot "Dạ em thôi hỏi ạ. Tin mình chưa lên kệ được vì còn thiếu…" rồi đóng mọi câu): tin chưa có gì mà khách nói
+      // "đủ rồi / đăng" là khách SẮP GỬI nội dung, không phải xong (tin rỗng không có gì để đăng) — mời gửi, giữ câu đang hỏi, không đóng.
+      if (noiDuRoi && pendingReq.question !== "duyet_tin" && laTinRong(pendingReq.listings as Parameters<typeof laTinRong>[0]) && !nhanDienFact(dapAn)) {
+        return await traLoiSeller([`Dạ ${cachGoi} gửi nội dung tin qua đây giúp em nha, em đọc rồi soạn lại cho mình ạ.`], { sap_gui_noi_dung: true, reask: pendingReq.question });
+      }
       const baoDangDu = noiDuRoi && await baoDangLuot(() => laBaoDang(dapAn));
       if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" && noiDuRoi && !baoDangDu) {
         // SRS-5.1zzzzzq: "đăng giúp bác thông tin này nhé" + bài rao tới 12 giây sau — quyết định ĐÓNG (đóng câu treo, chu_noi_du_at) dựa
@@ -8489,8 +8495,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // thuê" không phải ý giao dịch) — mặc định bán như câu chào hỏi; luật `dealCauRao` chỉ còn khi AI không chạy.
       const tinRongCu = pendingReq?.listings && laTinRong(pendingReq.listings)
         ? pendingReq.listings as { deal?: string | null; property_type?: string | null; gap?: boolean | null } : null;
+      // SRS-5.1zzzzzt (Zalo thật 13/10/2026 13:36: "Mình cần cho thuê nhà" → AI im về loại giao dịch → mặc định BÁN, 🤖 "BĐS bán", tới bài
+      // rao mới đổi): câu MỞ ĐẦU nói thẳng "cần / muốn / có nhà cho thuê" (không có chữ bán, không phải "xây … cho thuê") là ý giao dịch
+      // rõ — luật đỡ đúng khuôn câu đó khi AI im; prompt cũng đã dặn AI đọc câu chào này là cho_thue.
+      const moCauChoThue = /\b(?:can|muon|co nhu cau|dang can|co)\s+(?:nha|can ho|chung cu|phong|mat bang|dat|kho|van phong)?\s*cho\s+thue\b/.test(tKD) && !/\b(?:ban|can ban|de lai|thanh ly)\b/.test(tKD);
       const sDeal = aiRao
-        ? aiRao.loaiGiaoDich ?? (tinRongCu?.deal as "ban" | "cho_thue" | null | undefined) ?? (dealNguoi as "ban" | "cho_thue" | null) ?? "ban"
+        ? aiRao.loaiGiaoDich ?? (tinRongCu?.deal as "ban" | "cho_thue" | null | undefined) ?? (dealNguoi as "ban" | "cho_thue" | null) ?? (moCauChoThue ? "cho_thue" : "ban")
         : dealCauRao(tKD);
       // (wardNo — số phường trong câu rao — tính ở trên, trước nhánh bán.)
       // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); đơn vị tiền lấy từ

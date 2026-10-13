@@ -531,6 +531,7 @@ Sau khi gộp: `bun run prompt --day` (khoá `cau_hoi_mau`, `cau_tien_dinh`, `se
 | `TONE_RULES` (khen) | cho khen NGẮN nhắc đúng điểm mạnh khách nói bằng chữ, lâu lâu một câu; `kiem-khen` kiểu `khen_nhac_lai` | cấm gắn thêm lợi ích / tính chất |
 | 🤖 lượt khách xin / hỏi về tin (SRS-5.1zzzzzs) | "🤖 Đã bóc tách yêu cầu:" + "• ghi nhận yêu cầu của {ac}: xin xem lại nội dung tin đăng" (thay "🤖 Hiểu: yêu cầu của …") | "🤖 Hiểu:" cho gật bản nháp / khách hỏi em |
 | Ảnh bìa sổ (SRS-5.1zzzzzs) | pháp lý ghi đúng loại trên bìa: "sổ đỏ" / "sổ hồng" (+ ", đồng sở hữu"), 🤖 từ ảnh in "• pháp lý: …", câu "Trên bìa là sổ đỏ, em ghi pháp lý vậy nha" khi model không viết lời nhận | chữ chủ nhà đã nói không bị ảnh ghi đè |
+| Tin rỗng + "đăng cho mình với nội dung này" / "đủ rồi" (SRS-5.1zzzzzt) | "Dạ {ac} gửi nội dung tin qua đây giúp em nha, em đọc rồi soạn lại cho mình ạ." — giữ câu đang hỏi, không "em thôi hỏi" | câu "em thôi hỏi … còn thiếu" cho tin đã có dữ liệu |
 | `FEE_RULES` | thêm: không hẹn "sẽ báo sau / báo rõ khi rao" — chưa rõ vai thì hỏi vai ngay | các mức phí, luật thuyết phục |
 | Lời ghi nhận ngoài câu treo | đọc tên ô ngắn ("độ rộng hẻm trước nhà, đường vào"), không đọc câu hỏi | câu hỏi kế (`cauHoiMau`) |
 | Câu lệnh khi khách nói không biết | "Chủ nhà nói không biết … — đáp nhẹ một tiếng là không sao, KHÔNG hỏi lại câu đó" | các câu lệnh câu treo khác |
