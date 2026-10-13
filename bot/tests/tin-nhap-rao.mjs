@@ -5,7 +5,7 @@
 //
 // Ba mẫu dưới đây là ba hình dạng hay gặp nhất của rổ hàng: nhà phố hẻm xe hơi
 // (đủ thông số), căn hộ CHO THUÊ (điều kiện thuê), và đất (chỉ có vài dòng).
-import { soanTinNhap, soanTinNhapHaiBong, tieuDeTin } from "../supabase/functions/_shared/tin-nhap.ts";
+import { soanTinNhap, soanTinNhapHaiBong, tieuDeTin, tieuDeTinLe } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 
 const cachGoi = "anh";
@@ -80,15 +80,16 @@ const la = (ten, ok, chiTiet = "") => {
 
 console.log("BẢN NHÁP TIN RAO — đọc như tin lẻ trên mogi\n");
 
-const tdNha = tieuDeTin(NHA_PHO.l, fact(NHA_PHO));
-la("tiêu đề nhà phố: cụm tách bằng dấu phẩy — chỗ nào, bao nhiêu m², nhà thế nào, giấy tờ, KẾT bằng giá",
-  /^Bán nhà hẻm xe hơi 5m Nguyễn Trãi P\.3 Q\.5, 60m², trệt \+ 2 lầu, 3PN, SHR, giá 7 tỷ 2$/.test(tdNha), tdNha);
-la("tiêu đề KHÔNG lặp 'hẻm 5m' hai lần", (tdNha.match(/hẻm/gi) ?? []).length === 1, tdNha);
-la("tiêu đề ≤ 120 ký tự", tdNha.length <= 120, `${tdNha.length} ký tự`);
+const tdNha = tieuDeTin(NHA_PHO.l, fact(NHA_PHO), NHA_PHO.facts);
+const tdNhaLe = tieuDeTinLe(NHA_PHO.l, fact(NHA_PHO));
+la("tiêu đề kiểu tin lẻ (cho thuê / chưa giá): cụm tách bằng dấu phẩy — chỗ nào, bao nhiêu m², nhà thế nào, giấy tờ, KẾT bằng giá",
+  /^Bán nhà hẻm xe hơi 5m Nguyễn Trãi P\.3 Q\.5, 60m², trệt \+ 2 lầu, 3PN, SHR, giá 7 tỷ 2$/.test(tdNhaLe), tdNhaLe);
+la("tiêu đề KHÔNG lặp 'hẻm 5m' hai lần", (tdNhaLe.match(/hẻm/gi) ?? []).length === 1, tdNha);
+la("tiêu đề ≤ 120 ký tự", tdNhaLe.length <= 120, `${tdNhaLe.length} ký tự`);
 // 01/10/2026 (bắn thật lx-tam-42): số nhà đứng trước "hẻm 4m" → tiêu đề từng lặp "hẻm xe hơi 4m 12 hẻm 4m Trần Bình Trọng".
 {
   const l12 = { ...NHA_PHO.l, location_raw: "12 hẻm 4m Trần Bình Trọng", alley_width_m: 4 };
-  const td12 = tieuDeTin(l12, fact(NHA_PHO));
+  const td12 = tieuDeTinLe(l12, fact(NHA_PHO));
   la("tiêu đề: '12 hẻm 4m Trần Bình Trọng' → không lặp chữ hẻm, giữ số nhà 12", (td12.match(/hẻm/gi) ?? []).length === 1 && /\b12 Trần Bình Trọng\b/.test(td12), td12);
 }
 
@@ -96,19 +97,19 @@ la("tiêu đề ≤ 120 ký tự", tdNha.length <= 120, `${tdNha.length} ký t�
 // "hẻm khoảng 2-3 mét" → cột 2, tin từng in "hẻm 2m".
 {
   const lMt = { ...NHA_PHO.l, location_raw: "Mặt tiền Trần Hưng Đạo", access_type: "mat_tien", alley_width_m: null };
-  const tdMt = tieuDeTin(lMt, fact(NHA_PHO));
+  const tdMt = tieuDeTinLe(lMt, fact(NHA_PHO));
   la("ZZZZY-T1 (ca gốc) địa chỉ 'Mặt tiền Trần Hưng Đạo' + đường vào mặt tiền → tiêu đề một lần 'mặt tiền'", (tdMt.match(/mặt tiền/gi) ?? []).length === 1 && /Trần Hưng Đạo/.test(tdMt), tdMt);
-  const tdMt2 = tieuDeTin({ ...lMt, location_raw: "MTKD Hai Bà Trưng" }, fact(NHA_PHO));
+  const tdMt2 = tieuDeTinLe({ ...lMt, location_raw: "MTKD Hai Bà Trưng" }, fact(NHA_PHO));
   la("ZZZZY-T2 (cách viết mới) 'MTKD Hai Bà Trưng' → không 'mặt tiền MTKD'", !/MTKD/i.test(tdMt2) && (tdMt2.match(/mặt tiền/gi) ?? []).length === 1, tdMt2);
   const khoang = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "do_rong_hem", answer: "2-3" }] };
   const lK = { ...NHA_PHO.l, location_raw: "hẻm Phan Xích Long", access_type: "hem_xe_may", alley_width_m: 2 };
-  const tdK = tieuDeTin(lK, fact(khoang));
+  const tdK = tieuDeTinLe(lK, fact(khoang));
   const banK = soanTinNhap({ l: lK, facts: khoang.facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
   la("ZZZZY-T3 (ca gốc) hẻm '2-3' (cột 2) → tiêu đề và dòng đường vào in 'hẻm 2-3m', không 'hẻm 2m'", /hẻm 2-3m/.test(tdK) && /Đường vào: [^\n]*2-3m/.test(banK) && !/\b2m\b/.test(banK), tdK + " || " + banK);
   const kD = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "do_rong_hem", answer: "khoảng 3 tới 4 mét" }] };
-  const tdD = tieuDeTin({ ...lK, alley_width_m: 3 }, fact(kD));
+  const tdD = tieuDeTinLe({ ...lK, alley_width_m: 3 }, fact(kD));
   la("ZZZZY-T4 (cách nói mới) 'khoảng 3 tới 4 mét' → 'hẻm 3-4m'", /hẻm 3-4m/.test(tdD), tdD);
-  const tdN = tieuDeTin({ ...lK, alley_width_m: 5 }, fact(khoang));
+  const tdN = tieuDeTinLe({ ...lK, alley_width_m: 5 }, fact(khoang));
   la("ZZZZY-T5 đối chứng: khoảng không khớp số trong cột (cột 5, fact 2-3) → in đúng cột 5m", /hẻm 5m/.test(tdN), tdN);
 }
 
@@ -116,16 +117,16 @@ const tdThue = tieuDeTin(CAN_HO_THUE.l, fact(CAN_HO_THUE));
 la("tiêu đề cho thuê: mở bằng 'Cho thuê căn hộ', giá kèm '/tháng'",
   /^Cho thuê căn hộ/.test(tdThue) && /giá 18 triệu\/tháng$/.test(tdThue), tdThue);
 
-const tdDat = tieuDeTin(DAT.l, fact(DAT));
+const tdDat = tieuDeTinLe(DAT.l, fact(DAT));
 la("tin thiếu đường/kết cấu vẫn ra tiêu đề gọn, có 'cần bán gấp'",
   /^Bán đất Huyện Củ Chi, 100m², cần bán gấp, giá 900 triệu$/.test(tdDat), tdDat);
 // 27/09/2026 (bắn thật lx-36): "Giá 8.000.000.000" → bản nháp in nguyên dãy số. Nay in bằng chữ khi chẵn triệu.
-const tdDaySo = tieuDeTin({ ...DAT.l, price_raw: "8.000.000.000" }, fact(DAT));
+const tdDaySo = tieuDeTinLe({ ...DAT.l, price_raw: "8.000.000.000" }, fact(DAT));
 la("giá dãy số '8.000.000.000' → tiêu đề 'giá 8 tỷ'", /giá 8 tỷ$/.test(tdDaySo), tdDaySo);
 // 01/10/2026 (chủ dự án test Zalo): tiêu đề dài bị cắt đuôi "…, SHR, cần bán…" — mất GIÁ. Cắt phần giữa, giữ giá.
-const tdDai = tieuDeTin({ ...NHA_PHO.l, location_raw: "137/28 đường số 59 khu dân cư Bàu Cát gần chợ Gò Vấp", gap: true, price_raw: "14 tỷ" }, fact(NHA_PHO));
+const tdDai = tieuDeTinLe({ ...NHA_PHO.l, location_raw: "137/28 đường số 59 khu dân cư Bàu Cát gần chợ Gò Vấp", gap: true, price_raw: "14 tỷ" }, fact(NHA_PHO));
 la("tiêu đề dài > 120 ký tự → cắt phần giữa, VẪN kết bằng giá", tdDai.length <= 120 && /…, giá 14 tỷ$/.test(tdDai), `${tdDai.length}: ${tdDai}`);
-const tdLe = tieuDeTin({ ...DAT.l, price_raw: "8.500.000" }, fact(DAT));
+const tdLe = tieuDeTinLe({ ...DAT.l, price_raw: "8.500.000" }, fact(DAT));
 la("giá dãy số lẻ triệu '8.500.000' giữ nguyên (không làm tròn thành 9 triệu)", /giá 8\.500\.000$/.test(tdLe), tdLe);
 
 const nha = dung(NHA_PHO);
@@ -136,14 +137,14 @@ la("dòng 1 câu mở (KHÔNG kèm điểm), dòng 2 TIÊU ĐỀ, dòng 3 địa
 la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 7 tỷ 2 \(còn thương lượng\)$/.test(dongNha[3]), dongNha[3]);
 la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước, không lặp (17/09)", dongNha.some((d) => d === "📝 Thêm: khu an ninh · gần chợ Bình Tây"), dongNha.join(" | "));
 la("có đủ khối thông số: diện tích, kết cấu, đường vào, hướng, pháp lý",
-  /📐 Diện tích: 60m² · ngang 4m x dài 15m/.test(nha) && /🏗 Kết cấu: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC/.test(nha) &&
+  /📐 Diện tích: 60m² · dài 15m$/m.test(nha) && /^🏫 Tiện ích: mặt tiền 4m · gần chợ An Đông · trường Hùng Vương$/m.test(nha) && /🏗 Kết cấu: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC/.test(nha) &&
   /🛣 Đường vào: hẻm xe hơi 5m/.test(nha) && /🧭 Hướng: Đông Nam/.test(nha) && /📜 Pháp lý: sổ hồng riêng, hoàn công/.test(nha), nha);
 // 24/09/2026 (chủ dự án): bỏ "Khách quan tâm nhắn Zalo cho em để hẹn xem nhà" — lời hứa báo lại người rao, có tên
 // trợ lý, đứng SAU CÙNG.
 la("kết bằng điểm, câu hỏi duyệt, rồi SAU CÙNG '👉 … R•ai báo lại anh …'",
-  /^Độ đầy đủ 82\/100, thêm /.test(dongNha.at(-3) ?? "") && /hấp dẫn chưa|ổn chưa|được chưa/.test(dongNha.at(-2) ?? "") &&
+  /^Độ đầy đủ 82\/100, thêm /.test(dongNha.at(-4) ?? "") && /^Điểm càng cao, công ty càng ưu tiên chào bán\.$/.test(dongNha.at(-3) ?? "") && /hấp dẫn chưa|ổn chưa|được chưa/.test(dongNha.at(-2) ?? "") &&
   /^👉 Có khách quan tâm là R•ai báo lại anh liền ạ\.$/.test(dongNha.at(-1) ?? "") && !/hẹn xem nhà/.test(nha),
-  dongNha.slice(-3).join(" | "));
+  dongNha.slice(-4).join(" | "));
 la("thiếu tên trợ lý thì BỎ câu 👉, không in '{ten}' hay dòng rỗng",
   (() => { const t = soanTinNhap({ ...NHA_PHO, lai: false, cauTD: (k, o = {}) => dienCau(CAU_TIEN_DINH[k] ?? "", { ...o, ac: "anh", Ac: "Anh" }) });
     return !/👉|\{ten\}/.test(t) && !/\n\s*\n/.test(t); })());
@@ -167,7 +168,7 @@ la("không có dòng rỗng thừa", !/\n\s*\n/.test(nha));
   la("tin chưa có tiền thuê: không có dòng 💵", !/💵/.test(nha));
   // 24/09/2026 (bắn 10 tin): khách nói "vi bằng", cột lưu giay_tay → in "vi bằng", không in "giấy tay".
   const vb = soanTinNhap({ ...NHA_PHO, l: { ...NHA_PHO.l, legal_status: "giay_tay" }, facts: [{ question: "phap_ly", answer: "vi bằng" }], lai: false, cauTD });
-  la("vi bằng: tiêu đề + dòng pháp lý in 'vi bằng'", /, vi bằng, giá/.test(vb) && /📜 Pháp lý: vi bằng/.test(vb) && !/giấy tay/.test(vb), vb);
+  la("vi bằng: dòng pháp lý in 'vi bằng'", /📜 Pháp lý: vi bằng/.test(vb) && !/giấy tay/.test(vb), vb);
   // 27/09/2026 (test Zalo, đất Cần Đước): dòng pháp lý in trơn "· tự do · ko có gì hết" — gắn nhãn cho người đọc hiểu.
   const nhanPl = soanTinNhap({ ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "xay_dung", answer: "tự do" }, { question: "len_tho_cu", answer: "được" }], lai: false, cauTD });
   la("pháp lý: 'xây: tự do', 'lên thổ cư: được' có nhãn", /📜 Pháp lý:.*xây: tự do/.test(nhanPl) && /lên thổ cư: được/.test(nhanPl) && !/ · tự do/.test(nhanPl), nhanPl);
@@ -184,7 +185,7 @@ la("cho thuê: tầng 15 và nội thất vào đúng khối kết cấu / nội
 
 const datNhap = dung(DAT);
 la("tin nghèo thông tin: chỉ có mấy dòng, không bịa dòng nào",
-  datNhap.split("\n").length <= 8 && !/🏗|🧭|📜/.test(datNhap), datNhap);
+  datNhap.split("\n").length <= 9 && !/🏗|🧭|📜/.test(datNhap), datNhap);
 la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.test(dung(NHA_PHO, true)), dung(NHA_PHO, true).split("\n").at(-1));
 
 // 25/09/2026 (chủ dự án test Zalo): "sang tên ngay và luôn" in thành "sang tên ngay và" — "và luôn" là thành ngữ.
@@ -247,6 +248,44 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("HAIBONG-2 than + duoi = soanTinNhap (một nguồn)", `${hb.than}\n${hb.duoi}` === soanTinNhap({ ...NHA_PHO, lai: false, cauTD }));
   const hd = soanTinNhapHaiBong({ ...NHA_PHO, lai: false, cauTD, daDang: true });
   la("HAIBONG-3 tin đã lên kệ: đuôi chỉ còn dòng điểm", /^Độ đầy đủ/.test(hd.duoi) && !/👉|hấp dẫn chưa/.test(hd.duoi), JSON.stringify(hd));
+}
+// SRS-5.1zzzzzl (chủ dự án 13/10/2026, test Zalo tin Hương Lộ 3): "Em sẽ rao như vậy nhé. Chỉ 7.6 tỉ ô tô tận cửa. Ko ghi ngang ghi mặt
+// tiền, Mặt tiền đi chung với tiện ích. Điểm càng cao công ty càng ưu tiên chào bán … Tin nháp phải có khen nữa".
+{
+  const HL = {
+    l: { property_type: "nha_pho", deal: "ban", location_raw: "Hương Lộ 3", ward: "Phường Bình Hưng Hòa", district: "Quận Bình Tân",
+      area_m2: 60, price_raw: "7,6 tỷ", frontage_m: 6, length_m: 10, access_type: "hem_xe_hoi", alley_width_m: 6, floors_text: "trệt + 2 lầu" },
+    facts: [{ question: "tien_ich_gan", answer: "Gần trường mầm non, chợ, Bách Hóa Xanh, công viên" }, { question: "bo_sung", answer: "ô tô tận cửa" }],
+    diem: 85, thieu: ["vài tấm ảnh"], soAnh: 0,
+  };
+  const fHL = fact(HL);
+  const td = tieuDeTin(HL.l, fHL, HL.facts);
+  la("TIEUDE-1 (ca gốc) tin bán có giá → 'Chỉ 7,6 tỷ ô tô tận cửa tại Bình Hưng Hòa, Bình Tân' (cụm khách nói, khu vực bỏ chữ Phường/Quận)",
+    td === "Chỉ 7,6 tỷ ô tô tận cửa tại Bình Hưng Hòa, Bình Tân", td);
+  const td2 = tieuDeTin(HL.l, fHL, HL.facts.filter((f) => f.question !== "bo_sung"));
+  la("TIEUDE-1b khách không nói 'tận cửa' → điểm mạnh theo cột đường vào 'hẻm xe hơi', KHÔNG tự viết 'tận cửa'", td2 === "Chỉ 7,6 tỷ hẻm xe hơi tại Bình Hưng Hòa, Bình Tân", td2);
+  const td3 = tieuDeTin({ ...HL.l, property_type: "dat", access_type: "hem" }, fHL, []);
+  la("TIEUDE-1c (cách khác) đất, hẻm thường → 'Chỉ 7,6 tỷ đất tại …' (loại khác nhà phố có chữ loại, không điểm mạnh bịa)", td3 === "Chỉ 7,6 tỷ đất tại Bình Hưng Hòa, Bình Tân", td3);
+  const tdk = "Chỉ với 7,6 tỷ ô tô tận cửa tại Bình Hưng Hòa Bình Tân";
+  const ban = soanTinNhapHaiBong({ ...HL, lai: true, cauTD, tieuDeKhach: tdk });
+  la("TIEUDE-2 chủ nhà gửi tiêu đề → dòng 2 bản nháp đúng câu của khách", ban.than.split("\n")[1] === tdk, ban.than.split("\n")[1]);
+  la("TIEUDE-3 tin cho thuê vẫn tiêu đề kiểu tin lẻ ('Cho thuê …')", /^Cho thuê căn hộ/.test(tieuDeTin(CAN_HO_THUE.l, fact(CAN_HO_THUE), CAN_HO_THUE.facts)));
+  const t = soanTinNhap({ ...HL, lai: false, cauTD });
+  la("TIENICH-1 không in 'ngang', bề ngang thành 'mặt tiền 6m' đứng đầu dòng 🏫 Tiện ích cùng các mục khách liệt kê",
+    !/ngang/.test(t) && /^🏫 Tiện ích: mặt tiền 6m · gần trường mầm non · chợ · Bách Hóa Xanh · công viên$/m.test(t) && /^📐 Diện tích: 60m² · dài 10m$/m.test(t), t);
+  la("UUTIEN-1 bong bóng hai có 'Điểm càng cao, công ty càng ưu tiên chào bán.' ngay dưới dòng điểm",
+    /Độ đầy đủ 85\/100[^\n]*\nĐiểm càng cao, công ty càng ưu tiên chào bán\./.test(ban.duoi), ban.duoi);
+  const khen = "Căn mình ô tô tận cửa, mặt tiền 6m lại gần trường mầm non, chợ, anh giới thiệu chi tiết quá ạ.";
+  const coKhen = soanTinNhapHaiBong({ ...HL, lai: false, cauTD, khen });
+  la("KHEN-1 câu khen (đã soát) mở đầu bong bóng hai, thân tin không đổi", coKhen.duoi.split("\n")[0] === khen && coKhen.than === soanTinNhapHaiBong({ ...HL, lai: false, cauTD }).than, coKhen.duoi);
+  la("KHEN-2 không có câu khen → bong bóng hai mở bằng dòng điểm (không câu thay thế)", /^Độ đầy đủ/.test(soanTinNhapHaiBong({ ...HL, lai: false, cauTD, khen: null }).duoi));
+}
+// SRS-5.1zzzzzl (production 13/10): khách "đang ở không cho thuê" → bản nháp từng in "💵 Đang cho thuê: hợp đồng đang ở không cho thuê".
+{
+  const tuChoi = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "hien_trang_su_dung", answer: "đang ở không cho thuê" }, { question: "han_hop_dong_thue", answer: "đang ở không cho thuê" }] };
+  la("RENT-1 (ca gốc) hiện trạng 'đang ở không cho thuê' → không có dòng 💵 dù ô hợp đồng có chữ", !/💵/.test(dung(tuChoi)), dung(tuChoi));
+  const that = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "hien_trang_su_dung", answer: "đang cho shop thời trang thuê" }, { question: "han_hop_dong_thue", answer: "tới 2028" }] };
+  la("RENT-2 (cách nói khác) 'đang cho shop thời trang thuê' → có dòng 💵 với hợp đồng tới 2028", /^💵 Đang cho thuê: hợp đồng tới 2028$/m.test(dung(that)), dung(that));
 }
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }

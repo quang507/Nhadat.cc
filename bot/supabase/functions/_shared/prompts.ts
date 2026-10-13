@@ -594,6 +594,8 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   nhap_goi_y: "Độ đầy đủ {diem}/100, thêm {thieu} là tin mạnh hơn nữa ạ.",
   nhap_goi_y_tron: "Độ đầy đủ {diem}/100, thêm {thieu} là tin đủ 100/100 luôn ạ.",
   nhap_diem: "Độ đầy đủ {diem}/100.",
+  // 13/10/2026 (chủ dự án, SRS-5.1zzzzzl): câu riêng ngay dưới dòng điểm của bản nháp.
+  nhap_uu_tien: "Điểm càng cao, công ty càng ưu tiên chào bán.",
   nhap_hoi_duyet: "{Ac} thấy hấp dẫn chưa ạ? Ổn thì em đăng liền và rao tích cực cho {ac}.",
   nhap_sua_xong: "Em sửa lại rồi, {ac} xem vậy được chưa ạ?",
   // 24/09/2026 (chủ dự án): bỏ "Khách quan tâm nhắn Zalo cho em để hẹn xem nhà" — đổi thành lời hứa với NGƯỜI RAO,

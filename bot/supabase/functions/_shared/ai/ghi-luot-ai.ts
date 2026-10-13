@@ -54,6 +54,7 @@ const DAU_HIEU: Array<[string, RegExp]> = [
   ["boc_gan", /có muốn nhà ở GẦN/],
   ["boc_du_an", /^Bạn bóc thông tin về DỰ ÁN/],
   ["doc_tai_lieu", /^ĐỌC TÀI LIỆU DỰ ÁN/],
+  ["khen_nhap", /^VIẾT CÂU KHEN BẢN NHÁP/],
 ];
 
 export function loaiLuotAi(kind: "create" | "parse", p: ThamSo): string {
