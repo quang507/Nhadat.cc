@@ -40,7 +40,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { chuanY, type FactNhap, soanTinNhapHaiBong, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  aiDocThem, bocTachTaoTin, boBaoLai, bongTrichXuat, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, dongFact, dongVuaLuu, HIEU_LUOT, KHONG_BOC, NGUON_AI, nhanNgan, phuongKemQuanCu, traLoiCauBot, TU_ANH, vuaLuuBan, vuaLuuMua,
+  aiDocThem, bocTachTaoTin, boBaoLai, BOC_YEU_CAU, bongTrichXuat, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, dongFact, dongVuaLuu, HIEU_LUOT, KHONG_BOC, NGUON_AI, nhanNgan, phuongKemQuanCu, traLoiCauBot, TU_ANH, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
@@ -3314,10 +3314,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const hieuKhac = extra.duyet === true ? "đồng ý bản nháp, em đăng tin"
           : vaiTuNoiLuot ? `tự nói là ${vaiTuNoiLuot === "moi_gioi" ? "môi giới" : "chính chủ"}`
           : hoiNguocX ? `hỏi em "${hoiNguocX}", em trả lời câu đó`
-          : yeuCauX ? `yêu cầu của ${cachGoi}: ${yeuCauX}`
           : null;
+        // SRS-5.1zzzzzs: yêu cầu của khách in khuôn "Đã bóc tách yêu cầu: • ghi nhận yêu cầu của {ac}: …" (chủ dự án 13/10).
+        const bocYeuCau = yeuCauX ? `${BOC_YEU_CAU}\n• ghi nhận yêu cầu của ${cachGoi}: ${yeuCauX}` : null;
         const bocDu = bongTrichXuat(dongLuot) ??
-          (hieuTraLoiVai && sellerMoi ? traLoiCauBot(cauVaiDaHoi, hieuTraLoiVai, text) : hieuKhac ? `${HIEU_LUOT} ${hieuKhac}.` : KHONG_BOC);
+          (hieuTraLoiVai && sellerMoi ? traLoiCauBot(cauVaiDaHoi, hieuTraLoiVai, text) : hieuKhac ? `${HIEU_LUOT} ${hieuKhac}.` : bocYeuCau ?? KHONG_BOC);
         return { bong: [bocDu, dongHoSo].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
@@ -3589,7 +3590,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         if (extra.anh === true && (!bl.bong || bl.bong.startsWith(KHONG_BOC))) {
           const loaiAnh = Array.isArray(extra.anh_loai) ? (extra.anh_loai as string[]) : [];
           const soAnh = typeof extra.so_anh === "number" && extra.so_anh > 1 ? `${extra.so_anh} ảnh: ` : "";
-          bl.bong = bl.cheDo !== "tat" && loaiAnh.length ? `${TU_ANH} ${soAnh}${loaiAnh.join(", ")}` : null;
+          // SRS-5.1zzzzzs: bìa sổ đọc ra loại sổ → 🤖 in thêm dòng pháp lý (cùng khuôn "• nhãn: giá trị" của lượt chữ).
+          const plAnh = typeof extra.anh_phap_ly === "string" && extra.anh_phap_ly ? `\n• pháp lý: "${extra.anh_phap_ly}"` : "";
+          bl.bong = bl.cheDo !== "tat" && loaiAnh.length ? `${TU_ANH} ${soAnh}${loaiAnh.join(", ")}${plAnh}` : null;
         }
         // FR-239 g: lượt này không lưu được gì mà model "Dạ, em ghi lại rồi anh" → bỏ câu ghi nhận suông.
         // Bỏ xong không còn câu nào ("dạ em" → "Dạ em ghi nhận rồi ạ.") thì đáp một lời gật, không để khách chỉ thấy 🤖.
@@ -5741,6 +5744,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     /** Điểm mạnh model thấy trong ảnh của lượt này (gộp album dùng làm câu khen). */
     let khenAnhLuot: string | null = null;
     let anhLaGiayTo = false;
+    /** SRS-5.1zzzzzs: pháp lý ghi từ bìa sổ trong lượt ảnh này ("sổ hồng" / "sổ đỏ[, đồng sở hữu]") — để 🤖 in "pháp lý: …". */
+    let phapLyTuAnh: string | null = null;
     /** Trả `true` khi ảnh KHÔNG liên quan tới nhà (đã hỏi "gửi nhầm ảnh không", không cất vào tin). */
     // ─── SRS-5.1zzk (05/10/2026, demo AOND bulk.py): BẢNG RỔ HÀNG (CSV / XLSX) của môi giới → mỗi dòng một tin, ánh xạ cột tất
     // định, không model; trần hạng vẫn áp; cột tên / SĐT chủ nhà cố ý bỏ (§5). Thiếu ô thì tin vẫn mở, hỏi bù lo sau.
@@ -5935,6 +5940,27 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           });
           if (dcErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ocr dia chi)", dcErr.message);
         }
+        // SRS-5.1zzzzzs (chủ dự án 13/10: "người ta gửi ảnh nó biết sổ các thứ mà, làm sao cho nó biết sổ đỏ sổ hồng khác nhau"): loại sổ
+        // đọc từ TIÊU ĐỀ bìa là câu trả lời pháp lý — ghi ô pháp lý đúng chữ ("sổ đỏ" ≠ "sổ hồng", bìa ghi cùng sử dụng → ", đồng sở hữu")
+        // khi tin CHƯA có pháp lý (chủ nhà đã nói chữ gì thì giữ chữ đó), đóng câu pháp lý đang treo. Không ghi tên người.
+        const loaiSo = (g?.loai_giay ?? "").trim().toLowerCase();
+        if (/^sổ (?:hồng|đỏ)$/.test(loaiSo)) {
+          const { data: plCu, error: plErr } = await client.from("listing_facts").select("id").eq("listing_id", id).eq("question", "phap_ly").limit(1);
+          if (plErr) await ghiLoi(client, "chat-reply listing_facts(ocr phap ly)", plErr.message);
+          if (!plErr && !(plCu ?? []).length) {
+            const phapLySo = `${loaiSo}${(g as { dong_so_huu?: boolean | null })?.dong_so_huu === true ? ", đồng sở hữu" : ""}`;
+            const { error: plGhi } = await ghiFact(client, { p_listing_id: id, p_question: "phap_ly", p_answer: phapLySo, p_source: "so_do_ocr" });
+            if (plGhi) await ghiLoi(client, "chat-reply ghi_fact_listing(ocr phap ly)", plGhi.message);
+            else {
+              phapLyTuAnh = phapLySo;
+              const treoPl = ds.find((p) => p.listing_id === id && p.question === "phap_ly");
+              if (treoPl) {
+                await client.from("info_requests").update({ status: "answered", answer: phapLySo, answered_at: new Date().toISOString() }).eq("id", treoPl.id);
+              }
+              if (!loiAi) cau.push(`Trên bìa là ${phapLySo}, em ghi pháp lý vậy nha.`);
+            }
+          }
+        }
         ackAnh.push(cau.join("\n"));
       } else if (kq) {
         const nhan = LOAI_ANH_VI[kq.loai];
@@ -6015,14 +6041,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         ackAnh = [`Ảnh${loaiDot.length === 1 ? ` ${loaiDot[0]}` : ""} đẹp lắm ${cachGoi} ạ${khenGon}.`];
       }
       // Hỏi tiếp câu đang chờ (câu "gửi ảnh" thì nhanAnh đã đóng) — nhận ảnh xong không để hội thoại đứng.
-      const qAnh = pendingReq && pendingReq.question !== "hinh_anh" && pendingReq.listing_id === idNeoAnh ? pendingReq.question : null;
+      // SRS-5.1zzzzzs: câu pháp lý vừa được bìa sổ trả lời trong chính lượt này → không nhắc lại điều vừa đọc trên bìa.
+      const qAnh = pendingReq && pendingReq.question !== "hinh_anh" && pendingReq.listing_id === idNeoAnh && !(phapLyTuAnh && pendingReq.question === "phap_ly") ? pendingReq.question : null;
       const cauSauAnh0 = qAnh
         ? cauHoiMau(qAnh, cachGoi, pendingReq?.listings?.property_type, pendingReq?.listings?.district, pendingReq?.listings?.deal, pendingReq?.listings?.location_raw)
         : null;
       // SRS-5.1zzzzzn (test Zalo 13/10/2026: ba lượt ảnh liền, lượt nào cũng "Bản nháp ở trên … nhắn ok là em đăng liền ạ."): câu treo
       // nhắc lại sau ảnh chỉ khi mấy tin bot gần nhất chưa nói đúng câu đó — chủ nhà đang gửi ảnh, không cần nghe lại mỗi tấm.
       const cauSauAnh = cauSauAnh0 && !lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-4).some((m) => (m.body ?? "").includes(cauSauAnh0)) ? cauSauAnh0 : null;
-      return await traLoiSeller(cauSauAnh ? [cauSauAnh] : [], { anh: true, so_anh: soAnhDot, anh_loai: loaiDot, ...(qAnh ? { reask: qAnh } : {}) });
+      return await traLoiSeller(cauSauAnh ? [cauSauAnh] : [], { anh: true, so_anh: soAnhDot, anh_loai: loaiDot, ...(phapLyTuAnh ? { anh_phap_ly: phapLyTuAnh } : {}), ...(qAnh ? { reask: qAnh } : {}) });
     }
     // Soát 01/09 (vai người bán): ảnh KÈM CHÚ THÍCH từng rơi mất — chữ là câu
     // trả lời, ảnh vẫn phải vào kho. Neo căn theo thứ tự FR-157.

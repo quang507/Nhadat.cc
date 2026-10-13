@@ -49,6 +49,9 @@ export const BOC_DUOC = `${DAU_BAO_LAI} Đã trích xuất:`;
 export const KHONG_BOC = `${DAU_BAO_LAI} Không trích xuất được gì từ tin này.`;
 /** SRS-5.1zzzzzn: lượt không có dữ liệu để trích nhưng em hiểu việc của nó (gật bản nháp, khách hỏi, tự nói vai): "🤖 Hiểu: …". */
 export const HIEU_LUOT = `${DAU_BAO_LAI} Hiểu:`;
+/** SRS-5.1zzzzzs (chủ dự án 13/10: "nếu nhận yêu cầu của khách hàng thì ghi ra là đã bóc tách yêu cầu … ghi nhận yêu cầu"): lượt khách
+ *  XIN / HỎI về tin của mình → "🤖 Đã bóc tách yêu cầu:" + một dòng "• ghi nhận yêu cầu của {ac}: …", cùng khuôn với dòng dữ liệu. */
+export const BOC_YEU_CAU = `${DAU_BAO_LAI} Đã bóc tách yêu cầu:`;
 /** Dấu mở bong bóng lượt ẢNH (không có chữ để trích): "🤖 Đã trích xuất từ ảnh: mặt tiền". */
 export const TU_ANH = `${DAU_BAO_LAI} Đã trích xuất từ ảnh:`;
 const LAM_CHUAN = "làm chuẩn";

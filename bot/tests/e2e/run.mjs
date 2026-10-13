@@ -1905,6 +1905,40 @@ fresh(seedKho);
   globalThis.__anh = { loai: "giay_to", mo_ta: "sổ hồng", giay_to: { loai_giay: "sổ hồng", dien_tich_m2: 48.5, dia_chi: "Hồng Bàng, P12", so_thua: "7", so_to: "2", ro_net: true } };
   r = await send({ external_user_id: "z-so", text: "", image_url: "https://f9-zpg.zdn.vn/so3.jpg" });
   check("N10b tin chưa có diện tích → lấy 48.5m2 từ sổ (fact dien_tich nguồn so_do_ocr), bong bóng nói lấy số đó", db().t.listing_facts.some((f) => f.question === "dien_tich" && /48\.5/.test(f.answer) && f.source === "so_do_ocr") && r.body.replies.some((x) => /48\.5m2/.test(x)), JSON.stringify({ body: r.body, f: db().t.listing_facts }));
+  // SRS-5.1zzzzzs (chủ dự án 13/10: "làm sao cho nó biết sổ đỏ sổ hồng khác nhau"): bìa sổ đọc ra loại → ô pháp lý đúng chữ, chỉ khi tin chưa có.
+  check("N10b2 tin chưa có pháp lý, ảnh bìa 'sổ hồng' → fact phap_ly = 'sổ hồng' (nguồn so_do_ocr), lời nhận nói 'Trên bìa là sổ hồng'",
+    db().t.listing_facts.some((f) => f.question === "phap_ly" && f.answer === "sổ hồng" && f.source === "so_do_ocr") && r.body.replies.some((x) => /Trên bìa là sổ hồng/.test(x)),
+    JSON.stringify({ body: r.body, f: db().t.listing_facts.filter((f) => f.question === "phap_ly") }));
+  {
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { ...(cuCH ?? { test_reset_hello: "1" }), bao_lai_da_luu: "thay_doi" };
+    fresh((d) => {
+      const s = d.insert("sellers", { zalo_user_id: "z-so-do", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+      const l = d.insert("listings", { code: "BDS-Q5-0104", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "7 Hồng Bàng", ward: "Phường 12", price_raw: "6 tỷ", price_vnd: 6e9, area_m2: 60, can_chu_duyet: true }).data;
+      d.insert("info_requests", { listing_id: l.id, question: "phap_ly", status: "pending" });
+    });
+    globalThis.__anh = { loai: "giay_to", mo_ta: "sổ đỏ", giay_to: { loai_giay: "sổ đỏ", dong_so_huu: true, dien_tich_m2: 60, dia_chi: null, so_thua: null, so_to: null, ro_net: true } };
+    r = await send({ external_user_id: "z-so-do", text: "", image_url: "https://f9-zpg.zdn.vn/so4.jpg" });
+    const plSo = db().t.listing_facts.filter((f) => f.question === "phap_ly");
+    check("N10b3 (cách nói mới) bìa 'sổ đỏ' + cùng sử dụng → phap_ly = 'sổ đỏ, đồng sở hữu' (KHÔNG thành 'sổ hồng riêng'), câu pháp lý treo answered, 🤖 có dòng pháp lý, KHÔNG hỏi lại pháp lý ngay sau đó",
+      plSo.length === 1 && plSo[0].answer === "sổ đỏ, đồng sở hữu" && plSo[0].source === "so_do_ocr" &&
+        db().t.info_requests.some((q) => q.question === "phap_ly" && q.status === "answered") &&
+        r.body.replies.some((x) => /^🤖 .*\n• pháp lý: .*sổ đỏ, đồng sở hữu/.test(x)) &&
+        !r.body.replies.some((x) => /[Pp]háp lý .*(thế nào|như thế nào)|riêng hay chung/.test(x)),
+      JSON.stringify({ rep: r.body.replies, plSo, ir: db().t.info_requests }));
+    fresh((d) => {
+      const s = d.insert("sellers", { zalo_user_id: "z-so-co", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+      const l = d.insert("listings", { code: "BDS-Q5-0105", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "9 Hồng Bàng", ward: "Phường 12", price_raw: "6 tỷ", price_vnd: 6e9, area_m2: 60, can_chu_duyet: true }).data;
+      d.insert("listing_facts", { listing_id: l.id, question: "phap_ly", answer: "sổ hồng riêng", source: "seller_chat" });
+    });
+    globalThis.__anh = { loai: "giay_to", mo_ta: "sổ đỏ", giay_to: { loai_giay: "sổ đỏ", dong_so_huu: false, dien_tich_m2: 60, dia_chi: null, so_thua: null, so_to: null, ro_net: true } };
+    r = await send({ external_user_id: "z-so-co", text: "", image_url: "https://f9-zpg.zdn.vn/so5.jpg" });
+    check("N10b4 (đối chứng) chủ nhà đã nói 'sổ hồng riêng' → ảnh bìa không ghi đè, không thêm fact pháp lý, 🤖 không có dòng pháp lý",
+      db().t.listing_facts.filter((f) => f.question === "phap_ly").length === 1 && db().t.listing_facts.find((f) => f.question === "phap_ly").answer === "sổ hồng riêng" &&
+        !r.body.replies.some((x) => /• pháp lý/.test(x)),
+      JSON.stringify({ rep: r.body.replies, f: db().t.listing_facts.filter((f) => f.question === "phap_ly") }));
+    globalThis.__cauHinh = cuCH;
+  }
   check("N10c model không phân loại được → vẫn cất nhưng RIÊNG TƯ", (() => { globalThis.__anh = undefined; return true; })());
   fresh(seedKho);
   globalThis.__model.parse = (p) => laLuotAnh(p) ? null : OUT();
@@ -6666,6 +6700,17 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
       r.body.hoi_ve_tin === "noi_dung" && r.body.xem_tin === true && /📋 Bên em đang đăng như vậy nhé/.test(r.body.replies.join("\n")) && /Trần Hưng Đạo/.test(r.body.replies.join("\n")) && /5,8 tỷ/i.test(r.body.replies.join("\n")) &&
         createCalls().length === nParse0 && !/Không trích xuất được gì/.test(r.body.replies.join("\n")) && r.body.replies.length === 1,
       JSON.stringify(r.body.replies));
+    // SRS-5.1zzzzzs (chủ dự án 13/10: "nếu nhận yêu cầu của khách hàng thì ghi ra là đã bóc tách yêu cầu … ghi nhận yêu cầu"): 🤖 cho khách đọc.
+    {
+      const cuCH = globalThis.__cauHinh;
+      globalThis.__cauHinh = { ...(cuCH ?? { test_reset_hello: "1" }), bao_lai_da_luu: "thay_doi" };
+      r = await send({ external_user_id: "z-ccrb", text: "cho anh coi lại nội dung tin đăng với" });
+      check("DAM-S1c (cách nói mới) xin coi lại nội dung → 🤖 'Đã bóc tách yêu cầu:' + '• ghi nhận yêu cầu của anh: xin xem lại nội dung tin đăng' (không 'Hiểu:', không 'Không trích xuất')",
+        r.body.hoi_ve_tin === "noi_dung" && r.body.replies.some((x) => /^🤖 Đã bóc tách yêu cầu:\n• ghi nhận yêu cầu của anh(?: chị)?: xin xem lại nội dung tin đăng$/.test(x)) &&
+          !r.body.replies.some((x) => /🤖 Hiểu:|Không trích xuất/.test(x)),
+        JSON.stringify(r.body.replies));
+      globalThis.__cauHinh = cuCH;
+    }
     // Người chưa có tin nào xin nội dung → nói thật.
     r = await send({ external_user_id: "dam-s1b", text: "em có căn nhà cần bán" });
     r = await send({ external_user_id: "dam-s1b", text: "gửi lại bài rao cho anh coi với" });

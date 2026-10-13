@@ -529,6 +529,8 @@ Sau khi gộp: `bun run prompt --day` (khoá `cau_hoi_mau`, `cau_tien_dinh`, `se
 | Chữ "kết cấu" → "quy mô" (`FACT_LABELS`, `SELLER_SCRIPT_RULES`, câu hỏi lửng) | "Dạ 4 tấm đó có tính cả gác lửng không {ac} ạ?", "Dạ vậy quy mô nhà mình là …" | khoá `ket_cau` trong DB |
 | Bản tin: tiêu đề AI "hoa văn" + dòng cuối giá | tiêu đề do lượt khen viết, `tieuDeHopLe` kiểm số + chữ cấm, không qua thì tiêu đề máy; dòng cuối "💰 GIÁ 3,9 TỶ (còn thương lượng)" in hoa (Zalo không đậm) | bố cục còn lại của bản tin |
 | `TONE_RULES` (khen) | cho khen NGẮN nhắc đúng điểm mạnh khách nói bằng chữ, lâu lâu một câu; `kiem-khen` kiểu `khen_nhac_lai` | cấm gắn thêm lợi ích / tính chất |
+| 🤖 lượt khách xin / hỏi về tin (SRS-5.1zzzzzs) | "🤖 Đã bóc tách yêu cầu:" + "• ghi nhận yêu cầu của {ac}: xin xem lại nội dung tin đăng" (thay "🤖 Hiểu: yêu cầu của …") | "🤖 Hiểu:" cho gật bản nháp / khách hỏi em |
+| Ảnh bìa sổ (SRS-5.1zzzzzs) | pháp lý ghi đúng loại trên bìa: "sổ đỏ" / "sổ hồng" (+ ", đồng sở hữu"), 🤖 từ ảnh in "• pháp lý: …", câu "Trên bìa là sổ đỏ, em ghi pháp lý vậy nha" khi model không viết lời nhận | chữ chủ nhà đã nói không bị ảnh ghi đè |
 | `FEE_RULES` | thêm: không hẹn "sẽ báo sau / báo rõ khi rao" — chưa rõ vai thì hỏi vai ngay | các mức phí, luật thuyết phục |
 | Lời ghi nhận ngoài câu treo | đọc tên ô ngắn ("độ rộng hẻm trước nhà, đường vào"), không đọc câu hỏi | câu hỏi kế (`cauHoiMau`) |
 | Câu lệnh khi khách nói không biết | "Chủ nhà nói không biết … — đáp nhẹ một tiếng là không sao, KHÔNG hỏi lại câu đó" | các câu lệnh câu treo khác |

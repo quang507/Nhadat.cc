@@ -23,7 +23,13 @@ export const AnhSchema = z.object({
   khen: z.string().nullable().describe("MỘT điểm mạnh THẬT nhìn thấy trong ảnh để khen chủ nhà (dưới 12 từ, ví dụ 'mặt tiền sáng, hẻm rộng xe hơi vào thoải mái'); null nếu không có gì đáng khen hoặc là giấy tờ. Không bịa."),
   mo_ta: z.string().describe("Một câu dưới 15 từ tả điều THẤY được; đoán thì mở bằng 'hình như'. Không suy diễn vật liệu/pháp lý."),
   giay_to: z.object({
-    loai_giay: z.string().nullable().describe("'sổ hồng' / 'sổ đỏ' / 'hợp đồng mua bán' / 'giấy tờ khác'"),
+    // SRS-5.1zzzzzs (chủ dự án 13/10/2026: "làm sao cho nó biết sổ đỏ sổ hồng khác nhau"): đọc theo TIÊU ĐỀ in trên bìa, không đoán theo màu ảnh.
+    loai_giay: z.string().nullable().describe(
+      "'sổ đỏ' = bìa in \"Giấy chứng nhận quyền sử dụng đất\" (mẫu cũ, bìa đỏ, chỉ đất); " +
+      "'sổ hồng' = bìa in \"Giấy chứng nhận quyền sở hữu nhà ở và quyền sử dụng đất ở\" (bìa hồng cũ) HOẶC mẫu từ 2009 \"Giấy chứng nhận quyền sử dụng đất, quyền sở hữu nhà ở và tài sản khác gắn liền với đất\" (bìa hồng); " +
+      "'hợp đồng mua bán' / 'vi bằng' / 'giấy tay' / 'giấy phép xây dựng' / 'giấy tờ khác'. Đọc theo chữ TIÊU ĐỀ, không đoán theo màu.",
+    ),
+    dong_so_huu: z.boolean().nullable().optional().describe("true khi bìa ghi 'cùng sử dụng đất' / 'đồng sở hữu' / 'cùng sở hữu' (sổ chung); false khi một chủ; null khi không đọc được. KHÔNG ghi tên."),
     dien_tich_m2: z.number().nullable().describe("Diện tích ĐỌC ĐƯỢC trên giấy (m2), null nếu không thấy rõ"),
     dia_chi: z.string().nullable().describe("Địa chỉ thửa đất đọc được (đường, phường, quận), null nếu không rõ"),
     so_thua: z.string().nullable(),
