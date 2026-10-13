@@ -4108,6 +4108,39 @@ AI trả `dien_tich` trích "Dtsd" → chỉ `dien_tich_san`, 🤖 in cả ba ô
 hoa; e2e N3b / LUNG-01 / LUNG-08 / HTSD-05 theo chữ mới. Prompt đẩy DB bằng `dong-bo-prompt --chi cau_hoi_mau,tone_rules,seller_script_rules`
 (không đụng `cau_tien_dinh` chủ dự án đã sửa tay 12/10). e2e **1370/1370**.
 
+### SRS-5.1zzzzzs · Ảnh bìa sổ ghi pháp lý đúng loại (sổ đỏ ≠ sổ hồng, đồng sở hữu); 🤖 "Đã bóc tách yêu cầu" khi khách xin / hỏi về tin (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026 kèm ảnh chat 12/10 14:07 ("sổ hồng riêng, anh đứng tên" → pháp lý ghi cả câu — ca này đã sửa ở SRS-5.1zzzzzh):
+"nãy h người ta gửi ảnh nó biết sổ các thứ mà, làm sao cho nó biết sổ đỏ sổ hòng khác nhau đi, các thứ như pháp lý đóng thuê hằng năm đồ, dòng này
+nếu nhận yêu cầu của khách hàng thì ghi ra là đã bóc tách yêu cầu cho bot, ghi nhận yêu cầu được không"]`
+
+**Ca gốc.** (a) Chủ nhà gửi ảnh sổ: `phanLoaiAnh` đọc ra `loai_giay` ("sổ hồng" / "sổ đỏ") nhưng chat-reply chỉ dùng chữ đó trong câu
+"Em nhận được ảnh sổ hồng rồi ạ" và lấy diện tích; ô pháp lý KHÔNG ghi, câu pháp lý vẫn treo và bot hỏi lại điều vừa nhìn thấy trên bìa.
+Mô tả `loai_giay` cho model chỉ là bốn chữ liệt kê, không nói sổ đỏ khác sổ hồng ở đâu. (b) Khách xin xem lại tin → 🤖 "Hiểu: yêu cầu của
+anh: …" — chủ dự án muốn khuôn "đã bóc tách yêu cầu / ghi nhận yêu cầu" như dòng dữ liệu.
+
+**Lớp lỗi.** (a) Dữ liệu model đọc ra từ ảnh chỉ đi vào LỜI, không đi vào Ô — cùng lớp với diện tích trên sổ trước SRS-5.1zzzzzn (đã nối),
+địa chỉ thửa (đã nối vào `bo_sung`); loại sổ là mảnh cuối chưa nối. Phân biệt sổ đỏ / sổ hồng là KIẾN THỨC NGHIỆP VỤ phải đặt vào mô tả
+trường cho model (đọc theo tiêu đề bìa), không đoán theo màu ảnh. (b) Nhãn 🤖 cho lượt "hiểu việc" dùng chung một chữ "Hiểu:" cho ba loại
+(gật, hỏi, yêu cầu) — yêu cầu của khách là thứ bóc tách được, đáng có khuôn riêng.
+
+**Sửa.** (a) `phan-loai-anh.ts`: `loai_giay` mô tả theo TIÊU ĐỀ in trên bìa (sổ đỏ = "Giấy chứng nhận quyền sử dụng đất" mẫu cũ; sổ hồng =
+"quyền sở hữu nhà ở và quyền sử dụng đất ở" hoặc mẫu 2009+ "quyền sử dụng đất, quyền sở hữu nhà ở và tài sản khác gắn liền với đất"; thêm
+hợp đồng mua bán / vi bằng / giấy tay / giấy phép xây dựng), thêm `dong_so_huu` (bìa ghi cùng sử dụng / đồng sở hữu; không ghi tên). chat-reply
+nhánh `giay_to`: `loai_giay` là "sổ hồng" / "sổ đỏ" và tin CHƯA có fact pháp lý → ghi `phap_ly = "<loại sổ>[, đồng sở hữu]"` nguồn
+`so_do_ocr`, đóng câu pháp lý đang treo, câu soạn sẵn "Trên bìa là sổ đỏ, đồng sở hữu, em ghi pháp lý vậy nha" (chỉ khi model không viết
+`loi_nhan`), 🤖 lượt ảnh in thêm "• pháp lý: "…"". Chủ nhà đã nói chữ gì ("sổ hồng riêng") thì giữ chữ đó, ảnh không ghi đè. (b)
+`bao_lai.ts` `BOC_YEU_CAU` = "🤖 Đã bóc tách yêu cầu:"; lượt `hoi_ve_tin` in "• ghi nhận yêu cầu của {ac}: <nhãn yêu cầu>" (`NHAN_YEU_CAU`).
+Pháp lý "có kê khai thuế hằng năm" / vi bằng / phép xây / hoàn công đã vào ô pháp lý ở SRS-5.1zzzzzr (prompt), không đổi thêm.
+
+**Chỗ khác cùng lớp.** Tài liệu dự án (bảng giá / brochure) đã đi vào kho `du_an_can` (SRS-5.1zzj); diện tích + địa chỉ thửa trên sổ đã
+nối; `so_thua` / `so_to` chỉ nằm ở `ocr` của `listing_media` (riêng tư), cố ý không ra tin. Lượt "Hiểu:" còn hai loại (gật bản nháp, khách
+hỏi em) giữ chữ cũ.
+
+**Kiểm.** e2e N10b2 (sổ hồng → `phap_ly` "sổ hồng" `so_do_ocr`), N10b3 (cách nói mới: bìa sổ đỏ + cùng sử dụng → "sổ đỏ, đồng sở hữu",
+câu treo answered, 🤖 có dòng pháp lý), N10b4 (đối chứng: đã có "sổ hồng riêng" → không ghi đè), DAM-S1c (🤖 "Đã bóc tách yêu cầu: • ghi nhận
+yêu cầu của anh: xin xem lại nội dung tin đăng"). Đỏ khi bỏ khối ghi pháp lý trong nhánh `giay_to` hoặc đổi `BOC_YEU_CAU`.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
