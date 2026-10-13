@@ -11,7 +11,8 @@ import { dinhDangLong, docLong } from "./doc-long.ts";
 const KhenNhap = z.object({
   khen: z.string().nullable().describe("MỘT câu khen, ≤ 30 chữ, không câu hỏi. Không viết được câu đúng luật → null."),
   // SRS-5.1zzzzzr (chủ dự án 13/10/2026: "Tiêu đề nên hoa văn tí"): AI viết tiêu đề, code kiểm số + chữ cấm (`tieuDeHopLe`), không qua thì giữ tiêu đề máy.
-  tieu_de: z.string().nullable().optional().describe("MỘT tiêu đề rao hấp dẫn ≤ 90 ký tự: mở bằng \"Chỉ <giá>\" đúng giá trong bản tin, rồi 1–2 điểm mạnh có trong bản tin bằng lời mời gọi vừa phải, kết bằng khu vực (\"Chỉ 3,9 tỷ sở hữu ngay nhà cấp 4 hẻm xe hơi, sân rộng tại Đông Thạnh, Hóc Môn\"). Không con số ngoài bản tin, không nói thị trường / sinh lời / dễ bán, không hứa, không tiếng Anh, không chấm than. Không viết được → null."),
+  // SRS-5.1zzzzzu (chủ dự án 13/10: "tiêu đề phải thu hút người mua và cachy hơn"): không bắt khuôn "Chỉ <giá>"; tin thuê cũng có tiêu đề.
+  tieu_de: z.string().nullable().optional().describe("MỘT tiêu đề rao THU HÚT người mua / người thuê, 40–90 ký tự, như môi giới giỏi viết: nêu giá đúng như bản tin, 1–2 điểm mạnh nổi nhất CÓ TRONG bản tin, khu vực; lời mời gọi vừa phải (\"sở hữu ngay\", \"về ở liền\", \"dọn vào ngay\", \"nhà xinh\"). Tin bán ví dụ \"Nhà hẻm xe hơi Đông Thạnh 132m², sân rộng, chỉ 3,9 tỷ\"; tin thuê ví dụ \"Cho thuê nguyên căn hẻm 5m Dương Bá Trạc, 2PN, dọn vào ngay, 6 triệu/tháng\". Không con số ngoài bản tin, không nói thị trường / sinh lời / dễ bán / đầu tư, không hứa, không tiếng Anh, không chấm than. Không viết được → null."),
   dua_tren: z.array(z.string()).describe("Các cụm COPY NGUYÊN VĂN từ BẢN TIN mà câu khen nhắc tới (mỗi điểm mạnh một cụm)."),
   // SRS-5.1zzzzzn: xếp ý thêm vào dòng "Quy mô" theo NGHĨA (không dò từ khoá) — cùng lượt model này, không thêm lượt gọi.
   // SRS-5.1zzzzzo ("tiện ích phải gom vào đúng tiện ích"): ý thêm nói về xung quanh căn → dòng 🏫 Tiện ích. Cùng lượt model.
@@ -34,8 +35,9 @@ gửi chủ nhà, đặt ngay dưới bản tin.
   sân thượng…) thì chép nguyên văn vào quy_mo; ý về vị trí, tiện ích quanh nhà, tình trạng nhà thì không.
 - tien_ich: xếp riêng — ý nào nói về xung quanh căn (gần chợ / trường / công viên, khu dân cư, cách đường lớn…) thì chép nguyên văn vào tien_ich.
   Một ý chỉ vào MỘT trong hai danh sách.
-- tieu_de: viết lại dòng tiêu đề (dòng 2 của bản tin, mở bằng "Chỉ <giá>") cho hấp dẫn hơn một chút — cùng giá, cùng điểm mạnh, cùng khu
-  vực có trong bản tin; thêm lời mời gọi vừa phải ("sở hữu ngay", "nhà xinh", "ngay"), KHÔNG thêm điểm mạnh / con số / nhận định mới.
+- tieu_de: viết lại dòng tiêu đề (dòng 2 của bản tin) cho THU HÚT, đọc là muốn hỏi ngay — cùng giá, cùng điểm mạnh, cùng khu vực có
+  trong bản tin, tự chọn thứ tự (giá có thể đứng đầu hay cuối), lời mời gọi vừa phải ("sở hữu ngay", "về ở liền", "dọn vào ngay", "nhà
+  xinh"); tin thuê mở bằng "Cho thuê" / "Thuê ngay". KHÔNG thêm điểm mạnh / con số / nhận định mới.
 Bản tin không có điểm mạnh nào để nhắc → khen = null.`;
 
 type ClientModel = {

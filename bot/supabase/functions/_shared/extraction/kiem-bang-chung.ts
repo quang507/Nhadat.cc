@@ -2056,6 +2056,9 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daG
     const kd = chuanSo(v);
     if (kd.length < 3 || v.length > 80) continue;
     if (!kdTin.includes(kd)) continue;
+    // SRS-5.1zzzzzu (chủ dự án 13/10: "lầu 1+2 3.5x6.5m dư, thông tin ghi đủ đúng vào trong ô bóc tách thôi ko dc ghi nhiều chỗ quá"):
+    // mảnh chỉ là SỐ ĐO (kích thước "3,5m x 6,5m", "45m2", "ngang 4") thuộc về ô số, không phải kiến thức thêm — không in ra "📝 Thêm".
+    if (/\d+(?:[.,]\d+)?\s*m?\s*x\s*\d+(?:[.,]\d+)?\s*m?\b/.test(kd) || /^(?:[a-z+ ]{0,20})?\d+(?:[.,]\d+)?\s*(?:m2|m|met)\s*$/.test(kd)) continue;
     // 21/09/2026 (bắn thật mau-v-03): "để em coi lại sổ rồi báo" là LỜI HỨA / lời nói chuyện của chủ
     // nhà, không phải điều gì về căn nhà — không vào mô tả.
     if (LOI_NOI_CHUYEN.test(kd)) continue;

@@ -1240,6 +1240,13 @@ ok("ZZZZZH-K2c (đối chứng) vị trí giữ phường, diện tích giữ ng
   const c = mot("đất thổ cư, sổ lâu dài", "thoi_han_su_dung", "lâu dài", "sổ lâu dài");
   ok("ZZZZZT-K1c (đối chứng) 'sổ lâu dài' của đất → giữ", c.dat.some((d) => d.khoa === "thoi_han_su_dung"), JSON.stringify(c));
 }
+// SRS-5.1zzzzzu (chủ dự án 13/10: "lầu 1+2 3.5x6.5m dư, thông tin ghi đủ đúng vào trong ô bóc tách thôi"): mảnh chỉ là số đo không vào kiến thức thêm.
+{
+  const T = "Cho thuê nhà nguyên căn Dương Bá Trạc, trong hẻm làng ốc, hẻm 5m. Diện tích trệt 3m x 5,5m. Lầu 1 + 2 : 3,5m x 6,5m. Gần trung tâm thuận tiện qua các quận 1, 5, 7";
+  const kt = kiemKienThuc(["trong hẻm làng ốc", "Lầu 1 + 2 : 3,5m x 6,5m", "Gần trung tâm thuận tiện qua các quận 1, 5, 7"], T, []);
+  ok("ZZZZZU-K1 (ca gốc) 'Lầu 1 + 2 : 3,5m x 6,5m' là số đo → không vào kiến thức thêm; hai ý chữ giữ", kt.length === 2 && !kt.some((k) => /3,5m/.test(k)), JSON.stringify(kt));
+  ok("ZZZZZU-K1b (cách nói mới) 'sân sau 12m2' là số đo → bỏ", kiemKienThuc(["sân sau 12m2"], "nhà có sân sau 12m2", []).length === 0);
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

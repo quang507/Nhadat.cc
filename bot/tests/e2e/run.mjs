@@ -5826,6 +5826,9 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   check("NHAP-02 'ok em đăng đi, mà cái dòng phù hợp đọc kỳ quá' lúc duyệt → gật (chu_duyet_at), không vào bo_sung, không gửi lại nháp",
     !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)) && !rp.body.replies.some((r) => /Em sẽ rao như vầy|Em sửa lại rồi/.test(r)),
     JSON.stringify({ l: { chu_duyet_at: tin().chu_duyet_at }, facts: db().t.listing_facts.map((f) => [f.question, f.answer]), rep: rp.body.replies }));
+  // SRS-5.1zzzzzu (chủ dự án 13/10, nghi ngờ D "sửa từ gốc"): lượt lên kệ có câu phí vẫn xin chấm điểm (trước đây câu phí chặn câu chấm điểm).
+  check("AOND-05b lượt lên kệ có câu phí → vẫn xin chấm điểm trải nghiệm (xin_danh_gia), mở câu danh_gia",
+    rp.body.xin_danh_gia === true && rp.body.replies.some((r) => /mấy điểm trên 10/.test(r)), JSON.stringify({ rep: rp.body.replies, x: rp.body.xin_danh_gia }));
   check("AOND-05 tin lên kệ mà chưa từng nói phí → DẪN PHÍ một câu hỏi (demo AOND), body.dan_phi",
     rp.body.dan_phi === true && rp.body.replies.some((r) => /xin phép báo phí bên em nhé/.test(r)), JSON.stringify({ rep: rp.body.replies, dan_phi: rp.body.dan_phi }));
   // Vế sau có LỜI SỬA ("mà giá 9 tỷ 8") → FR-164 ghi giá mới trước, phần còn lại "ok đăng đi" là gật (FR-177 g:
@@ -10374,15 +10377,16 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     ["11 (cách nói mới)", "vậy rốt cuộc bên em ăn bao nhiêu phần trăm hả em?"]]) {
     const { uid, L } = dung({ tin: { ...TIN_NHA, ward: "Phường Cầu Kiệu" }, cauTreo: "huong", loaiNguoi: "ccrb", botNoi: [CAU_PHI_CU, "Nhà mình hướng gì vậy chị?"] });
     const f = await goi(uid, cau, { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "phi" } });
-    check(`ZZZZZ-${ma} đã nghe câu phí không số, «${cau.slice(0, 40)}…» → hỏi vai để báo đúng mức, không con số %, câu hướng vẫn mở`,
-      /Cho em hỏi chị là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé\./.test(f.rep) && !motMuc(f.rep) && treo(L).includes("huong"), JSON.stringify({ rep: f.rep, treo: treo(L) }));
+    // SRS-5.1zzzzzu: câu phí chưa rõ vai nêu CẢ HAI mức (zzzzzo), không nối câu hỏi vai ở nhánh câu treo nữa (một luật với r3).
+    check(`ZZZZZ-${ma} đã nghe câu phí hai mức, «${cau.slice(0, 40)}…» → nói lại câu phí hai mức, KHÔNG hỏi vai, câu hướng vẫn mở`,
+      /chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(f.rep) && !/chính chủ hay môi giới/.test(f.rep) && !motMuc(f.rep) && treo(L).includes("huong"), JSON.stringify({ rep: f.rep, treo: treo(L) }));
   }
   {
     const { uid, L } = dung({ tin: { ...TIN_NHA, ward: "Phường Cầu Kiệu" }, cauTreo: "duyet_tin", loaiNguoi: "ccrb" });
     const cau = "Được rồi em ơi, rao đi. Mà em nói rõ xíu, nếu có khách mua thì chị phải trả bao nhiêu tiền hoa hồng hay gì vậy em?";
     const g = await goi(uid, cau, { dong_y: "dong_y_dang", dong_y_trich: "Được rồi em ơi, rao đi", hoi_lai: { co_hoi: true, cau_hoi: "nếu có khách mua thì chị phải trả bao nhiêu tiền hoa hồng hay gì vậy em?", chu_de: "phi" } });
-    check("ZZZZZ-12 (ca gốc) gật duyệt kèm hỏi hoa hồng → tin lên kệ, có câu trả lời phí + hỏi vai, không 'biết phí bên em chưa'",
-      lr(L).status === "dang_ban" && /chỉ thu khi giao dịch thành công/.test(g.rep) && /chính chủ hay môi giới để em báo/.test(g.rep) && !/xin phép báo phí bên em nhé/.test(g.rep),
+    check("ZZZZZ-12 (ca gốc) gật duyệt kèm hỏi hoa hồng → tin lên kệ, có câu trả lời phí hai mức, KHÔNG hỏi vai, không dẫn phí lần hai",
+      lr(L).status === "dang_ban" && /chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(g.rep) && !/chính chủ hay môi giới/.test(g.rep) && !/xin phép báo phí bên em nhé/.test(g.rep),
       JSON.stringify({ st: lr(L).status, rep: g.rep }));
   }
   // (6) Ghi fact ngoài câu treo → lời ghi nhận đọc tên ô ngắn, không đọc câu hỏi trong FACT_LABELS.
@@ -11247,11 +11251,14 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
       JSON.stringify({ f, rep: b2.replies }));
   }
   {
-    // Đối chứng: chưa từng nói phí → lượt lên kệ đã có câu hỏi phí → không xin điểm thêm (một câu hỏi một lượt).
+    // SRS-5.1zzzzzu (chủ dự án 13/10: "hỏi ngay sau khi lên kệ … sửa từ gốc"): câu phí lúc lên kệ là CÂU BÁO (zzzzzo), không phải câu
+    // hỏi → vẫn xin chấm điểm ngay lượt lên kệ, không đợi lượt sau.
     const { uid, L } = choDuyet();
     const b = await goiL(uid, "ok em", { dong_y: "dong_y", dong_y_trich: "ok em" });
-    check("ZZZZZL-03c đối chứng: lượt lên kệ còn câu dẫn phí → không xin chấm điểm", lrL(L).status !== "cho_thong_tin" && !treoL(L).includes("danh_gia") && !/mấy điểm trên 10/.test((b.replies ?? []).join(" ")),
-      JSON.stringify({ st: lrL(L).status, rep: b.replies }));
+    const rep = (b.replies ?? []).join("\n");
+    check("ZZZZZL-03c lượt lên kệ có câu báo phí → VẪN xin chấm điểm ngay lượt đó, câu danh_gia treo",
+      lrL(L).status !== "cho_thong_tin" && treoL(L).includes("danh_gia") && /mấy điểm trên 10/.test(rep) && /xin phép báo phí bên em nhé/.test(rep) && b.xin_danh_gia === true,
+      JSON.stringify({ st: lrL(L).status, rep: b.replies, treo: treoL(L) }));
   }
   // ── SRS-5.1zzzzzn (test Zalo 13/10/2026, tin Hóc Môn): tin lên kệ, bot hỏi "Mà anh chị biết phí bên em chưa ạ?", khách "Phí như thế nào
   // em ?" → model tự hỏi vai; khách "Mình là chính chủ" → "Dạ vâng anh chị.", phí không bao giờ được báo. "ok" → "🤖 Không trích xuất được
