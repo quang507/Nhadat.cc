@@ -22,6 +22,16 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // SRS-5.1zzzzzza (Zalo thật 13/10/2026 16:44–16:53): "Điều chỉnh cho mình giá 6,950 tỷ" / "Sửa cho chị giá từ 1,2 tỷ thành 6,950 tỷ" lúc chờ
+    // duyệt → model trả rỗng bốn lần. Lệnh sửa kèm giá trị là lời sửa dữ liệu. Cách nói khác ca gốc.
+    cau_dang_hoi: "duyet_tin",
+    tin: "Sửa cho chị giá từ 8 tỷ thành 7 tỷ 5 nha em",
+    so_can: 1,
+    truong: [t("gia", "7 tỷ 5", "thành 7 tỷ 5")],
+    kien_thuc: [],
+    luu_y: "Đang chờ duyệt mà bảo sửa kèm giá trị mới → truong gia = giá trị MỚI (7 tỷ 5), không phải lời nói với bot, không để trống.",
+  },
+  {
     // SRS-5.1zzzzzy (Zalo thật 13/10/2026, Trương Đình Hội): "chỉ 6.950 TỶ … hoàn thiện theo ý gia chủ tầm 1,2 tỷ" → gia 1,2 tỷ đè giá rao;
     // "Tại đường Trương Đình Hội" xếp vào kien_thuc. Cách nói khác ca gốc cho cả hai.
     cau_dang_hoi: null,

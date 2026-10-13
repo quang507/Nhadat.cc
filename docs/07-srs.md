@@ -4367,6 +4367,34 @@ goc bịa → bỏ; lệch dấu vẫn khớp; trùng chỉ một); `tin-nhap-ra
 danh sách → in đủ; ý chọn không có trong tin → in đủ); e2e ZZZZZZ-01 / 01b (bản nháp thật qua lượt khen, DB vẫn đủ 8 fact). Tắt (1) hay (3) → e2e
 01 đỏ; tắt (2) → TICH-2/4 đỏ.
 
+### SRS-5.1zzzzzza · Lúc chờ duyệt: lệnh "sửa giá thành X" phải ghi; gọi tên căn khác thì chuyển căn; câu điểm tách bong bóng (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 16:44–16:59 (zalo_personal_test, căn BDS-NP-Q8-0001 / BDS-NP-BINHTAN-0001); chủ dự án: "nó có trích xuất dc yêu
+cầu ko", "câu này tách ra với câu dưới"]`
+
+**Ca gốc.** Đang chờ duyệt, chủ nhà "Điều chỉnh cho mình giá 6,950 tỷ", rồi "Sửa cho chị giá từ 1,2 tỷ thành 6,950 tỷ" (ba cách nói, bốn lần) →
+🤖 "Không trích xuất được gì", bot "Dạ em nghe rồi ạ…"; `boc_tach_bong` ghi `de_xuat: []` cả bốn lượt. "Mình cần sửa căn 311 An Dương Vương…"
+(căn khác) → bot lặp câu duyệt của căn đang treo. Chủ dự án muốn dòng điểm / ưu tiên tách khỏi câu hỏi duyệt.
+
+**Lớp lỗi.** (1) Danh sách "Thông tin đang ghi" gửi model (`dangGhiCua`) không có giá / diện tích / phường / quận → lệnh sửa giá không có ô để
+`cap_nhat`, và `kiemCapNhat` cũng bỏ vì không có giá trị cũ; `aiLuot()` (nhánh duyệt) chỉ đọc `truong`, không đọc `cap_nhat`. (2) Luật chữ 5
+("sửa lời") chỉ dạy kiểu "à nhầm", chưa dạy câu lệnh "điều chỉnh / sửa giá thành X" lúc duyệt → model trả rỗng. (3) Gán mảnh chỉ chuyển neo
+khi mảnh MANG DỮ KIỆN (`tinGhiManh`); mảnh chỉ gọi tên căn thì rơi xuống câu duyệt của căn cũ.
+
+**Sửa.** (1) `dangGhiCua` thêm gia / dien_tich / phuong / quan; `aiLuot` gộp `kiemCapNhat(k.capNhat…)` vào `ghi` (trừ ô đang hỏi). (2) Prompt
+`boc-rao.ts` luật 5 + mục cap_nhat: lệnh sửa kèm giá trị lúc duyệt là lời sửa dữ liệu → truong (và cap_nhat cach "thay"); ví dụ mẫu mới
+(trần 15200). (3) `khop-cau-tra-loi.ts` `suaGiaTrongLoi` — LƯỚI ĐỠ chỉ chạy khi AI đã đọc mà không ra ô nào: động từ sửa + "giá" + số tiền (lấy
+số sau "thành / là / còn", không thì số cuối), khác giá đang ghi → ghi giá mới. (4) Gán mảnh: `tinNhacManh` (tin đã có được mảnh gọi tên dù không
+dữ kiện) → lúc câu treo là duyệt tin, chuyển neo sang căn đó và đưa bản nháp / câu kế của nó (`chuyen_can`). (5) `doc-y-luot` xin_sua nhận "bản
+nháp trên mình không đồng ý", "chị thấy chưa được". (6) `tin-nhap.ts` `soanTinNhapHaiBong` trả thêm `hoi`: điểm + ưu tiên một bong bóng, câu hỏi
+duyệt + 👉 bong bóng riêng (`chat-reply` hai chỗ gửi).
+
+**Chỗ khác cùng lớp.** Mọi đường đọc `cap_nhat` nay cùng một `dangGhiCua`. Lưới (3) chỉ cho ô giá; sửa diện tích / phường lúc duyệt đi đường AI
+(đã có ô trong danh sách đang ghi).
+
+**Kiểm.** `tin-nhap-rao.mjs` HAIBONG-1/2 (ba phần), `vi-du-boc-rao.mjs`, `kieu:bot`; bộ e2e chạy ở CI (chủ dự án 13/10: lỗi phát hiện khi test
+thì sửa và deploy thẳng, không chờ e2e).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

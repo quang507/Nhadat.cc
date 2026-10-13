@@ -268,8 +268,8 @@ export function tieuDeTinLe(l: TinNhapRow, fact: (k: string) => string | null): 
 
 /** Bản nháp đầy đủ — một chuỗi, mỗi dòng một ý (giống một tin rao thật). */
 export function soanTinNhap(t: ThamSoNhap): string {
-  const { than, duoi } = soanTinNhapHaiBong(t);
-  return [than, duoi].filter(Boolean).join("\n");
+  const { than, duoi, hoi } = soanTinNhapHaiBong(t);
+  return [than, duoi, hoi].filter(Boolean).join("\n");
 }
 
 /**
@@ -277,7 +277,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
  * `than` là tin rao (📋 … dòng thông số / ảnh), `duoi` là phần nói với chủ nhà (điểm đầy đủ + gợi ý, câu hỏi duyệt, lời hứa báo lại).
  * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
  */
-export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
+export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string; hoi: string } {
   const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, tieuDeAi, khen, quyMo, tienIch: tienIchAi, tienIchNoiBat, tieuDeDau } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
@@ -497,10 +497,12 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   );
   // SRS-5.1zzzzzl (chủ dự án 13/10: "Điểm càng cao công ty càng ưu tiên chào bán"): khoá riêng — khoá điểm cũ có thể đã sửa ở DB.
   dong.push(cauTD("nhap_uu_tien"));
+  // 13/10/2026 (chủ dự án: câu điểm "tách ra với câu dưới"): điểm + ưu tiên là một bong bóng, câu hỏi duyệt + lời hứa báo lại là bong bóng riêng.
+  const hetDuoi = dong.length;
   if (!daDang) dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
   // FR-178: không đọc mã tin cho khách — mã chỉ ở web, CTV, admin.
   // 24/09/2026 (chủ dự án): lời hứa báo lại người rao đứng SAU CÙNG. Tin đã lên kệ (daDang) thì câu
   // `dang_luon_cuoi` nói đúng ý đó ngay sau — không lặp.
   if (!daDang) dong.push(cauTD("nhap_goi_hanh_dong"));
-  return { than: dong.slice(0, hetThan).filter(Boolean).join("\n"), duoi: dong.slice(hetThan).filter(Boolean).join("\n") };
+  return { than: dong.slice(0, hetThan).filter(Boolean).join("\n"), duoi: dong.slice(hetThan, hetDuoi).filter(Boolean).join("\n"), hoi: dong.slice(hetDuoi).filter(Boolean).join("\n") };
 }

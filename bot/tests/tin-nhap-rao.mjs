@@ -249,8 +249,9 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
 {
   const hb = soanTinNhapHaiBong({ ...NHA_PHO, lai: false, cauTD });
   la("HAIBONG-1 thân không có điểm / câu duyệt / 👉, đuôi mở bằng 'Độ đầy đủ' và kết bằng 👉",
-    !/Độ đầy đủ|👉|hấp dẫn chưa/.test(hb.than) && /^Độ đầy đủ \d+\/100/.test(hb.duoi) && /👉/.test(hb.duoi.split("\n").at(-1)), JSON.stringify(hb));
-  la("HAIBONG-2 than + duoi = soanTinNhap (một nguồn)", `${hb.than}\n${hb.duoi}` === soanTinNhap({ ...NHA_PHO, lai: false, cauTD }));
+    !/Độ đầy đủ|👉|hấp dẫn chưa/.test(hb.than) && /^Độ đầy đủ \d+\/100/.test(hb.duoi) && !/👉|hấp dẫn chưa/.test(hb.duoi) && /hấp dẫn chưa/.test(hb.hoi) && /👉/.test(hb.hoi.split("\n").at(-1)), JSON.stringify(hb));
+  // 13/10/2026 (chủ dự án): câu điểm tách bong bóng riêng với câu hỏi duyệt → ba phần: than · duoi (điểm + ưu tiên) · hoi (hỏi duyệt + 👉).
+  la("HAIBONG-2 than + duoi + hoi = soanTinNhap (một nguồn)", `${hb.than}\n${hb.duoi}\n${hb.hoi}` === soanTinNhap({ ...NHA_PHO, lai: false, cauTD }));
   const hd = soanTinNhapHaiBong({ ...NHA_PHO, lai: false, cauTD, daDang: true });
   la("HAIBONG-3 tin đã lên kệ: đuôi chỉ còn dòng điểm", /^Độ đầy đủ/.test(hd.duoi) && !/👉|hấp dẫn chưa/.test(hd.duoi), JSON.stringify(hd));
 }

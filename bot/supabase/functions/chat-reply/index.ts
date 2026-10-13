@@ -57,7 +57,7 @@ import { base64, docCsv, docLinkDrive, docXlsx, loaiTep, m2TuChu, taiTep, tangTu
 import { docTaiLieuDuAn, type NguonTaiLieu, type TaiLieuDoc } from "../_shared/ai/doc-tai-lieu-du-an.ts";
 import { bangThanhTin, cauRaoTuDong } from "../_shared/nhap-ro-hang.ts";
 import { nhipGui } from "../_shared/nhip-gui.ts";
-import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { laNgungHangLoat, suaGiaTrongLoi } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docKhongBiet, docNgungHangLoat, khongBietCua, giaTriKhongDoi, vaiTuCau, laChiGat, laCauHoiXacNhan } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
 import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb, boSungDiaChiTuKienThuc } from "../_shared/extraction/kiem-bang-chung.ts";
@@ -172,11 +172,18 @@ const danTraLoiHoiNguoc = (cau: string, chuDe: string | null | undefined): strin
 const TEN_PHAP_LY: Record<string, string> = { so_hong_rieng: "sổ hồng riêng", so_hong_chung: "sổ hồng chung", so_hong: "sổ hồng", hdmb: "hợp đồng mua bán", giay_tay: "giấy tay" };
 const TEN_DUONG_VAO: Record<string, string> = { hem_xe_hoi: "hẻm xe hơi", hem_xe_tai: "hẻm xe tải", hem_xe_may: "hẻm xe máy", mat_tien: "mặt tiền" };
 const TEN_NOI_THAT: Record<string, string> = { full: "full nội thất", co_ban: "nội thất cơ bản", khong: "không nội thất" };
-function dangGhiCua(l: { location_raw?: string | null; floors_text?: string | null; legal_status?: string | null; access_type?: string | null; alley_width_m?: number | string | null; furnishing?: string | null } | null | undefined): Record<string, string> {
+function dangGhiCua(l: { location_raw?: string | null; floors_text?: string | null; legal_status?: string | null; access_type?: string | null; alley_width_m?: number | string | null; furnishing?: string | null; price_raw?: string | null; area_m2?: number | string | null; ward?: string | null; district?: string | null } | null | undefined): Record<string, string> {
   if (!l) return {};
   const hem = [l.access_type ? TEN_DUONG_VAO[l.access_type] : null, l.alley_width_m != null && l.alley_width_m !== "" ? `${l.access_type === "mat_tien" ? "đường" : "hẻm"} ${Number(l.alley_width_m)}m` : null]
     .filter(Boolean).join(", ");
   const ra: Record<string, string> = {};
+  // SRS-5.1zzzzzza (Zalo thật 13/10 16:44–16:53: "Điều chỉnh cho mình giá 6,950 tỷ", "Sửa cho chị giá từ 1,2 tỷ thành 6,950 tỷ" × 4 → 🤖 "Không
+  // trích xuất được gì"): danh sách "Thông tin đang ghi" không có GIÁ / diện tích / phường / quận nên model không có ô để sửa (`cap_nhat`), và
+  // `kiemCapNhat` cũng bỏ vì không có giá trị cũ. Bốn ô lõi vào danh sách.
+  if (l.price_raw?.trim()) ra.gia = l.price_raw.trim();
+  if (l.area_m2 != null && l.area_m2 !== "" && Number(l.area_m2) > 0) ra.dien_tich = `${Number(l.area_m2)}m2`;
+  if (l.ward?.trim()) ra.phuong = l.ward.trim();
+  if (l.district?.trim()) ra.quan = l.district.trim();
   if (l.location_raw?.trim()) ra.vi_tri = l.location_raw.trim();
   if (l.floors_text?.trim()) ra.ket_cau = l.floors_text.trim();
   if (l.legal_status && TEN_PHAP_LY[l.legal_status]) ra.phap_ly = TEN_PHAP_LY[l.legal_status];
@@ -2761,7 +2768,13 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (!bongAi) return undefined;
       const k = await bongAi;
       if (!laCheDoAi || !k?.ket) return undefined;
-      return docAiChinh(kiemDeXuat(k.truong, textTreo || textBongAi).dat, null);
+      const chinh = docAiChinh(kiemDeXuat(k.truong, textTreo || textBongAi).dat, null);
+      // SRS-5.1zzzzzza: lời SỬA một ô đang ghi ("Điều chỉnh giá 6,950 tỷ") model đưa qua `cap_nhat` (FR-226) — kiểm rồi gộp vào `ghi` như
+      // đường câu treo, để nhánh duyệt / lời sửa cũng thấy. Ô đang hỏi thì để đường trả lời câu treo lo.
+      const cn = kiemCapNhat(k.capNhat ?? [], textTreo || textBongAi, dangGhiCua(pendingReq?.listings))
+        .filter((c) => !(pendingReq && c.question === pendingReq.question));
+      if (!cn.length) return chinh;
+      return { ...chinh, ghi: [...chinh.ghi.filter((g) => !cn.some((c) => c.question === g.question)), ...cn.map((c) => ({ ...c, khoa: "cap_nhat" }))] };
     })();
     const vaiAi = async (): Promise<ReturnType<typeof docVai> | undefined> => {
       if (!bongAi) return undefined;
@@ -4152,6 +4165,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     let textTreo: string | null = null;
     /** Tin ĐÃ CÓ vừa nhận dữ kiện từ một mảnh (để không hỏi tiếp một tin vỏ rỗng khi khách đang nói về tin này). */
     let tinGhiManh: { id: string; code: string | null; property_type?: string | null; district?: string | null } | null = null;
+    /** SRS-5.1zzzzzza: tin ĐÃ CÓ được mảnh GỌI TÊN ("Mình cần sửa căn 311 An Dương Vương…") dù mảnh không mang dữ kiện — để chuyển neo sang căn đó. */
+    let tinNhacManh: { id: string; code: string | null; property_type?: string | null; district?: string | null } | null = null;
     let daTraCauTreo = false; // mảnh ghi theo tin đã trả lời luôn câu đang treo (vd "80m2 giá 15 tỷ" khi đang hỏi diện tích)
     const maTreo = pendingReq?.listings?.code?.toUpperCase() ?? null;
     if (anthropicS && !codeInText && canGanManh(text, dsMo.map((t) => ({ ...t, code: t.code! })), maTreo)) {
@@ -4271,6 +4286,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
                 tin = moi as TinMo;
               }
               if (!tin) continue;
+              if (m.ma !== "MOI") tinNhacManh = tin;
               const nhan: string[] = [];
               // Vị trí / phường / quận / loại là lời GỌI căn đã có — chỉ ghi khi mảnh mở tin mới.
               const facts = (factAi ?? nhanDienNhieuFact(m.trich))
@@ -4326,8 +4342,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // bot nhắc lại câu duyệt của căn kia (lạc chỗ) và căn 3 không bao giờ được hỏi tiếp / soạn nháp. Cùng việc với vỏ rỗng: đi tiếp
       // căn vừa nhận dữ kiện. Khác vỏ rỗng ở chỗ bản nháp chờ duyệt GIỮ nguyên (khách gật lúc nào cũng được), chỉ đổi neo.
       const nhapCanKhac = pendingReq.question === "duyet_tin";
-      if ((voRong || nhapCanKhac) && tinGhiManh && tinGhiManh.id !== pendingReq.listing_id) {
-        const tg = tinGhiManh;
+      // SRS-5.1zzzzzza (Zalo thật 13/10 16:59: "Mình cần sửa căn 311 An Dương Vương, Phường An Lạc, Quận Bình Tân" lúc đang chờ duyệt căn khác →
+      // bot lặp "Bản nháp ở trên…" của căn cũ): mảnh chỉ GỌI TÊN căn khác (không dữ kiện) cũng là chuyển sang căn đó — đổi neo, đưa bản nháp /
+      // câu kế của căn đó. Cùng một đường với mảnh có dữ kiện.
+      const tinChuyen = tinGhiManh ?? (nhapCanKhac ? tinNhacManh : null);
+      if ((voRong || nhapCanKhac) && tinChuyen && tinChuyen.id !== pendingReq.listing_id) {
+        const tg = tinChuyen;
         const [{ error: exErr }, { error: neoErr }, { data: thieuG, error: thErr }] = await Promise.all([
           voRong ? client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id) : Promise.resolve({ error: null }),
           client.from("sellers").update({ active_listing_id: tg.id }).eq("id", sellerRow.id),
@@ -4335,7 +4355,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         ]);
         if (exErr || neoErr || thErr) await ghiLoi(client, "chat-reply gan manh(bo vo rong)", (exErr ?? neoErr ?? thErr)!.message);
         const keG = chonCauKe([], ((thieuG ?? []) as Array<{ fact_key: string; priority?: number; nhom?: string }>).filter((f) => f.nhom !== "sau_dang"));
-        const meta = { gan_manh: true, ...(voRong ? { bo_cau_vo_rong: pendingReq.question } : { giu_nhap: pendingReq.listing_id }) };
+        const meta = { gan_manh: true, ...(voRong ? { bo_cau_vo_rong: pendingReq.question } : { giu_nhap: pendingReq.listing_id }), ...(tinGhiManh ? {} : { chuyen_can: tg.code }) };
         if (keG && keG !== "hinh_anh") {
           const { error: irG } = await client.from("info_requests").insert({ listing_id: tg.id, question: keG, status: "pending" });
           if (irG && irG.code !== "23505") await ghiLoi(client, "chat-reply gan manh(cau ke)", irG.message);
@@ -6339,7 +6359,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           const cauDanPhiDL = daNoiPhiRoi() ? "" : cauBaoPhiLenKe((l as { deal?: string | null }).deal ?? dealNguoi);
           const dongHangDL = await dongHangRao();
           const xinDiemDL = cauDanPhiDL ? null : await xinChamDiem(listingId); // SRS-5.1zzzzzl
-          return await traLoiSeller([...truoc, nhapDang.than, ...(nhapDang.duoi ? [nhapDang.duoi] : []), cauTD("dang_luon_cuoi") + (dongHangDL ? `\n${dongHangDL}` : "") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : ""), ...(xinDiemDL ? [xinDiemDL] : [])],
+          return await traLoiSeller([...truoc, nhapDang.than, ...(nhapDang.duoi ? [nhapDang.duoi] : []), ...(nhapDang.hoi ? [nhapDang.hoi] : []), cauTD("dang_luon_cuoi") + (dongHangDL ? `\n${dongHangDL}` : "") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : ""), ...(xinDiemDL ? [xinDiemDL] : [])],
             { ...extra, duyet: true, dang_luon: true, diem: d.diem, listing_status: sau.status, ...(cauDanPhiDL ? { dan_phi: true } : {}), ...(xinDiemDL ? { xin_danh_gia: true } : {}) });
         }
         // SRS-5.1zzy (chat thử 07/10: "anh không nhớ nữa em tự search xem, đăng đi" — tin có "đường Thạnh Lộc 41", Quận 12): đã có
@@ -6365,7 +6385,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo duyet_tin", irErr.message);
       const { nhap_cu: _nc, ...extraGui } = extra;
       const nhapHai = soanTinNhapHaiBong({ ...thamNhap, lai, ...(await layKhen()) });
-      return await traLoiSeller([...truoc, nhapHai.than, ...(nhapHai.duoi ? [nhapHai.duoi] : [])], { ...extraGui, ban_nhap: true, diem: d.diem });
+      return await traLoiSeller([...truoc, nhapHai.than, ...(nhapHai.duoi ? [nhapHai.duoi] : []), ...(nhapHai.hoi ? [nhapHai.hoi] : [])], { ...extraGui, ban_nhap: true, diem: d.diem });
     }
     /**
      * SRS-5.1zzzy (bắn production 09/10/2026): HẾT câu để hỏi trước bản nháp → việc kế là MỘT: gửi bản nháp; chưa đủ điểm thì
@@ -6859,6 +6879,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
                 const kB = await bongAi;
                 const ktAi = kB?.ket ? kiemKienThuc(kB.kienThuc ?? [], dapAn, kiemDeXuat(kB.truong, dapAn).dat) : [];
                 ds = oAi.length ? oAi : ktAi.map((a) => ({ question: "bo_sung", answer: a }));
+                // SRS-5.1zzzzzza: AI đọc mà không ra ô nào, câu lại là LỆNH SỬA GIÁ kèm số ("Điều chỉnh cho mình giá 6,950 tỷ") → lưới đỡ tất định ghi giá mới.
+                if (!ds.length) {
+                  const giaMoi = suaGiaTrongLoi(dapAn, pendingReq.listings?.price_raw);
+                  if (giaMoi) { ds = [{ question: "gia", answer: giaMoi }]; console.log("chat-reply: luoi do sua gia luc duyet", giaMoi); }
+                }
                 if (!ds.length) {
                   const { data: dgReq } = await client.from("info_requests").select("id, status").eq("listing_id", pendingReq.listing_id).eq("question", "danh_gia").limit(1).maybeSingle();
                   if (dgReq && laDiemCham(dapAn)) {
