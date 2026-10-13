@@ -135,9 +135,9 @@ la("dòng 1 câu mở (KHÔNG kèm điểm), dòng 2 TIÊU ĐỀ, dòng 3 địa
   /^📋 Em sẽ rao như vầy nhé anh:$/.test(dongNha[0]) && dongNha[1] === tdNha && /^📍 Hẻm 5m Nguyễn Trãi/.test(dongNha[2]) && /^💰 /.test(dongNha[3]),
   dongNha.slice(0, 4).join(" | "));
 la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 7 tỷ 2 \(còn thương lượng\)$/.test(dongNha[3]), dongNha[3]);
-la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước, không lặp (17/09)", dongNha.some((d) => d === "📝 Thêm: khu an ninh · gần chợ Bình Tây"), dongNha.join(" | "));
+la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước, không lặp (17/09)", dongNha.some((d) => d === "📝 Thêm: nhà mới sửa 2024 · khu an ninh · gần chợ Bình Tây") /* SRS-5.1zzzzzn: tình trạng nhà xuống dòng Thêm */, dongNha.join(" | "));
 la("có đủ khối thông số: diện tích, kết cấu, đường vào, hướng, pháp lý",
-  /📐 Diện tích: 60m² · dài 15m$/m.test(nha) && /^🏫 Tiện ích: mặt tiền 4m · gần chợ An Đông · trường Hùng Vương$/m.test(nha) && /🏗 Kết cấu: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC/.test(nha) &&
+  /📐 Diện tích: 60m² · dài 15m$/m.test(nha) && /^🏫 Tiện ích: mặt tiền 4m · gần chợ An Đông · trường Hùng Vương$/m.test(nha) && /🏗 Quy mô: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC$/m.test(nha) &&
   /🛣 Đường vào: hẻm xe hơi 5m/.test(nha) && /🧭 Hướng: Đông Nam/.test(nha) && /📜 Pháp lý: sổ hồng riêng, hoàn công/.test(nha), nha);
 // 24/09/2026 (chủ dự án): bỏ "Khách quan tâm nhắn Zalo cho em để hẹn xem nhà" — lời hứa báo lại người rao, có tên
 // trợ lý, đứng SAU CÙNG.
@@ -181,7 +181,7 @@ la("cho thuê: giá kèm '/tháng', có khối điều kiện thuê, có ảnh",
   /💰 18 triệu\/tháng \(giá cố định\)/.test(thue) && /📝 Điều kiện thuê: cọc 2 tháng · thuê tối thiểu 1 năm · phí QL 14 nghìn\/m2/.test(thue) &&
   /📷 2 ảnh/.test(thue), thue);
 la("cho thuê: tầng 15 và nội thất vào đúng khối kết cấu / nội thất",
-  /🏗 Kết cấu: tầng 15 · 2 phòng ngủ · 2 WC · view sông/.test(thue) && /🛋 Nội thất: full nội thất/.test(thue), thue);
+  /🏗 Quy mô: tầng 15 · 2 phòng ngủ · 2 WC · view sông/.test(thue) && /🛋 Nội thất: full nội thất/.test(thue), thue);
 
 const datNhap = dung(DAT);
 la("tin nghèo thông tin: chỉ có mấy dòng, không bịa dòng nào",
@@ -238,7 +238,7 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("ZZZZZ-T1 (ca gốc) 'cũ, còn sử dụng được' (kết cấu) + 'cũ rồi nhưng còn sử dụng được' (hiện trạng) → ý in một lần", (b1.match(/sử dụng được/g) ?? []).length === 1 && !/🏠/u.test(b1), b1);
   const khac = { ...NHA_PHO, facts: [...goc, { question: "hien_trang", answer: "mới sơn lại" }, { question: "hien_trang_su_dung", answer: "đang cho thuê" }] };
   const b2 = soanTinNhap({ l: NHA_PHO.l, facts: khac.facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
-  la("ZZZZZ-T2 đối chứng 'mới sơn lại' + 'đang cho thuê' (hai ý) → giữ cả hai dòng", /mới sơn lại/.test(b2) && /🏠 Hiện trạng: đang cho thuê/u.test(b2), b2);
+  la("ZZZZZ-T2 đối chứng 'mới sơn lại' + 'đang cho thuê' (hai ý) → giữ cả hai dòng", /📝 Thêm: mới sơn lại · đang cho thuê/u.test(b2), b2);
 }
 // 13/10/2026 (chủ dự án): bản nháp hai bong bóng — thân là tin rao, đuôi từ "Độ đầy đủ" trở xuống; ghép lại đúng bằng bản một chuỗi.
 {
@@ -286,6 +286,22 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("RENT-1 (ca gốc) hiện trạng 'đang ở không cho thuê' → không có dòng 💵 dù ô hợp đồng có chữ", !/💵/.test(dung(tuChoi)), dung(tuChoi));
   const that = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "hien_trang_su_dung", answer: "đang cho shop thời trang thuê" }, { question: "han_hop_dong_thue", answer: "tới 2028" }] };
   la("RENT-2 (cách nói khác) 'đang cho shop thời trang thuê' → có dòng 💵 với hợp đồng tới 2028", /^💵 Đang cho thuê: hợp đồng tới 2028$/m.test(dung(that)), dung(that));
+}
+// SRS-5.1zzzzzn (chủ dự án 13/10, ảnh bản nháp Hóc Môn): "kết cấu sửa thành quy mô, Nhà bếp - Phòng khách rộng · sân rộng thì sẽ đưa lên chỗ
+// quy mô, còn mới, hiện đang ở đưa xuống chỗ mô tả thêm".
+{
+  const HM = { l: { property_type: "nha_cap4", deal: "ban", location_raw: "Đt 7-4A", ward: "Xã Đông Thạnh", district: "Huyện Hóc Môn", area_m2: 132, length_m: 22,
+      price_raw: "3,6 tỷ", bedrooms: 2, bathrooms: 2, floors_text: "gác lửng gỗ", access_type: "hem_xe_hoi", legal_status: "so_hong_rieng" },
+    facts: [{ question: "hien_trang", answer: "còn mới, hiện đang ở" }, { question: "bo_sung", answer: "gần chợ Gấu" }, { question: "bo_sung", answer: "sân rộng" },
+      { question: "bo_sung", answer: "Nhà bếp - Phòng khách rộng" }, { question: "bo_sung", answer: "khu dân cư" }],
+    diem: 80, thieu: [], soAnh: 0 };
+  const t = soanTinNhap({ ...HM, lai: false, cauTD, quyMo: ["Nhà bếp - Phòng khách rộng", "sân rộng", "không có trong danh sách"] });
+  const qm = t.split("\n").find((x) => x.startsWith("🏗")) ?? "", them = t.split("\n").find((x) => x.startsWith("📝")) ?? "";
+  la("QUYMO-1 (ca gốc) dòng 'Quy mô' (không còn 'Kết cấu') có 'Nhà bếp - Phòng khách rộng · sân rộng'; 'còn mới, hiện đang ở' ở dòng Thêm, không ở Quy mô",
+    /^🏗 Quy mô: gác lửng gỗ · 2 phòng ngủ · 2 WC · Nhà bếp - Phòng khách rộng · sân rộng$/.test(qm) && /còn mới, hiện đang ở/.test(them) && !/còn mới/.test(qm) && !/Kết cấu/.test(t) &&
+      /gần chợ Gấu/.test(them) && /khu dân cư/.test(them) && !/sân rộng|Nhà bếp/.test(them), `${qm} || ${them}`);
+  const t2 = soanTinNhap({ ...HM, lai: false, cauTD });
+  la("QUYMO-2 không có danh sách AI xếp (AI không chạy) → ý thêm ở dòng Thêm như cũ, không đoán bằng từ khoá", /sân rộng/.test(t2.split("\n").find((x) => x.startsWith("📝")) ?? "") && !/sân rộng/.test(t2.split("\n").find((x) => x.startsWith("🏗")) ?? ""), t2);
 }
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }

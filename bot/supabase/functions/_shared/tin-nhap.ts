@@ -82,6 +82,8 @@ export type ThamSoNhap = {
   tieuDeKhach?: string | null;
   /** SRS-5.1zzzzzl: câu khen AI viết (đã qua `khenHopLe` + lượt soát) — mở đầu bong bóng thứ hai. */
   khen?: string | null;
+  /** SRS-5.1zzzzzn: ý thêm (`bo_sung`) AI xếp là QUY MÔ / không gian căn ("nhà bếp - phòng khách rộng", "sân rộng") — in ở dòng Quy mô. */
+  quyMo?: string[];
   cauTD:(khoa: string, o?: Record<string, string | number | null | undefined>) => string;
 };
 
@@ -261,7 +263,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
  * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
  */
 export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
-  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen } = t;
+  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen, quyMo } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
   // "thuê tối thiểu thuê tối thiểu 3 năm". So theo TỪNG CHỮ của nhãn.
@@ -322,7 +324,27 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
     nhan("thổ cư", fact("tho_cu")),
     fact("hinh_dang"),
   ]);
-  them("🏗", "Kết cấu", [
+  // 17/09/2026 (chủ dự án): "các trường mà khách nói bổ sung sẽ ghi vào mô tả" — mọi fact
+  // `bo_sung` (AI đọc thêm hay chủ nhà nói lệch câu hỏi) vào một dòng, cũ trước, không lặp.
+  const boSung: string[] = [];
+  const factMap: Record<string, string> = {};
+  for (const f of facts) if (f.answer && f.question !== "bo_sung") factMap[f.question] = f.answer;
+  const nhanKd = (l.nhan ?? []).map((k) => boDau(tenNhan([k])));
+  for (const f of [...facts].reverse()) {
+    const a = (f.question === "bo_sung" ? f.answer : null)?.replace(/\s+/g, " ").trim();
+    // 25/09/2026: mảnh chỉ nói lại ô đã có (kết cấu / đường vào / sổ) hoặc trùng nhãn thì không in lại — lọc cả dữ liệu cũ.
+    if (!a || laBoSungTrung(a, { facts: factMap, floors_text: l.floors_text, access_type: l.access_type, alley_width_m: l.alley_width_m, legal_status: l.legal_status, nhan: l.nhan ?? [], rear_width_m: l.rear_width_m })) continue;
+    const aKd = boDau(a).replace(/^(?:co|nha co|can co)\s+/, "");
+    if (nhanKd.some((n) => n === aKd)) continue;
+    if (!boSung.some((x) => boDau(x) === boDau(a))) boSung.push(a);
+  }
+  // SRS-5.1zzzzzn (chủ dự án 13/10/2026, ảnh bản nháp Hóc Môn: "kết cấu sửa thành quy mô, Nhà bếp - Phòng khách rộng · sân rộng thì sẽ đưa
+  // lên chỗ quy mô, còn mới, hiện đang ở đưa xuống chỗ mô tả thêm"): dòng "Quy mô" = số tầng / phòng / WC / sân… + ý thêm AI xếp là không gian
+  // (`quyMo`, chỉ nhận ý có đúng trong danh sách ý thêm); tình trạng nhà + hiện trạng sử dụng xuống dòng "Thêm".
+  const laQuyMo = new Set((quyMo ?? []).map((x) => boDau(x).replace(/\s+/g, " ").trim()));
+  const boSungQuyMo = boSung.filter((x) => laQuyMo.has(boDau(x).replace(/\s+/g, " ").trim()));
+  const boSungThem = boSung.filter((x) => !boSungQuyMo.includes(x));
+  them("🏗", "Quy mô", [
     l.floors_text ?? (l.floors ? `${l.floors} tầng` : fact("ket_cau")),
     nhan("toà", fact("toa_thap")),
     l.floor ? `tầng ${l.floor}` : nhan("tầng", fact("tang")),
@@ -330,7 +352,7 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
     l.bathrooms ? `${l.bathrooms} WC` : hau(fact("so_wc"), "WC"),
     nhan("thang máy:", fact("thang_may")),
     nhan("sân vườn:", fact("san_vuon")),
-    fact("hien_trang"),
+    ...boSungQuyMo,
     nhan("xây", fact("nam_xay")),
     nhan("căn góc:", fact("can_goc")),
     nhan("view:", fact("view")),
@@ -402,22 +424,7 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   // một dòng — hiện trạng sử dụng cùng ý tình trạng nhà đã in ở dòng kết cấu thì không in lần hai.
   const htSuDung = chuanHienTrang(fact("hien_trang_su_dung"));
   const htNha = fact("hien_trang");
-  them("🏠", "Hiện trạng", [htSuDung && htNha && trungY(htSuDung, htNha) ? null : htSuDung]);
-  // 17/09/2026 (chủ dự án): "các trường mà khách nói bổ sung sẽ ghi vào mô tả" — mọi fact
-  // `bo_sung` (AI đọc thêm hay chủ nhà nói lệch câu hỏi) vào một dòng, cũ trước, không lặp.
-  const boSung: string[] = [];
-  const factMap: Record<string, string> = {};
-  for (const f of facts) if (f.answer && f.question !== "bo_sung") factMap[f.question] = f.answer;
-  const nhanKd = (l.nhan ?? []).map((k) => boDau(tenNhan([k])));
-  for (const f of [...facts].reverse()) {
-    const a = (f.question === "bo_sung" ? f.answer : null)?.replace(/\s+/g, " ").trim();
-    // 25/09/2026: mảnh chỉ nói lại ô đã có (kết cấu / đường vào / sổ) hoặc trùng nhãn thì không in lại — lọc cả dữ liệu cũ.
-    if (!a || laBoSungTrung(a, { facts: factMap, floors_text: l.floors_text, access_type: l.access_type, alley_width_m: l.alley_width_m, legal_status: l.legal_status, nhan: l.nhan ?? [], rear_width_m: l.rear_width_m })) continue;
-    const aKd = boDau(a).replace(/^(?:co|nha co|can co)\s+/, "");
-    if (nhanKd.some((n) => n === aKd)) continue;
-    if (!boSung.some((x) => boDau(x) === boDau(a))) boSung.push(a);
-  }
-  them("📝", "Thêm", boSung);
+  them("📝", "Thêm", [htNha, htSuDung && htNha && trungY(htSuDung, htNha) ? null : htSuDung, ...boSungThem]);
   if (thue) {
     them("📝", "Điều kiện thuê", [
       fact("tien_coc"),

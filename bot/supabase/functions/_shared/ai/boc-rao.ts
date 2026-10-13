@@ -257,7 +257,8 @@ cảnh căn này. Khoá phải đúng y chữ trong danh sách; không chắc �
 VAI ("vai") — chỉ khi người nhắn TỰ NÓI mình là chủ nhà hay môi giới, bằng chữ GỌI TÊN vai ("chính chủ", "anh là chủ", "nhà của
 chị", "không phải môi giới"; "em là sale", "bên sàn", "bán giúp chủ"), trich_dan chép đúng cụm đó. Có nhà / muốn bán / "chú có căn
 nhà" / "bán lô đất" KHÔNG nói vai (môi giới cũng nói vậy); "sổ hồng chính chủ" nói về GIẤY TỜ. Nhắc tới môi giới khác, kể chuyện môi
-giới, hỏi phí môi giới → khong_noi.
+giới, hỏi phí môi giới → khong_noi. Bài rao mở bằng "Nhà chính chủ cần bán", "Chính chủ bán", "chính chủ gửi bán" là người nhắn TỰ NÓI
+vai chinh_chu (trich_dan chép đúng cụm, vd "Nhà chính chủ cần bán") — đọc vai cả trong bài rao dài, không chỉ câu tự giới thiệu.
 
 KHÁCH HỎI LẠI ("hoi_lai") — đọc theo NGHĨA, như môi giới nghe khách: tin có ý HỎI bên mình (có hay không có dấu "?", gõ tắt,
 không dấu) → co_hoi = true, cau_hoi = câu hỏi chép nguyên văn, chu_de theo nội dung câu hỏi. "giá khu này giờ sao" là hỏi

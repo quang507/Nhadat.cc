@@ -30,6 +30,9 @@ export const AnhSchema = z.object({
     so_to: z.string().nullable(),
     ro_net: z.boolean().describe("true khi chữ trên giấy đọc được rõ"),
   }).nullable().describe("CHỈ điền khi loai = giay_to. TUYỆT ĐỐI không ghi tên người, số CCCD, ngày sinh."),
+  // SRS-5.1zzzzzn (chủ dự án 13/10/2026: câu báo nhận ảnh sổ "phần này để AI quyết"): lời em nhắn chủ nhà khi nhận ảnh giấy tờ — model
+  // viết, code kiểm (`loiNhanGiayToHopLe`: số trong lời phải là số đọc trên giấy / số đang ghi, không hỏi); không qua thì câu soạn sẵn.
+  loi_nhan: z.string().nullable().optional().describe("CHỈ khi loai = giay_to: 1–2 câu ngắn em nhắn chủ nhà, xưng em, gọi chủ nhà đúng cách gọi trong ngữ cảnh: đã nhận ảnh giấy tờ, em cất riêng không đưa lên web; đọc được diện tích thì nói sổ ghi bao nhiêu và so với diện tích đang ghi trong ngữ cảnh (khớp, hay chưa ghi thì em lấy số trên sổ). Không hỏi, không khen, không tên người, không số nào ngoài diện tích. Không phải giấy tờ → null."),
 });
 export type PhanLoaiAnh = z.infer<typeof AnhSchema>;
 
@@ -60,7 +63,7 @@ export async function phanLoaiAnh(
       type: "text",
       text: `${DAU_HIEU_PHAN_LOAI_ANH}. Bạn là người soát ảnh của một văn phòng môi giới nhà đất Sài Gòn. ` +
         `Phân loại tấm ảnh chủ nhà vừa gửi và tả ngắn điều thấy được. Đoán thì nói "hình như". ` +
-        `Ảnh giấy tờ: đọc diện tích, địa chỉ thửa, số thửa, số tờ nếu rõ; KHÔNG ghi tên người, CCCD, ngày sinh. ` +
+        `Ảnh giấy tờ: đọc diện tích, địa chỉ thửa, số thửa, số tờ nếu rõ; KHÔNG ghi tên người, CCCD, ngày sinh; viết loi_nhan nhắn chủ nhà. ` +
         `Không suy diễn vật liệu, pháp lý hay tình trạng từ ảnh.`,
       cache_control: { type: "ephemeral" },
     }],
