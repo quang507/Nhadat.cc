@@ -1177,7 +1177,7 @@ export const HOI_MOT_LAN = new Set(["gap", "ly_do_ban", "thuong_luong", "tiem_na
 
 /** Nhãn tiếng Việt ngắn để hỏi lại, KHÔNG lặp nguyên văn câu hỏi trước. */
 export const NHAN_HOI_LAI: Record<string, string> = {
-  phap_ly: "giấy tờ nhà mình là sổ hồng riêng hay sổ chung",
+  phap_ly: "pháp lý giấy tờ nhà mình như thế nào (hỏi chung một câu \"Pháp lý nhà mình như thế nào\", không liệt kê sổ riêng / chung)",
   hoan_cong: "sổ nhà mình đã hoàn công chưa",
   huong: "nhà mình quay hướng nào",
   dien_tich_dat: "tổng diện tích đất bao nhiêu m2, hoặc ngang bao nhiêu dài bao nhiêu",
@@ -1236,7 +1236,8 @@ const boDauGiuDoDai = (s: string): string =>
 // "tổng diện tích 240m2" / "diện tích tổng 240m2" chỉ là sàn khi câu có tầng/tấm/lầu
 // (lookbehind dài — V8/Deno hỗ trợ) và không phải "tổng diện tích đất".
 const DIEN_TICH_SAN_RE = new RegExp(
-  `(?:(?:${TRUOC_LA_SAN.source})|(?<=\\b(?:tam|tang|lau|tret)\\b.*)\\b(?:tong\\s+(?:dien tich|dt)|(?:dien tich|dt)\\s+tong)(?!\\s+dat\\b))\\s*:?\\s*(?:la\\s*|khoang\\s*|tam\\s*)?(\\d{1,5}(?:[.,]\\d+)?)\\s*(?:m2|m²|met vuong|mv)\\b`,
+  // SRS-5.1zzzzzr (13/10/2026): "Dtsd: 42,8m" — sau chữ sàn / sử dụng, đơn vị "m" trần vẫn là m² (không ai đo sàn bằng mét dài).
+  `(?:(?:${TRUOC_LA_SAN.source})|(?<=\\b(?:tam|tang|lau|tret)\\b.*)\\b(?:tong\\s+(?:dien tich|dt)|(?:dien tich|dt)\\s+tong)(?!\\s+dat\\b))\\s*:?\\s*(?:la\\s*|khoang\\s*|tam\\s*)?(\\d{1,5}(?:[.,]\\d+)?)\\s*(?:m2|m²|met vuong|mv|m(?!\\s*x\\s*\\d))\\b`,
 );
 // 22/09/2026 (bộ đo giọng B11): "5 tỷ 60m2" / "12 tỷ 80m2" — số đứng sau đơn vị tiền chỉ là
 // phần LẺ của giá ("5 tỷ 6") khi nó KHÔNG mang đơn vị của thứ khác (m2, x, pn, lầu, tầng…) và

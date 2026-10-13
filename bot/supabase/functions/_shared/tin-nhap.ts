@@ -86,6 +86,8 @@ export type ThamSoNhap = {
   tieuDeDau?: string | null;
   /** SRS-5.1zzzzzl: tiêu đề chủ nhà gửi lúc duyệt (`boc_tach.tieu_de_khach`, đã qua kiểm trích dẫn) — in thay tiêu đề bot viết. */
   tieuDeKhach?: string | null;
+  /** SRS-5.1zzzzzr: tiêu đề AI viết (đã qua `tieuDeHopLe`) — dùng khi chủ nhà không đưa tiêu đề. */
+  tieuDeAi?: string | null;
   /** SRS-5.1zzzzzl: câu khen AI viết (đã qua `khenHopLe` + lượt soát) — mở đầu bong bóng thứ hai. */
   khen?: string | null;
   /** SRS-5.1zzzzzn: ý thêm (`bo_sung`) AI xếp là QUY MÔ / không gian căn ("nhà bếp - phòng khách rộng", "sân rộng") — in ở dòng Quy mô. */
@@ -271,7 +273,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
  * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
  */
 export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
-  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen, quyMo, tienIch: tienIchAi, tieuDeDau } = t;
+  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, tieuDeAi, khen, quyMo, tienIch: tienIchAi, tieuDeDau } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
   // "thuê tối thiểu thuê tối thiểu 3 năm". So theo TỪNG CHỮ của nhãn.
@@ -298,7 +300,7 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   };
 
   dong.push(tieuDeDau?.trim() ? tieuDeDau.trim() : cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de", { loai: loaiDoc(l.property_type) }));
-  dong.push(tieuDeTin(l, fact, facts, tieuDeKhach));
+  dong.push(tieuDeTin(l, fact, facts, (tieuDeKhach ?? "").trim() || tieuDeAi || null));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.
   const dc = diaChiHienThi(l);
@@ -315,7 +317,9 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
       : l.negotiable === false
       ? " (giá cố định)"
       : "";
-    dongGia = `💰 ${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}${tl}${
+    // SRS-5.1zzzzzr (chủ dự án 13/10: "Giá để dưới cùng in đậm lên"): Zalo không in đậm chữ thường được → in HOA cả dòng giá cho nổi.
+    const giaNoi = `${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}`.toLocaleUpperCase("vi");
+    dongGia = `💰 GIÁ ${giaNoi}${tl}${
       fact("ly_do_ban") ? ` · lý do bán: ${fact("ly_do_ban")}` : ""
     }`;
   }

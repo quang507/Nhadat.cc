@@ -46,7 +46,7 @@ import {
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { soatNhanXetBangModel } from "../_shared/ai/kiem-khen.ts";
 import { vietKhenNhapBangModel } from "../_shared/ai/khen-nhap.ts";
-import { cauDuAnCoNguon, khenHopLe, loiNhanGiayToHopLe } from "../_shared/extraction/khen-hop-le.ts";
+import { cauDuAnCoNguon, khenHopLe, loiNhanGiayToHopLe, tieuDeHopLe } from "../_shared/extraction/khen-hop-le.ts";
 import { gopDuAnTrung, tienIchDuAnSach } from "../_shared/extraction/du-an-kho.ts";
 import { docYLuotBangModel, type YLuotLLM } from "../_shared/ai/doc-y-luot.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
@@ -2595,7 +2595,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // SRS-5.1zzzzzg: khách đã nói CÓ lửng → câu đáp "không" là "không tính lửng vào số tầng", không phải "không có lửng" (`co_lung`).
       const { error: gErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { lung_goi_y: lungChuaRoDem(tinKiem) ? { ...g, co_lung: true } : g } });
       if (gErr) { await ghiLoi(client, "chat-reply ghi_boc_tach(lung goi y)", gErr.message); return null; }
-      return `Dạ kết cấu ${g.n} ${g.dv} đó có tính cả gác lửng không ${cachGoiNguoi} ạ?`;
+      return `Dạ ${g.n} ${g.dv} đó có tính cả gác lửng không ${cachGoiNguoi} ạ?`;
     };
 
     // Tầng tiền định đã ghi được fact dự án nào trong lượt này chưa. Lưới vét
@@ -2901,8 +2901,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
      * bản tin vừa dựng, code kiểm cụm dựa vào + số (`khenHopLe`), rồi lượt soát nhận xét đọc lại: soát bỏ bất kỳ vế nào, hay soát không
      * chạy được, thì bỏ cả câu khen. Chỉ chế độ `ai`; không có câu khen thay thế.
      */
-    const khenChoNhap = async (banTin: string, yThem: string[] = []): Promise<{ khen: string | null; quyMo: string[]; tienIch: string[] }> => {
-      if (!anthropicS || !laCheDoAi) return { khen: null, quyMo: [], tienIch: [] };
+    const khenChoNhap = async (banTin: string, yThem: string[] = []): Promise<{ khen: string | null; quyMo: string[]; tienIch: string[]; tieuDeAi: string | null }> => {
+      if (!anthropicS || !laCheDoAi) return { khen: null, quyMo: [], tienIch: [], tieuDeAi: null };
       try {
         const kq = await vietKhenNhapBangModel(anthropicS as unknown as Parameters<typeof vietKhenNhapBangModel>[0], MODEL, banTin, cachGoi, yThem);
         await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
@@ -2911,14 +2911,16 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const khopY = (ds: string[]) => yThem.filter((y) => ds.some((q) => chuanY(q) === chuanY(y)));
         const quyMo = khopY(kq.quyMo);
         const tienIch = khopY(kq.tienIch).filter((y) => !quyMo.includes(y));
+        // SRS-5.1zzzzzr: tiêu đề AI qua kiểm số + chữ cấm; không qua thì tiêu đề máy.
+        const tieuDeAi = tieuDeHopLe(kq.tieuDe, banTin);
         const k = khenHopLe(kq.khen, kq.duaTren, banTin);
-        if (!k) return { khen: null, quyMo, tienIch };
+        if (!k) return { khen: null, quyMo, tienIch, tieuDeAi };
         const loiChu = [...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n");
         const sach = await soatNhanXet(k, loiChu, banTin);
-        return { khen: nhanXetAiXong && sach === k ? k : null, quyMo, tienIch };
+        return { khen: nhanXetAiXong && sach === k ? k : null, quyMo, tienIch, tieuDeAi };
       } catch (e) {
         await ghiLoi(client, "chat-reply khen ban nhap", e);
-        return { khen: null, quyMo: [], tienIch: [] };
+        return { khen: null, quyMo: [], tienIch: [], tieuDeAi: null };
       }
     };
     // 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds … cần AI hiểu"): câu trong bảng theo loại mà AI thấy KHÔNG áp dụng cho
@@ -3252,11 +3254,17 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const dong = (lRow ?? null) as DongBaoLai | null;
         // 14/09/2026: đúng thứ TIN KHÁCH VỪA NHẮN đã lưu — fact có `created_at` ≥ giờ
         // ghi tin đó. Cả hai mốc đều là đồng hồ DB, không so với đồng hồ edge.
-        const { data: mMsg, error: mErr } = await client.from("messages").select("created_at")
-          .eq("conversation_id", convSId).eq("sender", "seller")
-          .order("seq", { ascending: false }).limit(1).maybeSingle();
-        if (mErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(moc)", mErr.message);
-        const moc = (mMsg as { created_at?: string | null } | null)?.created_at ?? null;
+        // SRS-5.1zzzzzr (Zalo thật 13/10/2026 04:59Z, Nhà Bè): "Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu." rồi 9 giây sau "DT 3x14" — fact lượt 1 ghi lúc
+        // :11, mốc lấy TIN CHỦ NHÀ MỚI NHẤT (:13) → không fact nào ≥ mốc → "🤖 Không trích xuất được gì" dù đã ghi ba ô. Mốc phải là giờ ghi
+        // CHÍNH TIN LƯỢT NÀY (`lucTinChu`); chỉ khi không có (tin trùng zalo_msg_id) mới lấy tin mới nhất như cũ.
+        let moc: string | null = lucTinChu;
+        if (!moc) {
+          const { data: mMsg, error: mErr } = await client.from("messages").select("created_at")
+            .eq("conversation_id", convSId).eq("sender", "seller")
+            .order("seq", { ascending: false }).limit(1).maybeSingle();
+          if (mErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(moc)", mErr.message);
+          moc = (mMsg as { created_at?: string | null } | null)?.created_at ?? null;
+        }
         let factLuot: FactBaoLai[] = [];
         if (moc) {
           const { data: fs, error: fErr } = await client.from("listing_facts")
@@ -6511,7 +6519,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
             if (conLaiL) dapAn = conLaiL;
             else {
               const cauTreoL = cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw);
-              return await traLoiSeller([`Dạ vậy kết cấu nhà mình là ${kcL.floors_text} ạ. ${cauTreoL}`], { lung: dapL, reask: pendingReq.question, loai_cau: "xac_nhan" });
+              return await traLoiSeller([`Dạ vậy quy mô nhà mình là ${kcL.floors_text} ạ. ${cauTreoL}`], { lung: dapL, reask: pendingReq.question, loai_cau: "xac_nhan" });
             }
           }
         }
@@ -7147,7 +7155,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const factKem = (s: string): Array<{ question: string; answer: string }> => (aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||
-            (!laCheDoAi && !aiChinh!.ghi.some((g) => g.question === f.question) &&
+            // SRS-5.1zzzzzr: căn hộ — AI `dien_tich_san` đã đổi khoá thành `dien_tich` (docAiChinh, SRS-5.1zr) thì luật đọc sàn cùng số
+            // không được ghi thêm ô sàn (e2e AIBOC-11b trên căn hộ từng ra hai ô cùng một số).
+            (!laCheDoAi && !aiChinh!.ghi.some((g) => g.question === f.question || (f.question === "dien_tich_san" && g.question === "dien_tich")) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
                 KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f) || phapLyCoSo(f) || kichThuocChac(f)))))
             .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]

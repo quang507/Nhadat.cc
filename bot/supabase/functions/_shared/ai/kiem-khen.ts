@@ -20,8 +20,8 @@ const NhanXet = z.object({
   can_cu: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong LỜI CHỦ NHÀ hoặc THÔNG TIN ĐÃ GHI nói ĐÚNG điều đó. Không có thì null."),
   // SRS-5.1zzzzx: căn cứ có thật chưa đủ — "hẻm 4m" là căn cứ cho con số, không cho "ô tô vào tới nhà". AI phân loại quan hệ giữa
   // câu và căn cứ; code bỏ `suy_ra` / `danh_gia` dù căn cứ có thật.
-  kieu: z.enum(["nhac_lai", "loi_ich", "suy_ra", "danh_gia"]).nullish().describe(
-    "nhac_lai = nói lại đúng điều chủ nhà đã nói BẰNG CHỮ (cùng nghĩa, không thêm tính chất). loi_ich = bot GẮN THÊM lợi ích / tính chất cho một đặc điểm chủ nhà đã nói (\"ô tô vào tới nơi\" → \"đi lại tiện\"; \"sổ riêng\" → \"giấy tờ gọn\") — chủ nhà không nói điều được gắn thêm. suy_ra = tính chất chủ nhà KHÔNG nói, suy từ con số hay dữ kiện khác (\"hẻm 4m\" → \"ô tô vào tới nhà\"; \"4 lầu\" → \"kết cấu chắc\"). danh_gia = chấm điểm tốt / xấu / vừa, nói điểm yếu hay khuyên răn (\"4x16 là diện tích vừa phải\", \"rộng rãi\", \"hẻm hẹp thì đi lại cần cẩn thận\").",
+  kieu: z.enum(["nhac_lai", "khen_nhac_lai", "loi_ich", "suy_ra", "danh_gia"]).nullish().describe(
+    "nhac_lai = nói lại đúng điều chủ nhà đã nói BẰNG CHỮ (cùng nghĩa, không thêm tính chất). khen_nhac_lai = lời khen NGẮN gắn với điểm mạnh chủ nhà NÓI BẰNG CHỮ, nhắc đúng chữ đó và không gắn thêm tính chất nào (\"hẻm xe hơi tới cửa, sổ riêng, vậy là ổn rồi anh\"; \"sổ riêng vậy là gọn rồi\" KHÔNG phải — \"gọn\" là tính chất mới). loi_ich = bot GẮN THÊM lợi ích / tính chất cho một đặc điểm chủ nhà đã nói (\"ô tô vào tới nơi\" → \"đi lại tiện\"; \"sổ riêng\" → \"giấy tờ gọn\") — chủ nhà không nói điều được gắn thêm. suy_ra = tính chất chủ nhà KHÔNG nói, suy từ con số hay dữ kiện khác (\"hẻm 4m\" → \"ô tô vào tới nhà\"; \"4 lầu\" → \"kết cấu chắc\"). danh_gia = chấm điểm tốt / xấu / vừa, nói điểm yếu hay khuyên răn (\"4x16 là diện tích vừa phải\", \"rộng rãi\", \"hẻm hẹp thì đi lại cần cẩn thận\").",
   ),
   // SRS-5.1zzzzb: chỉ lượt soát lời gửi NGƯỜI MUA dùng ô này (nhánh bán luôn false).
   noi_co_hang: z.boolean().nullish().describe("true khi câu nói bên em CÓ / còn / đang có căn, đã tìm thấy căn, hay đang lọc / tìm căn cho khách (\"dạ có anh\", \"em đang lọc căn 2 lầu cho anh\", \"em tìm thấy mấy căn\"). Không thì false."),
@@ -69,6 +69,9 @@ xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "kh�
   người tìm"): bot không có số liệu người mua — đặc điểm thật chỉ là căn cứ cho chính đặc điểm đó, không cho lời đoán thị trường.
 - Khen gắn lợi ích cho đặc điểm có thật ("ô tô tới tận nhà, đi lại tiện lắm", "sổ riêng thì giấy tờ gọn") là kieu loi_ich (không phải
   đánh giá thị trường) — code bỏ: bot không gắn thêm điều chủ nhà không nói.
+- SRS-5.1zzzzzr (chủ dự án 13/10: "Khen vào"): lời khen NGẮN chỉ nhắc đúng điểm mạnh chủ nhà NÓI BẰNG CHỮ, không thêm tính chất ("hẻm xe hơi tới cửa,
+  sổ riêng, vậy là ổn rồi anh") là kieu khen_nhac_lai, can_cu chép đúng cụm chủ nhà nói — code GIỮ khi căn cứ có thật. Khen từ CON SỐ ("hẻm 4m
+  rộng") vẫn là suy_ra / danh_gia.
 - kieu: căn cứ có thật CHƯA ĐỦ — xét câu có nói ĐÚNG điều chủ nhà nói không. Chủ nhà chỉ đưa CON SỐ ("hẻm 4m", "4x16", "hẻm 2m5") thì
   mọi tính chất bot gắn thêm là suy_ra ("hẻm 4m ô tô vào tới nhà": chủ nhà chưa nói xe vào) hoặc danh_gia ("4x16 là diện tích vừa
   phải", "hẻm hẹp thì đi lại cần cẩn thận"). Chủ nhà NÓI "ô tô vào tới nơi" rồi bot nói "đi lại tiện lắm" là loi_ich.`;

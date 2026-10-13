@@ -136,7 +136,7 @@ const dongGiaNha = dongNha.find((d) => d.startsWith("💰")) ?? "";
 la("dòng 1 câu mở (KHÔNG kèm điểm), dòng 2 TIÊU ĐỀ, dòng 3 địa chỉ 📍 viết HOA, GIÁ 💰 là dòng cuối thân tin",
   /^📋 Em sẽ rao như vầy nhé anh:$/.test(dongNha[0]) && dongNha[1] === tdNha && /^📍 Hẻm 5m Nguyễn Trãi/.test(dongNha[2]) && (dongNha[dongNha.findIndex((d) => /^Độ đầy đủ/.test(d)) - 1] ?? "").startsWith("💰"),
   dongNha.join(" | "));
-la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 7 tỷ 2 \(còn thương lượng\)$/.test(dongGiaNha), dongGiaNha);
+la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 GIÁ 7 TỶ 2 \(còn thương lượng\)$/.test(dongGiaNha), dongGiaNha);
 la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước, không lặp (17/09)", dongNha.some((d) => d === "📝 Thêm: nhà mới sửa 2024 · khu an ninh · gần chợ Bình Tây") /* SRS-5.1zzzzzn: tình trạng nhà xuống dòng Thêm */, dongNha.join(" | "));
 la("có đủ khối thông số: diện tích, kết cấu, đường vào, hướng, pháp lý",
   /📐 Diện tích: 60m² · dài 15m$/m.test(nha) && /^🏫 Tiện ích: mặt tiền 4m · gần chợ An Đông · trường Hùng Vương$/m.test(nha) && /🏗 Quy mô: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC$/m.test(nha) &&
@@ -180,7 +180,7 @@ la("không có dòng rỗng thừa", !/\n\s*\n/.test(nha));
 
 const thue = dung(CAN_HO_THUE);
 la("cho thuê: giá kèm '/tháng', có khối điều kiện thuê, có ảnh",
-  /💰 18 triệu\/tháng \(giá cố định\)/.test(thue) && /📝 Điều kiện thuê: cọc 2 tháng · thuê tối thiểu 1 năm · phí QL 14 nghìn\/m2/.test(thue) &&
+  /💰 GIÁ 18 TRIỆU\/THÁNG \(giá cố định\)/.test(thue) && /📝 Điều kiện thuê: cọc 2 tháng · thuê tối thiểu 1 năm · phí QL 14 nghìn\/m2/.test(thue) &&
   /📷 2 ảnh/.test(thue), thue);
 la("cho thuê: tầng 15 và nội thất vào đúng khối kết cấu / nội thất",
   /🏗 Quy mô: tầng 15 · 2 phòng ngủ · 2 WC · view sông/.test(thue) && /🛋 Nội thất: full nội thất/.test(thue), thue);

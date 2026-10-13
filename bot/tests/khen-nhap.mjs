@@ -36,3 +36,20 @@ import { loiNhanGiayToHopLe } from "../supabase/functions/_shared/extraction/khe
   ok2("GIAYTO-4 lời có câu hỏi → bỏ", loiNhanGiayToHopLe("Dạ em nhận ảnh sổ rồi ạ, anh còn bản nào nữa không?", 132, 132) === null);
   ok2("GIAYTO-5 số diện tích bịa (120 khi sổ 132) → bỏ", loiNhanGiayToHopLe("Dạ sổ ghi 120m2, em cất riêng rồi ạ.", 132, 132) === null);
 }
+
+// SRS-5.1zzzzzr: tiêu đề AI viết ("hoa văn tí") — code kiểm số + chữ cấm.
+import { tieuDeHopLe } from "../supabase/functions/_shared/extraction/khen-hop-le.ts";
+{
+  const ok3 = (ten, dk, ct = "") => { console.log(`${dk ? "✓" : "✗"} ${ten}${dk ? "" : `\n    ${ct}`}`); if (!dk) process.exitCode = 1; };
+  const TIN = "📋 Em sẽ rao như vầy nhé chú:\nChỉ 3,9 tỷ hẻm xe hơi tại Đông Thạnh, Hóc Môn\n📍 Bùi Công Trừng, Xã Đông Thạnh, Huyện Hóc Môn\n📐 Diện tích: 132m² · dài 22m\n🏗 Quy mô: trệt + lửng · 2 phòng ngủ\n🛣 Đường vào: hẻm xe hơi 5m\n💰 GIÁ 3,9 TỶ (còn thương lượng)";
+  const td = "Chỉ 3,9 tỷ sở hữu ngay nhà trệt lửng hẻm xe hơi, sân rộng tại Đông Thạnh, Hóc Môn";
+  ok3("TD-1 tiêu đề hoa văn đúng số, đúng khu → nhận", tieuDeHopLe(td, TIN) === td, String(tieuDeHopLe(td, TIN)));
+  ok3("TD-1b 'nhà cấp 4' khi bản tin KHÔNG nói cấp 4 (nhà trệt lửng) → bỏ", tieuDeHopLe("Chỉ 3,9 tỷ sở hữu ngay nhà cấp 4 hẻm xe hơi tại Đông Thạnh, Hóc Môn", TIN) === null);
+  ok3("TD-1c 'nhà cấp 4' khi bản tin có 'cấp 4' → nhận (4 là loại nhà, không phải số đo)",
+    tieuDeHopLe("Chỉ 3,9 tỷ nhà cấp 4 hẻm xe hơi tại Đông Thạnh, Hóc Môn", TIN.replace("Quy mô: trệt + lửng", "Quy mô: nhà cấp 4")) !== null);
+  ok3("TD-2 con số ngoài bản tin ('150m²') → bỏ", tieuDeHopLe("Chỉ 3,9 tỷ nhà cấp 4 150m² tại Hóc Môn", TIN) === null);
+  ok3("TD-3 nói thị trường ('dễ bán', 'đầu tư') → bỏ", tieuDeHopLe("Chỉ 3,9 tỷ nhà cấp 4 dễ bán tại Hóc Môn", TIN) === null && tieuDeHopLe("Chỉ 3,9 tỷ nhà đầu tư sinh lời tại Hóc Môn", TIN) === null);
+  ok3("TD-4 không mở bằng 'Chỉ' / có '!' / quá dài → bỏ", tieuDeHopLe("Nhà cấp 4 hẻm xe hơi 3,9 tỷ tại Hóc Môn", TIN) === null && tieuDeHopLe("Chỉ 3,9 tỷ nhà đẹp lắm!", TIN) === null && tieuDeHopLe("Chỉ 3,9 tỷ " + "nhà xinh ".repeat(15), TIN) === null);
+  ok3("TD-5 null / rỗng → null", tieuDeHopLe(null, TIN) === null && tieuDeHopLe("", TIN) === null);
+}
+

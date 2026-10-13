@@ -10,6 +10,8 @@ import { dinhDangLong, docLong } from "./doc-long.ts";
 
 const KhenNhap = z.object({
   khen: z.string().nullable().describe("MỘT câu khen, ≤ 30 chữ, không câu hỏi. Không viết được câu đúng luật → null."),
+  // SRS-5.1zzzzzr (chủ dự án 13/10/2026: "Tiêu đề nên hoa văn tí"): AI viết tiêu đề, code kiểm số + chữ cấm (`tieuDeHopLe`), không qua thì giữ tiêu đề máy.
+  tieu_de: z.string().nullable().optional().describe("MỘT tiêu đề rao hấp dẫn ≤ 90 ký tự: mở bằng \"Chỉ <giá>\" đúng giá trong bản tin, rồi 1–2 điểm mạnh có trong bản tin bằng lời mời gọi vừa phải, kết bằng khu vực (\"Chỉ 3,9 tỷ sở hữu ngay nhà cấp 4 hẻm xe hơi, sân rộng tại Đông Thạnh, Hóc Môn\"). Không con số ngoài bản tin, không nói thị trường / sinh lời / dễ bán, không hứa, không tiếng Anh, không chấm than. Không viết được → null."),
   dua_tren: z.array(z.string()).describe("Các cụm COPY NGUYÊN VĂN từ BẢN TIN mà câu khen nhắc tới (mỗi điểm mạnh một cụm)."),
   // SRS-5.1zzzzzn: xếp ý thêm vào dòng "Quy mô" theo NGHĨA (không dò từ khoá) — cùng lượt model này, không thêm lượt gọi.
   // SRS-5.1zzzzzo ("tiện ích phải gom vào đúng tiện ích"): ý thêm nói về xung quanh căn → dòng 🏫 Tiện ích. Cùng lượt model.
@@ -32,6 +34,8 @@ gửi chủ nhà, đặt ngay dưới bản tin.
   sân thượng…) thì chép nguyên văn vào quy_mo; ý về vị trí, tiện ích quanh nhà, tình trạng nhà thì không.
 - tien_ich: xếp riêng — ý nào nói về xung quanh căn (gần chợ / trường / công viên, khu dân cư, cách đường lớn…) thì chép nguyên văn vào tien_ich.
   Một ý chỉ vào MỘT trong hai danh sách.
+- tieu_de: viết lại dòng tiêu đề (dòng 2 của bản tin, mở bằng "Chỉ <giá>") cho hấp dẫn hơn một chút — cùng giá, cùng điểm mạnh, cùng khu
+  vực có trong bản tin; thêm lời mời gọi vừa phải ("sở hữu ngay", "nhà xinh", "ngay"), KHÔNG thêm điểm mạnh / con số / nhận định mới.
 Bản tin không có điểm mạnh nào để nhắc → khen = null.`;
 
 type ClientModel = {
@@ -41,14 +45,14 @@ type ClientModel = {
 /** Hỏi model câu khen. Kết quả THÔ — đưa qua `khenHopLe`. Model hỏng thì NÉM. */
 export async function vietKhenNhapBangModel(
   ai: ClientModel, model: string, banTin: string, cachGoi: string, yThem: string[] = [],
-): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; tienIch: string[]; usage: unknown }> {
+): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; tienIch: string[]; tieuDe: string | null; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
-    max_tokens: 200,
+    max_tokens: 300,
     output_config: { effort: "low", format: FORMAT },
     system: [{ type: "text", text: LUAT_KHEN, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: `Cách gọi chủ nhà: "${cachGoi}"\nBẢN TIN:\n${banTin.slice(0, 2500)}\nÝ THÊM:\n${yThem.length ? yThem.map((y) => `- ${y}`).join("\n") : "(không có)"}` }],
   });
   const k = docLong(KhenNhap, r.parsed_output);
-  return { khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], quyMo: k.success ? k.data.quy_mo ?? [] : [], tienIch: k.success ? k.data.tien_ich ?? [] : [], usage: r.usage };
+  return { khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], quyMo: k.success ? k.data.quy_mo ?? [] : [], tienIch: k.success ? k.data.tien_ich ?? [] : [], tieuDe: k.success ? k.data.tieu_de ?? null : null, usage: r.usage };
 }

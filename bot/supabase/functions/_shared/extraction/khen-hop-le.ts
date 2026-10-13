@@ -63,3 +63,21 @@ export function cauDuAnCoNguon(
   }
   return ra;
 }
+
+/**
+ * SRS-5.1zzzzzr: tiêu đề AI viết ("hoa văn tí") — qua khi: 20–100 ký tự, một dòng, không "?", "!", gạch dài, mở bằng "Chỉ", MỌI con số
+ * có trong bản tin (giá, m², số tầng…), không chữ nói thị trường / sinh lời / hứa / tiếng Anh quảng cáo. Không qua → null (giữ tiêu đề máy).
+ */
+export function tieuDeHopLe(td: string | null | undefined, banTin: string): string | null {
+  const k = (td ?? "").replace(/\s+/g, " ").trim();
+  if (k.length < 20 || k.length > 100 || /[?!\n—]/.test(td ?? "") || !/^Chỉ\s/u.test(k)) return null;
+  const CAM = /\b(?:dễ bán|bán nhanh|khách chuộng|đắt khách|sinh lời|đầu tư|thanh khoản|giá tốt|giá rẻ|rẻ nhất|hời|lời|cam kết|đảm bảo|hot|vip|luxury|premium|view)\b/iu;
+  if (CAM.test(k)) return null;
+  // "nhà cấp 4" là LOẠI nhà, không phải con số — chỉ nhận khi bản tin cũng nói cấp 4 (AI gọi nhà trệt lửng là "cấp 4" thì bỏ).
+  const CAP4 = /\bcấp\s*4\b/iu;
+  if (CAP4.test(k) && !CAP4.test(banTin)) return null;
+  const so = (x: string) => (x.replace(CAP4, "cấp bốn").replace(/(\d)\s*m2(?![\p{L}\d])/giu, "$1m²").match(/\d+(?:[.,]\d+)?/g) ?? []).map((v) => v.replace(",", "."));
+  const coSo = new Set(so(banTin));
+  if (so(k).some((v) => !coSo.has(v))) return null;
+  return k;
+}
