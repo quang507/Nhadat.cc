@@ -6731,10 +6731,30 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
       const cuCH = globalThis.__cauHinh;
       globalThis.__cauHinh = { ...(cuCH ?? { test_reset_hello: "1" }), bao_lai_da_luu: "thay_doi" };
       r = await send({ external_user_id: "z-ccrb", text: "cho anh coi lại nội dung tin đăng với" });
-      check("DAM-S1c (cách nói mới) xin coi lại nội dung → 🤖 'Đã bóc tách yêu cầu:' + '• ghi nhận yêu cầu của anh: xin xem lại nội dung tin đăng' (không 'Hiểu:', không 'Không trích xuất')",
-        r.body.hoi_ve_tin === "noi_dung" && r.body.replies.some((x) => /^🤖 Đã bóc tách yêu cầu:\n• ghi nhận yêu cầu của anh(?: chị)?: xin xem lại nội dung tin đăng$/.test(x)) &&
+      // SRS-5.1zzzzzzc (13/10 tối): đầu bong bóng "Đã trích xuất yêu cầu cho bot thực hiện:" (một khuôn cho mọi lượt khách ra lệnh / xin).
+      check("DAM-S1c (cách nói mới) xin coi lại nội dung → 🤖 'Đã trích xuất yêu cầu cho bot thực hiện:' + '• ghi nhận yêu cầu của anh: xin xem lại nội dung tin đăng' (không 'Hiểu:', không 'Không trích xuất')",
+        r.body.hoi_ve_tin === "noi_dung" && r.body.replies.some((x) => /^🤖 Đã trích xuất yêu cầu cho bot thực hiện:\n• ghi nhận yêu cầu của anh(?: chị)?: xin xem lại nội dung tin đăng$/.test(x)) &&
           !r.body.replies.some((x) => /🤖 Hiểu:|Không trích xuất/.test(x)),
         JSON.stringify(r.body.replies));
+      // SRS-5.1zzzzzzc: lệnh SỬA lúc chờ duyệt → 🤖 mở bằng yêu cầu trong ngoặc kép, dưới là dòng dữ liệu.
+      {
+        const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+        const tinS = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+        sC.active_listing_id = tinS.id; tinS.status = "cho_thong_tin";
+        db().insert("messages", { conversation_id: db().t.conversations.find((c) => c.seller_id === sC.id)?.id, sender: "bot", body: "📋 Em sẽ rao như vầy nhé anh:\n💰 GIÁ 7 TỶ" });
+        db().insert("info_requests", { listing_id: tinS.id, question: "duyet_tin", status: "pending" });
+        r = await send({ external_user_id: "z-ccrb", text: "à sửa giá 7 tỷ 5 nha em" });
+        const bongS = r.body.replies.find((x) => /^🤖/u.test(x)) ?? "";
+        check("YEUCAU-01 'à sửa giá 7 tỷ 5 nha em' lúc duyệt → 🤖 'Đã trích xuất yêu cầu cho bot thực hiện: \"sửa giá … đã ghi\"' + dòng '• giá …: …'; giá ghi 7 tỷ 5",
+          /^🤖 Đã trích xuất yêu cầu cho bot thực hiện: "sửa giá(?: mong muốn)? đã ghi"\n• giá/.test(bongS) && /7 tỷ 5/.test(tinS.price_raw ?? "") &&
+            !/Đã trích xuất:\n/.test(bongS),
+          JSON.stringify({ bong: bongS, rep: r.body.replies, price: tinS.price_raw }));
+        r = await send({ external_user_id: "z-ccrb", text: "em xoá cái hẻm ghi nhầm đi" });
+        const bongX = r.body.replies.find((x) => /^🤖/u.test(x)) ?? "";
+        check("YEUCAU-02 'em xoá cái hẻm ghi nhầm đi' → 🤖 'Đã trích xuất yêu cầu cho bot thực hiện: \"bỏ … đã ghi\"' (không 'Không trích xuất được gì')",
+          r.body.xin_bo_truong === "do_rong_hem" && /^🤖 Đã trích xuất yêu cầu cho bot thực hiện: "bỏ .+ đã ghi"$/.test(bongX),
+          JSON.stringify({ bong: bongX, body: r.body }));
+      }
       globalThis.__cauHinh = cuCH;
     }
     // Người chưa có tin nào xin nội dung → nói thật.

@@ -40,7 +40,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { chuanY, type FactNhap, soanTinNhapHaiBong, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  aiDocThem, bocTachTaoTin, boBaoLai, BOC_YEU_CAU, bongTrichXuat, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, dongFact, dongVuaLuu, HIEU_LUOT, KHONG_BOC, NGUON_AI, nhanNgan, phuongKemQuanCu, traLoiCauBot, TU_ANH, vuaLuuBan, vuaLuuMua,
+  aiDocThem, bocTachTaoTin, boBaoLai, BOC_YEU_CAU, bongTrichXuat, bongYeuCau, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, dongFact, dongVuaLuu, HIEU_LUOT, KHONG_BOC, NGUON_AI, nhanNgan, phuongKemQuanCu, traLoiCauBot, TU_ANH, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
@@ -3137,6 +3137,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     let tinTrongLuot: string | null = null;
     const aiNoiTrangThai: string[] = [];
     let ackSua: string | null = null;
+    /** SRS-5.1zzzzzzc: ô vừa SỬA theo lời sửa FR-164 trong lượt (để 🤖 in "Đã trích xuất yêu cầu cho bot thực hiện"). */
+    let suaLuotKhoa: string[] = [];
     // SRS-5.1zzzzg: nội dung lời GHI THÊM (không phải sửa) của `ackSua` — lượt có model viết lời thì đưa vào câu lệnh để model ghi nhận
     // gộp một lần, bong bóng code bỏ (một ý một nguồn).
     let ackGhiGop: string | null = null;
@@ -3335,9 +3337,28 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           : vaiTuNoiLuot ? `tự nói là ${vaiTuNoiLuot === "moi_gioi" ? "môi giới" : "chính chủ"}`
           : hoiNguocX ? `hỏi em "${hoiNguocX}", em trả lời câu đó`
           : null;
-        // SRS-5.1zzzzzs: yêu cầu của khách in khuôn "Đã bóc tách yêu cầu: • ghi nhận yêu cầu của {ac}: …" (chủ dự án 13/10).
-        const bocYeuCau = yeuCauX ? `${BOC_YEU_CAU}\n• ghi nhận yêu cầu của ${cachGoi}: ${yeuCauX}` : null;
-        const bocDu = bongTrichXuat(dongLuot) ??
+        // SRS-5.1zzzzzs: yêu cầu của khách in khuôn "• ghi nhận yêu cầu của {ac}: …" (chủ dự án 13/10).
+        // SRS-5.1zzzzzzc (chủ dự án 13/10 tối, xác nhận "đúng"): lượt khách ra LỆNH cho bot (sửa ô lúc duyệt, bỏ ô / ý đã ghi, dùng tiêu đề
+        // của khách, chuyển sang căn khác) → đầu bong bóng "🤖 Đã trích xuất yêu cầu cho bot thực hiện: "<lệnh>"", dưới là dòng dữ liệu
+        // lượt đó (nếu có). Lệnh đọc từ meta của chính đường xử lý (không đoán lại chữ khách).
+        const boY = Array.isArray(extra.bo_y) ? (extra.bo_y as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
+        const nhanO = (q: string) => nhanNgan(q, FACT_LABELS);
+        const yeuCauLenh: string | null = (() => {
+          if (boY.length) return `bỏ ý "${boY[0]}"${boY.length > 1 ? ` và ${boY.length - 1} ý nữa` : ""} khỏi tin`;
+          if (extra.tieu_de_khach === true) return `dùng tiêu đề ${cachGoi} đưa cho bản tin`;
+          if (typeof extra.chuyen_can === "string" && extra.chuyen_can) return `chuyển sang căn ${extra.chuyen_can}`;
+          if (typeof extra.xin_bo_truong === "string" && extra.xin_bo_truong !== "?") return `bỏ ${nhanO(extra.xin_bo_truong)} đã ghi`;
+          // Lời sửa FR-164 ("à giá 7 tỷ 5 nha em") — ô sửa THẬT (tin đã có giá trị khác trước đó); ghi mới thì là dữ liệu, không phải lệnh.
+          const suaKhoa = extra.sua_that === true && Array.isArray(extra.sua_fact) ? (extra.sua_fact as string[]) : suaLuotKhoa;
+          if (suaKhoa.length) return `sửa ${[...new Set(suaKhoa)].map(nhanO).join(", ")} đã ghi`;
+          if (extra.sua_nhap === true) {
+            const o = [...new Set(factLuot.map((f) => f.question))].filter((q) => q !== "bo_sung").map(nhanO);
+            return o.length ? `sửa ${o.join(", ")} đã ghi` : "sửa bản tin";
+          }
+          return null;
+        })();
+        const bocYeuCau = yeuCauLenh ? bongYeuCau(yeuCauLenh, dongLuot) : yeuCauX ? `${BOC_YEU_CAU}\n• ghi nhận yêu cầu của ${cachGoi}: ${yeuCauX}` : null;
+        const bocDu = (yeuCauLenh ? bocYeuCau : null) ?? bongTrichXuat(dongLuot) ??
           (hieuTraLoiVai && sellerMoi ? traLoiCauBot(cauVaiDaHoi, hieuTraLoiVai, text) : hieuKhac ? `${HIEU_LUOT} ${hieuKhac}.` : bocYeuCau ?? KHONG_BOC);
         return { bong: [bocDu, dongHoSo].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
@@ -5812,7 +5833,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // hỏi tầng) thì cũng KHÔNG dừng — ghi xong bot im, chủ nhà ngồi chờ.
           // Đi tiếp xuống khối câu chờ để hỏi lại thứ còn thiếu.
           if (!vuaTraLoiVuaSua && !pendingReq) {
-            return await traLoiSeller([cau], { sua_fact: suaThat.map(([k]) => k) });
+            return await traLoiSeller([cau], { sua_fact: suaThat.map(([k]) => k), ...(laSuaThat ? { sua_that: true } : {}) });
           }
           // KHÔNG dừng ở đây. Trước bản này khối này `return` thẳng, nên câu
           // "sổ hồng rồi em, à giá 6.8 tỷ nha" (đang treo câu hỏi pháp lý) chỉ
@@ -5822,6 +5843,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // tránh. Gắn lời cảm ơn vào đường ra chung rồi đi tiếp xuống khối
           // `pendingReq` để câu trả lời cũng vào sổ.
           ackSua = cau;
+          if (laSuaThat) suaLuotKhoa = suaThat.map(([k]) => k);
           ackGhiGop = !laSuaThat && !giaKhongDoc ? daGhi.join(", ") : null;
         }
       }
