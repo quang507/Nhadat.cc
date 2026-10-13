@@ -243,7 +243,7 @@ const db = () => globalThis.__db;
 // bản nháp. Ca đo bản nháp qua chuỗi hỏi đáp thì trả lời hết các câu đó (`quaPhapLy`, trả phản hồi lượt cuối); ca dựng tin
 // bằng tay thì ghi sẵn các fact đó (`coSanPhapLy`) để lượt đang đo vẫn là lượt ra bản nháp.
 // SRS-5.1zzzzzm: câu hiện trạng sử dụng (20261013a) đứng ngay sau câu sổ — chung bộ câu "sau câu sổ" của các ca đo bản nháp.
-const DAP_PHAP_LY = { nguoi_dung_ten: "tên anh", the_chap: "cầm tay", quy_hoach: "không dính", tranh_chap: "không", dien_tich_khop_so: "khớp", hien_trang_su_dung: "đang ở" };
+const DAP_PHAP_LY = { nguoi_dung_ten: "tên anh", the_chap: "cầm tay", quy_hoach: "không dính", tranh_chap: "không", dien_tich_khop_so: "khớp", hien_trang_su_dung: "đang ở", so_phong_ngu: "3" };
 async function quaPhapLy(uid, r) {
   for (let i = 0; i < 6; i++) {
     const treo = db().t.info_requests.find((q) => q.status === "pending" && DAP_PHAP_LY[q.question]);
@@ -257,7 +257,12 @@ const coSanPhapLy = (listingId) => { for (const [question, answer] of Object.ent
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
 // SRS-5.1zzzzzm (20261013a): nhà phố / cấp 4 / căn hộ / biệt thự hỏi "đang ở, cho thuê hay để trống" TRƯỚC bản nháp. Ca đo việc KHÁC (bản
 // nháp, câu phường, câu sổ…) dựng tin như khách đã trả lời câu đó — `daHtsd(tin)` ghi fact hiện trạng sử dụng.
-const daHtsd = (l, answer = "đang ở") => l && db().insert("listing_facts", { listing_id: l.id, question: "hien_trang_su_dung", answer, source: "seller_chat" });
+// SRS-5.1zzzzzo (20261013b): số phòng ngủ cũng hỏi trước bản nháp (nhà phố / cấp 4 / biệt thự) — tin dựng sẵn mang luôn câu trả lời đó.
+const daHtsd = (l, answer = "đang ở", { pn = true } = {}) => {
+  if (!l) return l;
+  if (pn && l.bedrooms == null && !db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "so_phong_ngu")) db().insert("listing_facts", { listing_id: l.id, question: "so_phong_ngu", answer: "3", source: "seller_chat" });
+  return db().insert("listing_facts", { listing_id: l.id, question: "hien_trang_su_dung", answer, source: "seller_chat" });
+};
 function fresh(seed) { soatDbBatBien("(trước fresh)"); globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__nominatim = undefined; globalThis.__fetches = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
 // Lượt gọi model chỉ tính NHÁNH MUA (parse hồ sơ), không tính lượt phân loại ảnh (FR-185).
 // SRS-5.1zzzza: lượt AI soát nhận xét (người mua, không căn trong tay) cũng không phải lượt trả lời.
@@ -1265,7 +1270,7 @@ fresh(seedKho);
   // SRS-5.1zzzzj: "p4" + "q5" → Phường Chợ Quán (không quận thì phường trống, bot hỏi phường trước — chuỗi này đo bản nháp).
   r = await send({ external_user_id: "h-1", text: "bán nhà hẻm trần bình trọng p4 q5 giá 5 tỷ 8 60m2, không gấp" });
   const H = db().t.listings[0];
-  daHtsd(H);
+  daHtsd(H, "đang ở", { pn: false }); // ca này đo chính câu phòng ngủ
   // 20260924c (FR-219): thứ tự "chủ nhà dễ trả lời trước" — đã có vị trí, diện tích, giá → câu đầu là KẾT CẤU.
   check("H1 rao đủ vị trí + diện tích + giá → tin can_chu_duyet, chưa lên kệ, câu đầu là KẾT CẤU (FR-219)",
     H?.can_chu_duyet === true && H?.status === "cho_thong_tin" && pend("ket_cau"), JSON.stringify({ H, ir: db().t.info_requests }));
@@ -1528,11 +1533,11 @@ fresh(seedKho);
   // ngủ nhà / ảnh / hướng KHÔNG hỏi trước bản nháp. Bảng cũ: nhà phố 9–10 câu, căn hộ hỏi hướng, đất hỏi hướng + hạ tầng.
   for (const [uid, rao, traLoi, cam, thuTu] of [
     // Địa chỉ có chữ "hẻm" → câu nối hỏi hẻm ngay rồi kết cấu (LIEN_QUAN), vẫn trong dải vật lý; giá rồi mới tới sổ.
-    ["tt-np", "bán nhà quận 5", { vi_tri: "hẻm 12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_hem: "hẻm 5m xe hơi vào", gia: "5 tỷ 2", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "đang ở", phuong: "phường 2" },
-      ["gap", "so_phong_ngu", "hinh_anh", "huong", "do_rong_duong"], ["do_rong_hem", "ket_cau", "dien_tich_dat", "gia", "phap_ly", "hien_trang_su_dung"]],
+    ["tt-np", "bán nhà quận 5", { vi_tri: "hẻm 12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_hem: "hẻm 5m xe hơi vào", gia: "5 tỷ 2", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "đang ở", so_phong_ngu: "3 phòng ngủ", phuong: "phường 2" },
+      ["gap", "hinh_anh", "huong", "do_rong_duong"], ["do_rong_hem", "ket_cau", "dien_tich_dat", "gia", "phap_ly", "hien_trang_su_dung", "so_phong_ngu"]],
     // Nhà MẶT TIỀN (số nhà trơn + tên đường): hỏi đường trước nhà THAY câu hẻm — trả lời xong không hỏi hẻm nữa (bản cũ hỏi cả hai).
-    ["tt-mt", "bán nhà quận 5", { vi_tri: "12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_duong: "đường 8m", gia: "15 tỷ", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "để trống", phuong: "phường 2" },
-      ["gap", "so_phong_ngu", "hinh_anh", "huong", "do_rong_hem"], ["dien_tich_dat", "ket_cau", "do_rong_duong", "gia", "phap_ly", "hien_trang_su_dung"]],
+    ["tt-mt", "bán nhà quận 5", { vi_tri: "12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_duong: "đường 8m", gia: "15 tỷ", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "để trống", so_phong_ngu: "4 phòng ngủ", phuong: "phường 2" },
+      ["gap", "hinh_anh", "huong", "do_rong_hem"], ["dien_tich_dat", "ket_cau", "do_rong_duong", "gia", "phap_ly", "hien_trang_su_dung", "so_phong_ngu"]],
     ["tt-cc", "bán căn hộ quận 7", { vi_tri: "Sunrise City", dien_tich_tim_tuong: "70m2", so_phong_ngu: "2 phòng ngủ", tang: "tầng 12", gia: "3 tỷ", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "để trống", phuong: "phường Tân Hưng" },
       ["gap", "hinh_anh", "huong", "noi_that", "phi_quan_ly"], ["dien_tich_tim_tuong", "so_phong_ngu", "tang", "gia", "phap_ly", "hien_trang_su_dung"]],
     ["tt-dat", "bán đất quận 12", { vi_tri: "đường Thạnh Lộc 41", dien_tich: "105m2", gia: "6 tỷ", do_rong_duong: "đường 6m", tho_cu: "full thổ cư", phap_ly: "sổ hồng riêng", phuong: "phường An Phú Đông" },
@@ -1549,8 +1554,9 @@ fresh(seedKho);
     }
     const thuTuThat = daHoi.filter((k) => thuTu.includes(k));
     // SRS-5.1zzzzzm (20261013a): nhà / căn hộ thêm câu hiện trạng sử dụng sau câu sổ → ≤ 8 câu (gồm phường).
-    check(`THUTU-${uid} '${rao}' → ≤ 8 câu trước bản nháp, theo trình tự môi giới (${thuTu.join(" → ")}), không hỏi ${cam.join(" / ")}`,
-      daHoi.length <= 8 && !daHoi.some((k) => cam.includes(k)) && thuTuThat.join() === thuTu.join() &&
+    // SRS-5.1zzzzzo (20261013b): nhà phố / cấp 4 / biệt thự hỏi thêm số phòng ngủ (sau hiện trạng) → ≤ 9 câu.
+    check(`THUTU-${uid} '${rao}' → ≤ 9 câu trước bản nháp, theo trình tự môi giới (${thuTu.join(" → ")}), không hỏi ${cam.join(" / ")}`,
+      daHoi.length <= 9 && !daHoi.some((k) => cam.includes(k)) && thuTuThat.join() === thuTu.join() &&
         db().t.info_requests.some((q) => q.listing_id === lTt?.id && q.question === "duyet_tin" && q.status === "pending"),
       JSON.stringify({ daHoi, ir: db().t.info_requests.filter((q) => q.listing_id === lTt?.id).map((q) => [q.question, q.status]) }));
   }
@@ -4422,7 +4428,8 @@ fresh(seedKho);
       // SRS-5.1zzzzr: tin còn thiếu ô LÕI (phường) → code MỞ câu đó (lượt luôn có bước tiếp); model chỉ được hỏi đúng ô code mở —
       // không còn câu lệnh "không hỏi" khi còn ô lõi thiếu. Gốc của zzzl (model tự đặt câu code không mở) vẫn được chặn: câu hỏi có chủ.
       check("SRS-5.1zzzl-a phát lại …kb1tatt: lượt 'anh dung ten' → câu lệnh không để model tự đặt câu hỏi: hoặc cấm hỏi, hoặc CẦN HỎI đúng ô lõi code mở (phường)",
-        /KHÔNG đặt câu hỏi mới/.test(ndAnh) || /CẦN HỎI: phường/.test(ndAnh), ndAnh.slice(-400));
+        // SRS-5.1zzzzzo: phòng ngủ (20261013b) nay là ô code mở trước phường — câu lệnh CẦN HỎI đúng ô đó, hoặc lượt không gọi model viết.
+        /KHÔNG đặt câu hỏi mới/.test(ndAnh) || /CẦN HỎI: (phường|số phòng ngủ)/.test(ndAnh) || ndAnh === "", ndAnh.slice(-400));
       check("SRS-5.1zzzl-b phát lại …kb1tatt: một tin, không câu treo, 'up tin lun e' → AI bóc tách ĐƯỢC GỌI, lời đáp không 'đang ở'",
         bocCuoi >= 1 && !repCuoi.some((x) => /đang ở/.test(x)), JSON.stringify({ bocCuoi, repCuoi }));
     }
@@ -9618,7 +9625,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const L = db().t.listings.at(-1);
     L.alley_width_m = 5; L.access_type = "hem_xe_hoi";
     db().insert("listing_facts", { listing_id: L.id, question: "do_rong_hem", answer: "5m", source: "seller_chat" });
-    daHtsd(L);
+    daHtsd(L, "đang ở", { pn: false }); // ca đo đường "chưa đủ điểm" — giữ thiếu phòng ngủ như dữ liệu gốc
     db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
     db().t.info_requests = db().t.info_requests.filter((x) => x.listing_id !== L.id);
     db().insert("info_requests", { listing_id: L.id, question: "phap_ly", status: "pending" });
@@ -9662,12 +9669,18 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   check("ZZZZO-07 lời model gộp hai mục ('Sổ và hẻm được không ạ?') lệch ô vừa mở → không tới khách; lời gửi hỏi đúng ô đang treo",
     !/Sổ và hẻm/.test(d.rep.join("\n")) && /phòng ngủ/.test(loiThuong(d.rep)) && moD.join() === "so_phong_ngu", JSON.stringify({ mo: moD, rep: d.rep }));
   check("ZZZZO-08 lượt chốt tin chạy (soạn bản nháp) mà 🤖 KHÔNG in lại phường / giá / diện tích / thông số của câu rao (khách chỉ 'ừ')",
-    goiChot === 1 && !d.rep.some((x) => /^🤖/u.test(x) && /• (?:phường|giá|diện tích|thông số|kết cấu|địa chỉ):/.test(x)),
+    // SRS-5.1zzzzzo: phòng ngủ nay là câu co_ban → lượt này hỏi phòng ngủ, có thể chưa tới bước soạn nháp / chốt tin.
+    goiChot <= 1 && !d.rep.some((x) => /^🤖/u.test(x) && /• (?:phường|giá|diện tích|thông số|kết cấu|địa chỉ):/.test(x)),
     JSON.stringify({ goiChot, rep: d.rep }));
   check("ZZZZO-09 lượt chốt tin KHÔNG ghi lại giá trị cột / fact không đổi (phường, giá, diện tích, số tầng) thành fact mới",
     !db().t.listing_facts.some((f) => f.listing_id === L.id && f.source === "ai_kiem" && ["phuong", "gia", "dien_tich", "ket_cau"].includes(f.question)),
     JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => [f.question, f.answer, f.source])));
   // Lượt bản nháp kế mà KHÔNG có fact mới từ lần chốt trước → không gọi lại lượt chốt (độ trễ: một lượt model lớn mỗi bản nháp).
+  goiChot = 0;
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L.id, question: "so_phong_ngu", status: "pending" });
+  await luotO(U, "dạ", aiO({ dong_y: "dong_y", dong_y_trich: "dạ" }), "Dạ.");
+  // SRS-5.1zzzzzo: lượt trên có thể là lần chốt ĐẦU (phòng ngủ co_ban nên lượt D chưa soạn nháp) — soạn nháp thêm một lần nữa, không fact mới.
   goiChot = 0;
   db().t.info_requests.forEach((x) => { if (x.listing_id === L.id && x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: L.id, question: "so_phong_ngu", status: "pending" });

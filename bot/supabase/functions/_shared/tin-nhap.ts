@@ -419,12 +419,16 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   }
   // FR-241 j (10 ca test làm khó 28/09): khách gõ "dang o" → bản tin in "🛋 Nội thất: hiện: dang o" — hiện trạng sử dụng không phải
   // nội thất, và chữ không dấu in nguyên. Tách dòng riêng; mấy cụm hiện trạng quen gõ không dấu thì in có dấu.
-  them("🛋", "Nội thất", [l.furnishing ?? fact("noi_that")]);
+  // SRS-5.1zzzzzo (chủ dự án 13/10/2026: "cái gì ko có thì ko được ghi vào, sao nó lại ghi thêm nội thất"; bản nháp in "🛋 Nội thất: khong"): mã
+  // cột in thành chữ, "không có nội thất" thì không in dòng nào.
+  them("🛋", "Nội thất", [l.furnishing === "khong" ? null : l.furnishing === "full" ? "đầy đủ" : l.furnishing === "co_ban" ? "cơ bản" : l.furnishing ?? fact("noi_that")]);
   // SRS-5.1zzzzz (khách mô phỏng 11/10: "🏗 Kết cấu: … · cũ, còn sử dụng được" + "🏠 Hiện trạng: bác cũ rồi nhưng còn sử dụng được"): một ý
   // một dòng — hiện trạng sử dụng cùng ý tình trạng nhà đã in ở dòng kết cấu thì không in lần hai.
-  const htSuDung = chuanHienTrang(fact("hien_trang_su_dung"));
+  // SRS-5.1zzzzzo ("hiện trạng trống chứ chữ trống ko ai đọc mà hiểu được"): hiện trạng sử dụng in kèm nhãn khi chữ chưa tự nói nó là gì.
+  const htSuDung0 = chuanHienTrang(fact("hien_trang_su_dung"));
+  const htSuDung = htSuDung0 && !/^hiện\s*trạng/iu.test(htSuDung0) ? `hiện trạng ${htSuDung0.charAt(0).toLowerCase()}${htSuDung0.slice(1)}` : htSuDung0;
   const htNha = fact("hien_trang");
-  them("📝", "Thêm", [htNha, htSuDung && htNha && trungY(htSuDung, htNha) ? null : htSuDung, ...boSungThem]);
+  them("📝", "Thêm", [htNha, htSuDung0 && htNha && trungY(htSuDung0, htNha) ? null : htSuDung, ...boSungThem]);
   if (thue) {
     them("📝", "Điều kiện thuê", [
       fact("tien_coc"),

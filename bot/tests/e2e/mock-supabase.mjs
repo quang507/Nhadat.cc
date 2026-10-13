@@ -78,6 +78,7 @@ export class FakeDB {
     const CB = (k, p, deal = null) => [k, p, "co_ban", deal];
     // 20260909i: nhóm sau_dang — hỏi bù SAU khi lên kệ; chat-reply không đợi nhóm này trước bản nháp.
     const SD = (k, p, deal = null) => [k, p, "sau_dang", deal];
+    // 20261013b: so_phong_ngu lên co_ban 18 (nhà phố / cấp 4 / biệt thự).
     // 20261013a: hien_trang_su_dung lên co_ban 17 (nhà phố / cấp 4 / căn hộ / biệt thự) — hỏi trước bản nháp.
     const SAU_NHA = [SD("so_wc", 30), SD("cach_mat_tien", 31), SD("hem_thong", 32), SD("ngap_nuoc", 33), SD("the_chap", 35, "cho_thue"), SD("tien_ich_gan", 36), SD("ly_do_ban", 37), SD("thuong_luong", 38)];
     // 20260925i (FR-229): tin BÁN hỏi pháp lý trước bản nháp — sổ 16 → đứng tên 17 → thế chấp 18 → quy hoạch 19 → tranh chấp 20
@@ -96,11 +97,11 @@ export class FakeDB {
       dat_kinh_doanh: [CB("vi_tri", 2), CB("dien_tich", 3), CB("gia", 4), CB("muc_dich", 5), CB("thoi_han_su_dung", 15), CB("phap_ly", 16), CB("phuong", 22), ...PL(true, false), SD("do_rong_duong", 40), SD("hinh_thuc_thue_dat", 41), SD("gap", 43), SD("hinh_anh", 45)],
       kho_xuong: [CB("vi_tri", 2), CB("dien_tich", 3), CB("duong_container", 4), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16), CB("phuong", 22), ...PL(true, true), SD("chieu_cao", 40), SD("tai_trong_san", 41), SD("tram_bien_ap", 42), SD("gap", 43), SD("hinh_anh", 45), SD("thoi_han_thue", 46, "cho_thue"), SD("xu_ly_nuoc_thai", 47), SD("thoi_han_su_dung", 48)],
       chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("gia", 12), CB("phuong", 22)],
-      nha_pho: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("do_rong_hem", 5), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16, "ban"), CB("hien_trang_su_dung", 17), CB("phuong", 22), ...PL(true, true), ...SAU_NHA, SD("tang_phu", 30), SD("tiem_nang", 39), SD("noi_that", 40, "cho_thue"), SD("thoi_han_thue", 41, "cho_thue"), SD("truot_gia", 42, "cho_thue"), SD("gap", 43), SD("so_phong_ngu", 44), SD("hinh_anh", 45)],
-      nha_cap4: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("do_rong_hem", 4), CB("hien_trang", 5), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16, "ban"), CB("hien_trang_su_dung", 17), CB("phuong", 22), ...PL(true, true), SD("tang_phu", 30), SD("tiem_nang", 39), SD("noi_that", 40, "cho_thue"), SD("thoi_han_thue", 41, "cho_thue"), SD("gap", 43), SD("so_phong_ngu", 44), SD("hinh_anh", 45)],
+      nha_pho: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("do_rong_hem", 5), CB("so_phong_ngu", 18), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16, "ban"), CB("hien_trang_su_dung", 17), CB("phuong", 22), ...PL(true, true), ...SAU_NHA, SD("tang_phu", 30), SD("tiem_nang", 39), SD("noi_that", 40, "cho_thue"), SD("thoi_han_thue", 41, "cho_thue"), SD("truot_gia", 42, "cho_thue"), SD("gap", 43), SD("hinh_anh", 45)],
+      nha_cap4: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("do_rong_hem", 4), CB("hien_trang", 5), CB("so_phong_ngu", 18), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16, "ban"), CB("hien_trang_su_dung", 17), CB("phuong", 22), ...PL(true, true), SD("tang_phu", 30), SD("tiem_nang", 39), SD("noi_that", 40, "cho_thue"), SD("thoi_han_thue", 41, "cho_thue"), SD("gap", 43), SD("hinh_anh", 45)],
       chung_cu: [CB("vi_tri", 2), CB("dien_tich_tim_tuong", 3), CB("so_phong_ngu", 4), CB("tang", 5), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16, "ban"), CB("hien_trang_su_dung", 17), CB("phuong", 22), ...PL(false, false), SD("huong", 40), SD("noi_that", 41), SD("phi_quan_ly", 42), SD("gap", 43), SD("hinh_anh", 45), SD("thoi_han_thue", 46, "cho_thue")],
       dat: [CB("vi_tri", 2), CB("dien_tich", 3), CB("gia", 4), CB("do_rong_duong", 5), CB("tho_cu", 6), CB("phap_ly", 16), CB("phuong", 22), ...PL(true, false), SD("huong", 40), SD("ha_tang", 41), SD("xay_dung", 42), SD("gap", 43), SD("hinh_anh", 45)],
-      biet_thu: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("do_rong_hem", 5), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16, "ban"), CB("hien_trang_su_dung", 17), CB("phuong", 22), ...PL(true, true), SD("tang_phu", 30), SD("san_vuon", 40), SD("noi_that", 41, "cho_thue"), SD("khu_compound", 42), SD("gap", 43), SD("so_phong_ngu", 44), SD("hinh_anh", 45), SD("thoi_han_thue", 46, "cho_thue")],
+      biet_thu: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("do_rong_hem", 5), CB("so_phong_ngu", 18), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("phap_ly", 16, "ban"), CB("hien_trang_su_dung", 17), CB("phuong", 22), ...PL(true, true), SD("tang_phu", 30), SD("san_vuon", 40), SD("noi_that", 41, "cho_thue"), SD("khu_compound", 42), SD("gap", 43), SD("hinh_anh", 45), SD("thoi_han_thue", 46, "cho_thue")],
       phong_tro: [CB("vi_tri", 2), CB("dien_tich", 3), CB("noi_that", 4), CB("gia", 12), CB("tien_coc", 14), CB("phuong", 22), SD("gio_giac", 40), SD("gia_dien_nuoc", 41), SD("gap", 43), SD("hinh_anh", 45)],
       mat_bang: [CB("vi_tri", 2), CB("dien_tich", 3), CB("mat_tien", 4), CB("gia", 12), CB("tien_coc", 13), CB("phuong", 22), SD("nganh_hang_phu_hop", 40), SD("thoi_han_thue", 41), SD("truot_gia", 42), SD("gap", 43), SD("hinh_anh", 45)],
     };
@@ -143,7 +144,7 @@ export class FakeDB {
     else if (l.property_type === "phong_tro") { kc = l.furnishing || has("noi_that") ? 15 : 0; if (!kc) thieu.push("nội thất có gì"); }
     else if (l.property_type === "mat_bang") { kc = l.floors || has("ket_cau") || has("nganh_hang_phu_hop") ? 15 : 0; if (!kc) thieu.push("mấy tầng, hợp ngành gì"); }
     else {
-      const coKc = l.floors != null || l.floors_text || has("ket_cau") || l.floor != null || has("tang") || (l.property_type === "nha_cap4" && has("hien_trang"));
+      const coKc = l.floors != null || l.floors_text || has("ket_cau") || l.floor != null || has("tang") || l.property_type === "nha_cap4"; // 20261013b: nhà cấp 4 là nhà trệt
       const coPn = l.bedrooms != null || has("so_phong_ngu");
       kc = (coKc ? 8 : 0) + (coPn ? 7 : 0);
       if (!coKc) thieu.push("mấy tầng"); if (!coPn) thieu.push("mấy phòng ngủ");

@@ -4226,7 +4226,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const [{ error: exErr }, { error: neoErr }, { data: thieuG, error: thErr }] = await Promise.all([
           voRong ? client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id) : Promise.resolve({ error: null }),
           client.from("sellers").update({ active_listing_id: tg.id }).eq("id", sellerRow.id),
-          client.from("listing_missing_facts").select("fact_key, priority, nhom").eq("listing_id", tg.id).order("priority").limit(12),
+          client.from("listing_missing_facts").select("fact_key, priority, nhom").eq("listing_id", tg.id).order("priority").limit(40),
         ]);
         if (exErr || neoErr || thErr) await ghiLoi(client, "chat-reply gan manh(bo vo rong)", (exErr ?? neoErr ?? thErr)!.message);
         const keG = chonCauKe([], ((thieuG ?? []) as Array<{ fact_key: string; priority?: number; nhom?: string }>).filter((f) => f.nhom !== "sau_dang"));
@@ -4306,7 +4306,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         }
         if (laCheDoAi && pendingReq?.listing_id) {
           const { data: thieuAi, error: thErr } = await client.from("listing_missing_facts").select("fact_key, priority")
-            .eq("listing_id", pendingReq.listing_id).order("priority").limit(20);
+            .eq("listing_id", pendingReq.listing_id).order("priority").limit(40);
           if (thErr) await ghiLoi(client, "chat-reply cau con hoi (ai)", thErr.message);
           // Đợt 3 (02/10/2026): danh sách cũng là nơi AI CHỌN câu kế (`cau_ke`) → gồm cả câu lõi (code `docKhongCanHoi` vẫn không
           // cho bỏ câu lõi) và các câu NHÁNH re-nhanh có thể mở (đánh dấu "(nhánh)" — AI chỉ chọn khi đúng hoàn cảnh).
@@ -5215,7 +5215,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           } else {
             const canKe = pendingReq?.listing_id ?? cans[0].id;
             const { data: thieu } = await client.from("listing_missing_facts").select("fact_key, priority, nhom")
-              .eq("listing_id", canKe).order("priority").limit(8);
+              .eq("listing_id", canKe).order("priority").limit(40);
             const ke = chonCauKe([...(pendingReq ? [pendingReq.question] : [])], (await thieuCoReNhanh(client, canKe, (thieu ?? []) as Array<{ fact_key: string; priority: number; nhom: string | null }>, pendingReq ? [pendingReq.question] : [], text)).filter((f) => f.nhom !== "sau_dang"));
             if (ke) {
               const { error: irErr } = await client.from("info_requests").insert({ listing_id: canKe, question: ke, status: "pending" });
@@ -5413,7 +5413,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // Hỏi MỘT câu chung cho cả lô (kết cấu / pháp lý…) — mở trên căn đầu, câu trả lời
         // kế tiếp áp cho căn đó; các căn còn lại vòng hỏi bù hỏi sau.
         const { data: thieuLo } = await client.from("listing_missing_facts").select("fact_key, priority, nhom")
-          .eq("listing_id", dau!.id).order("priority").limit(8);
+          .eq("listing_id", dau!.id).order("priority").limit(40);
         const keLo = chonCauKe(["gia", "dien_tich"], (await thieuCoReNhanh(client, dau!.id, thieuLo)).filter((f) => f.nhom !== "sau_dang" && !["vi_tri", "phuong", "gap"].includes(f.fact_key)));
         if (keLo) {
           const { error: irLo } = await client.from("info_requests").insert({ listing_id: dau!.id, question: keLo, status: "pending" });
@@ -7892,8 +7892,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const [{ data: lstNow }, { data: nextFactsTho }, { data: daHetHan }] = await Promise.all([
         client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, ward, deal, boc_tach, property_type, street, location_raw, floors_text, bedrooms, price_vnd, area_m2, legal_status")
           .eq("id", pendingReq.listing_id).maybeSingle(),
+        // SRS-5.1zzzzzo: lấy đủ (40) — view xếp theo priority MỌI nhóm, 12 dòng đầu từng cắt mất câu phường (22) khi sau_dang 17–21 chen vào.
         client.from("listing_missing_facts").select("fact_key, priority, nhom")
-          .eq("listing_id", pendingReq.listing_id).order("priority").limit(12),
+          .eq("listing_id", pendingReq.listing_id).order("priority").limit(40),
         // Câu đã bị NÉ (expired) thì KHÔNG mở lại ngay trong cùng vòng — lần 3
         // kịch bản thật: địa chỉ hết hạn xong được chọn lại làm câu kế, hết hạn,
         // chọn lại… Vòng hỏi bù (cron) hỏi lại sau.
@@ -8669,7 +8670,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // tích, diện tích → hỏi giá…), trong nhóm cơ bản.
         const { data: firstFacts } = await client.from("listing_missing_facts")
           // FR-229: 12 như các chỗ khác — thêm 4 câu pháp lý thì 8 câu đầu không còn tới câu phường (gia → phuong).
-          .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(12);
+          .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(40);
         const vuaRao = [phuongRao ? "phuong" : "", areaM ? "dien_tich" : "", priceM ? "gia" : ""].filter(Boolean);
         // 01/10/2026: câu AI thấy không áp dụng cho căn này (lời chủ nhà trong câu rao) — bỏ từ câu hỏi ĐẦU (`khongHoiAi`).
         const khongHoiDau = await khongHoiAi(newLst.id, null, (firstFacts ?? []).map((f) => f.fact_key));
@@ -8887,7 +8888,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const daGhi = [...new Set(factRoi.map((f) => nhanGhi(f.question)))].join(", ");
         if (canNeo.status === "cho_thong_tin" || (canNeo.can_chu_duyet && !canNeo.chu_duyet_at)) {
           const [{ data: thieuRoi }, { data: hetHanRoi }] = await Promise.all([
-            client.from("listing_missing_facts").select("fact_key, priority, nhom").eq("listing_id", canNeo.id).order("priority").limit(12),
+            client.from("listing_missing_facts").select("fact_key, priority, nhom").eq("listing_id", canNeo.id).order("priority").limit(40),
             client.from("info_requests").select("question").eq("listing_id", canNeo.id).eq("status", "expired"),
           ]);
           const hh = new Set((hetHanRoi ?? []).map((q) => q.question));
