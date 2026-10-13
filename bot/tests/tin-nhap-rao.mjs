@@ -131,10 +131,12 @@ la("giá dãy số lẻ triệu '8.500.000' giữ nguyên (không làm tròn th�
 
 const nha = dung(NHA_PHO);
 const dongNha = nha.split("\n");
-la("dòng 1 câu mở (KHÔNG kèm điểm), dòng 2 TIÊU ĐỀ, dòng 3 địa chỉ 📍 viết HOA, dòng 4 GIÁ 💰",
-  /^📋 Em sẽ rao như vầy nhé anh:$/.test(dongNha[0]) && dongNha[1] === tdNha && /^📍 Hẻm 5m Nguyễn Trãi/.test(dongNha[2]) && /^💰 /.test(dongNha[3]),
-  dongNha.slice(0, 4).join(" | "));
-la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 7 tỷ 2 \(còn thương lượng\)$/.test(dongNha[3]), dongNha[3]);
+// SRS-5.1zzzzzo (chủ dự án 13/10/2026: "giá để ở cuối cùng"): dòng 💰 là dòng CUỐI của thân tin.
+const dongGiaNha = dongNha.find((d) => d.startsWith("💰")) ?? "";
+la("dòng 1 câu mở (KHÔNG kèm điểm), dòng 2 TIÊU ĐỀ, dòng 3 địa chỉ 📍 viết HOA, GIÁ 💰 là dòng cuối thân tin",
+  /^📋 Em sẽ rao như vầy nhé anh:$/.test(dongNha[0]) && dongNha[1] === tdNha && /^📍 Hẻm 5m Nguyễn Trãi/.test(dongNha[2]) && (dongNha[dongNha.findIndex((d) => /^Độ đầy đủ/.test(d)) - 1] ?? "").startsWith("💰"),
+  dongNha.join(" | "));
+la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 7 tỷ 2 \(còn thương lượng\)$/.test(dongGiaNha), dongGiaNha);
 la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước, không lặp (17/09)", dongNha.some((d) => d === "📝 Thêm: nhà mới sửa 2024 · khu an ninh · gần chợ Bình Tây") /* SRS-5.1zzzzzn: tình trạng nhà xuống dòng Thêm */, dongNha.join(" | "));
 la("có đủ khối thông số: diện tích, kết cấu, đường vào, hướng, pháp lý",
   /📐 Diện tích: 60m² · dài 15m$/m.test(nha) && /^🏫 Tiện ích: mặt tiền 4m · gần chợ An Đông · trường Hùng Vương$/m.test(nha) && /🏗 Quy mô: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC$/m.test(nha) &&
@@ -313,5 +315,17 @@ console.log(`\n${dat} đạt · ${hong} hỏng`);
   la("TRONG-2 (cách nói mới) nội thất 'full' → '🛋 Nội thất: đầy đủ'; 'để trống từ tết' → 'hiện trạng để trống từ tết'", /🛋 Nội thất: đầy đủ/u.test(b2) && /hiện trạng để trống từ tết/u.test(b2), b2);
 }
 
+// SRS-5.1zzzzzo (test Zalo 13/10 10:50): ý thêm AI xếp tiện ích → dòng 🏫 Tiện ích; AI chép thiếu chữ "có" vẫn nhận (so lỏng).
+{
+  const f0 = NHA_PHO.facts.filter((f) => f.question !== "bo_sung" && f.question !== "tien_ich_gan");
+  const facts = [...f0, { question: "bo_sung", answer: "có sân rộng, phòng khách rộng, bếp riêng" }, { question: "bo_sung", answer: "gần chợ Gấu Đông Thạnh" }, { question: "bo_sung", answer: "phù hợp xây dựng lại" }];
+  const b = soanTinNhap({ l: NHA_PHO.l, facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD, quyMo: ["sân rộng, phòng khách rộng, bếp riêng"], tienIch: ["gần chợ Gấu Đông Thạnh"] });
+  const d = b.split("\n");
+  const qm = d.find((x) => x.startsWith("🏗")) ?? "", ti = d.find((x) => x.startsWith("🏫")) ?? "", th = d.find((x) => x.startsWith("📝")) ?? "";
+  la("TIENICH-AI-1 (ca gốc) 'gần chợ Gấu Đông Thạnh' → 🏫 Tiện ích; 'có sân rộng…' (AI chép thiếu 'có') → 🏗 Quy mô; 📝 Thêm chỉ còn ý khác",
+    ti.includes("gần chợ Gấu Đông Thạnh") && qm.includes("sân rộng, phòng khách rộng, bếp riêng") && th.includes("phù hợp xây dựng lại") && !th.includes("chợ Gấu") && !th.includes("sân rộng"), b);
+  const b2 = soanTinNhap({ l: NHA_PHO.l, facts: [...f0, { question: "bo_sung", answer: "cách trường cấp 2 khoảng 300m" }], diem: 80, thieu: [], soAnh: 0, lai: false, cauTD, tienIch: ["cách trường cấp 2 khoảng 300m"] });
+  la("TIENICH-AI-2 (cách nói mới) 'cách trường cấp 2 khoảng 300m' → 🏫 Tiện ích, không ở 📝 Thêm", /🏫 Tiện ích:.*cách trường cấp 2 khoảng 300m/u.test(b2) && !/📝 Thêm:.*trường cấp 2/u.test(b2), b2);
+}
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");

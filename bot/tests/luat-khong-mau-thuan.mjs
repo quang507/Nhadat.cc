@@ -47,7 +47,7 @@ ok("(2) ví dụ ĐÚNG không nói con số phí (chủ của con số phí là
 const loi = ["Dạ phí bên em 1% giá chốt ạ. Phí 1% vậy được không anh? Nhà mình mấy tầng ạ?"];
 const ra = chanPhiChuaXacNhan(loi, null, cauPhi("unknown", "ban"));
 ok("(3) chanPhiChuaXacNhan: thay câu khẳng định có % bằng câu cauPhi, GIỮ nguyên mọi câu hỏi",
-  /mấy tầng ạ\?/.test(ra.join(" ")) && /Phí 1% vậy được không anh\?/.test(ra.join(" ")) && /mức tuỳ chính chủ hay môi giới/.test(ra.join(" ")) && !/1% giá chốt ạ\./.test(ra.join(" ")),
+  /mấy tầng ạ\?/.test(ra.join(" ")) && /Phí 1% vậy được không anh\?/.test(ra.join(" ")) && /chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(ra.join(" ")) /* SRS-5.1zzzzzp: câu chưa rõ vai nêu cả hai mức */ && !/em 1% giá chốt ạ\./.test(ra.join(" ")),
   JSON.stringify(ra));
 const nx = boCauNhanXet("Dạ hẻm xe hơi là khách chuộng lắm anh. Nhà mình mấy tầng ạ?", ["hẻm xe hơi là khách chuộng lắm anh"]);
 ok("(3) boCauNhanXet bỏ lời đoán người mua, GIỮ câu hỏi", nx === "Nhà mình mấy tầng ạ?" || /^Nhà mình mấy tầng ạ\?$/.test(nx ?? ""), String(nx));

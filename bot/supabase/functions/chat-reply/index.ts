@@ -37,7 +37,7 @@ import {
   tenHang, // SRS-5.1zzs: tên hạng Đồng / Bạc / Vàng cho câu lên kệ
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
-import { type FactNhap, soanTinNhapHaiBong, type TinNhapRow } from "../_shared/tin-nhap.ts";
+import { chuanY, type FactNhap, soanTinNhapHaiBong, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
   aiDocThem, bocTachTaoTin, boBaoLai, bongTrichXuat, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, dongFact, dongVuaLuu, HIEU_LUOT, KHONG_BOC, NGUON_AI, nhanNgan, phuongKemQuanCu, traLoiCauBot, TU_ANH, vuaLuuBan, vuaLuuMua,
@@ -2879,21 +2879,24 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
      * bản tin vừa dựng, code kiểm cụm dựa vào + số (`khenHopLe`), rồi lượt soát nhận xét đọc lại: soát bỏ bất kỳ vế nào, hay soát không
      * chạy được, thì bỏ cả câu khen. Chỉ chế độ `ai`; không có câu khen thay thế.
      */
-    const khenChoNhap = async (banTin: string, yThem: string[] = []): Promise<{ khen: string | null; quyMo: string[] }> => {
-      if (!anthropicS || !laCheDoAi) return { khen: null, quyMo: [] };
+    const khenChoNhap = async (banTin: string, yThem: string[] = []): Promise<{ khen: string | null; quyMo: string[]; tienIch: string[] }> => {
+      if (!anthropicS || !laCheDoAi) return { khen: null, quyMo: [], tienIch: [] };
       try {
         const kq = await vietKhenNhapBangModel(anthropicS as unknown as Parameters<typeof vietKhenNhapBangModel>[0], MODEL, banTin, cachGoi, yThem);
         await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
         // SRS-5.1zzzzzn: ý AI xếp vào "Quy mô" chỉ nhận khi có đúng trong danh sách ý thêm (tin-nhap.ts so lại lần nữa khi in).
-        const quyMo = kq.quyMo.filter((q) => yThem.some((y) => y.trim() === q.trim()));
+        // SRS-5.1zzzzzo: so lỏng (`chuanY`: bỏ dấu, bỏ "có" đầu) — AI hay chép thiếu chữ "có"; trả lại đúng chữ ý thêm gốc.
+        const khopY = (ds: string[]) => yThem.filter((y) => ds.some((q) => chuanY(q) === chuanY(y)));
+        const quyMo = khopY(kq.quyMo);
+        const tienIch = khopY(kq.tienIch).filter((y) => !quyMo.includes(y));
         const k = khenHopLe(kq.khen, kq.duaTren, banTin);
-        if (!k) return { khen: null, quyMo };
+        if (!k) return { khen: null, quyMo, tienIch };
         const loiChu = [...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n");
         const sach = await soatNhanXet(k, loiChu, banTin);
-        return { khen: nhanXetAiXong && sach === k ? k : null, quyMo };
+        return { khen: nhanXetAiXong && sach === k ? k : null, quyMo, tienIch };
       } catch (e) {
         await ghiLoi(client, "chat-reply khen ban nhap", e);
-        return { khen: null, quyMo: [] };
+        return { khen: null, quyMo: [], tienIch: [] };
       }
     };
     // 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds … cần AI hiểu"): câu trong bảng theo loại mà AI thấy KHÔNG áp dụng cho
@@ -3390,7 +3393,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const mocVan = theoDoiVan(soVan, () => sach);
       // SRS-5.1zzzzj: con số phí chỉ do `cauPhi(vaiPhi(…))` nói — lời model (hay câu nào) nói "1%" / "0,5%" khi vai chưa xác nhận (hoặc
       // sai số của vai) → thay bằng đúng câu `cauPhi`. Lưới chống bịa, luôn bật; không đụng câu hỏi.
-      sach = chanPhiChuaXacNhan(sach, phanTramPhi(vaiPhi(sellerRow), dealNguoi), cauPhi(vaiPhi(sellerRow), dealNguoi)); mocVan("chanPhiChuaXacNhan");
+      sach = chanPhiChuaXacNhan(sach, phanTramPhi(vaiPhi(sellerRow), dealNguoi), cauPhi(vaiPhi(sellerRow), dealNguoi), vaiPhi(sellerRow) === "unknown" && dealNguoi !== "cho_thue"); mocVan("chanPhiChuaXacNhan");
       // 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo): "Tin căn Trần Phú của anh đang rao" khi người này KHÔNG còn tin nào mở (căn
       // duy nhất vừa ẩn, căn Trần Phú chưa từng được mở). Lớp lỗi: lời khẳng định TRẠNG THÁI TIN do model (hay câu tiền định) viết
       // mà không đối chiếu DB — `boHuaDaDang` trước chỉ áp ở r2 khi tin chưa lên kệ, r3 (chăm sóc) không qua. Đây là đường ra DUY
@@ -3744,6 +3747,16 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ten: tenBot, ...o });
     /** SRS-5.1zzzzz: câu hỏi vai để báo đúng mức phí (một chỗ viết). SRS-5.1zzzzzn: lời chủ dự án 13/10/2026. */
     const cauHoiVaiPhi = () => `Cho em hỏi ${cachGoi} là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé.`;
+    /**
+     * SRS-5.1zzzzzo (chủ dự án 13/10/2026: "mà chú biết phí bên cháu chưa ạ, thì nói là xin phép báo mức phí của bên cháu khi giao dịch
+     * thành công luôn"): lúc tin lên kệ BÁO THẲNG phí thay cho câu hỏi "biết phí bên em chưa" (khoá `dang_xong_phi` cũ). Con số chỉ do
+     * `cauPhi(vaiPhi(…))` nói; vai chưa xác nhận thì câu không số + câu hỏi vai (lượt khách nói vai báo số — `dapPhiRoVai` / `dapPhiR3`).
+     */
+    const cauBaoPhiLenKe = (deal: string | null | undefined): string => {
+      const phi = cauPhi(vaiPhi(sellerRow), deal, { benEm: true });
+      // Vai chưa rõ: câu phí đã nêu cả hai mức (PHI_THAN.chung) — không hỏi thêm vai.
+      return `Em xin phép báo luôn, ${phi} ạ.`;
+    };
     /**
      * SRS-5.1zzzzz: chủ nhà đã duyệt / bảo đăng mà tin chưa lên kệ (`listing_du_dang_tin`: giá, diện tích, phường) — MỘT chỗ nói còn
      * thiếu gì. Thiếu phường: mở câu phường; tra được từ tên đường (và chủ nhà chưa nói không biết) → hỏi xác nhận; không thì nói
@@ -6162,7 +6175,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         if (sau && sau.status !== "cho_thong_tin") {
           const nhapDang = soanTinNhapHaiBong({ ...thamNhap, lai: false, daDang: true, ...(await layKhen()) });
           // SRS-5.1zzq: "đăng đi" lên kệ ngay cũng DẪN PHÍ một lần như nhánh duyệt thường (trước đây nhánh này quên).
-          const cauDanPhiDL = daNoiPhiRoi() ? "" : cauTD("dang_xong_phi", { loai: loaiDoc(l.property_type) });
+          const cauDanPhiDL = daNoiPhiRoi() ? "" : cauBaoPhiLenKe((l as { deal?: string | null }).deal ?? dealNguoi);
           const dongHangDL = await dongHangRao();
           const xinDiemDL = cauDanPhiDL ? null : await xinChamDiem(listingId); // SRS-5.1zzzzzl
           return await traLoiSeller([...truoc, nhapDang.than, ...(nhapDang.duoi ? [nhapDang.duoi] : []), cauTD("dang_luon_cuoi") + (dongHangDL ? `\n${dongHangDL}` : "") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : ""), ...(xinDiemDL ? [xinDiemDL] : [])],
@@ -6997,10 +7010,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           const hoiKem = kq.hoiNguoc ?? (kq.loai === "hoi" ? dapAn : undefined);
           kq = { loai: "khop", ...(hoiKem ? { hoiNguoc: hoiKem } : {}) };
           loaiDapAn = dapAnAi;
-        } else if (aiChinh && layChoCauTreo && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question) && kq.loai === "khop" &&
+        } else if (aiChinh && layChoCauTreo && kq.loai === "khop" &&
           // FR-224: AI nói thẳng "tin này KHÔNG trả lời câu đang hỏi" → lệch, với MỌI câu (kể cả câu theo loại nhà AI không có ô).
           // AI nói CÓ mà câu trả lời không qua kiểm → để luật đọc. AI không nói gì (bản cũ) → như trước: chỉ khoá AI có ô.
-          (traLoiAi ? !traLoiAi.co : KHOA_FACT_AI_BIET.has(pendingReq.question)) &&
+          // SRS-5.1zzzzzo (test Zalo 13/10: hỏi địa chỉ, khách "Con đăng theo nội dung này cho Chú" → luật thấy "cho" = "chợ", ghi làm
+          // địa chỉ): vị trí / phường cũng theo AI khi AI ĐÃ nói không trả lời; chỉ khi AI im hẳn thì luật mới đỡ (`CAU_AI_DOC_TRUOC_LUAT_DO`).
+          (traLoiAi ? !traLoiAi.co
+            : pendingReq.question === "vi_tri"
+            ? cheDoAiTreo === "chinh" && !!kqAi?.ket && kqAi.traLoi?.co_tra_loi === false && !datAi.some((d) => ["vi_tri", "duong", "phuong", "quan"].includes(d.khoa))
+            : !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question) && KHOA_FACT_AI_BIET.has(pendingReq.question)) &&
           !dapAnTuTinTruoc && !luatChacCauTreo(pendingReq.question, dapAn)) {
           kq = { loai: "lech" };
         }
@@ -7856,7 +7874,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // phí bị bỏ qua): gật kèm câu hỏi thì câu hỏi được trả lời ở đây (bong bóng tiền định đã soạn, `hoiNguocDap`), không dẫn phí lần hai;
         // câu phí không số thì hỏi luôn vai (câu chúc mừng không có câu hỏi nào khác).
         const dapKemDuyet = hoiNguoc && hoiNguocDap ? (coCauPhiChuaRoVai(hoiNguocDap) ? `${hoiNguocDap}\n${cauHoiVaiPhi()}` : hoiNguocDap) : null;
-        const cauDanPhi = len && !daNoiPhiRoi() && !(dapKemDuyet && coCauPhi(dapKemDuyet)) ? cauTD("dang_xong_phi", { loai: loaiDoc(lstOk?.property_type) }) : "";
+        const cauDanPhi = len && !daNoiPhiRoi() && !(dapKemDuyet && coCauPhi(dapKemDuyet)) ? cauBaoPhiLenKe((lstOk as { deal?: string | null } | null)?.deal ?? dealNguoi) : "";
         // SRS-5.1zzs: dòng hạng đi cùng bong bóng "thêm điểm" (chuyện điểm / hạng ở một chỗ) — bong bóng đầu giữ hai câu ≤ 30 từ (H8e).
         const dongHang = len ? await dongHangRao() : "";
         // SRS-5.1zzzzz: gật mà chưa lên kệ được → nói đúng thứ còn thiếu (một chỗ với nhánh "đăng đi"), không "còn thiếu một chút".
@@ -8084,7 +8102,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const dongCanHoi = nextKey
         ? `CẦN HỎI: ${nhanCanHoi}` +
           (cauCodeTra ? ` — hỏi đúng câu này (có lựa chọn cụ thể): "${cauCodeTra}"` : cauChuSua ? ` — câu bên em hay dùng: "${cauChuSua}", nói lại cho tự nhiên` : "") +
-          (nhanhKe ? ` (hỏi thêm cho rõ chuyện "${nhanhKe.ten}" chủ nhà vừa nhắc — các ý của chuyện này: ${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}; ý nào họ đã nói thì không hỏi lại)` : "")
+          (nhanhKe ? ` (hỏi thêm cho rõ chuyện "${nhanhKe.ten}" chủ nhà vừa nhắc — các ý của chuyện này: ${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}; ý nào họ đã nói thì không hỏi lại)` : "") +
+          // SRS-5.1zzzzzo (chủ dự án 13/10: bot hỏi "Nhà chú trệt, lửng, mấy lầu" khi khách vừa nói "có gác lửng gỗ" — "nó hỏi có xem lại trước khi hỏi ko"):
+          // đọc ĐÃ BIẾT rồi chỉ hỏi phần CÒN THIẾU của ý đó.
+          `. Đọc ĐÃ BIẾT trước: phần nào của ý này chủ nhà đã nói thì không hỏi lại, chỉ hỏi phần còn thiếu (vd đã biết có gác lửng thì chỉ hỏi có lầu nào nữa không)`
         : "";
       // SRS-5.1zzzl (bắn thử …kb1tatt): nhánh không câu kế (`chanNhap`) từng chỉ dặn "không hỏi lại câu em vừa hỏi" — model tự hỏi
       // "hiện trạng", code không mở ô nên lượt sau không có câu treo. Nhánh đó nay cấm hỏi câu mới.
@@ -8270,7 +8291,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // Nối CÙNG bong bóng với lời báo đã đăng (như nhánh duyệt thường): `motCauHoiLuot` chỉ giữ câu hỏi ở bong bóng
       // hỏi cuối, tách bong bóng riêng là nó cắt câu hỏi của bong bóng trước (GOVAP-06 bắt được).
       const cauDanPhiR2 = published && pendingReq.listings?.status === "cho_thong_tin" && !daNoiPhiRoi()
-        ? cauTD("dang_xong_phi", { loai: loaiDoc(lstNow?.property_type) }) : "";
+        ? cauBaoPhiLenKe(pendingReq.listings?.deal ?? dealNguoi) : "";
       if (cauDanPhiR2) sellerReply = sellerReply ? `${sellerReply}\n${cauDanPhiR2}` : cauDanPhiR2;
       return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dapPhiRoVai ? [dapPhiRoVai] : []), ...(dauDangThieu ? [dauDangThieu] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
         ...(dauDangThieu ? { chu_muon_dang: true } : {}),
@@ -8982,7 +9003,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // câu hỏi vai, và lượt khách tự nói vai sau đó báo số (`dapPhiRoVai`, cùng điều kiện nhánh câu treo).
         const cauHoiR3 = hoiR3 ? (hoiR3.caTin ? text : hoiR3.cau) : null;
         const dapR3Tho = cauHoiR3 ? dapHoiNguocTienDinh(cauHoiR3, cachGoi, cauPhi(vaiPhi(sellerRow), dealNguoi, { benEm: true }), hoiR3?.chuDe, botDaNoiGan()) : null;
-        const dapR3 = dapR3Tho && coCauPhiChuaRoVai(dapR3Tho) ? `${dapR3Tho}\n${cauHoiVaiPhi()}` : dapR3Tho;
+        // SRS-5.1zzzzzo: câu phí chưa rõ vai nay nêu cả hai mức — không nối câu hỏi vai.
+        const dapR3 = dapR3Tho;
         if (dapR3 && cauHoiR3) cauDaDap = cauHoiR3;
         if (dapR3 && hoiR3?.caTin) return await traLoiSeller([dapR3], { hoi_nguoc: cauHoiR3, ...(dapR3 !== dapR3Tho ? { hoi_vai_phi: true } : {}) });
         const vaiPhiR3 = vaiPhi(sellerRow);

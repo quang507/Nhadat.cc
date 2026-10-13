@@ -3993,6 +3993,38 @@ chỉ `furnishing` là mã enum in thẳng. (5) `ask-seller` không giới hạn
 `tin-nhap-rao.mjs` TRONG-1 ("khong" không in, "hiện trạng trống") / TRONG-2 (cách nói mới "để trống từ tết", nội thất "đầy đủ"). Ca dựng sẵn tin đo việc khác
 mang luôn câu trả lời phòng ngủ (`daHtsd`, `DAP_PHAP_LY`); ca đo chính câu phòng ngủ tắt bằng `{ pn: false }`. e2e **1302/1302**.
 
+### SRS-5.1zzzzzp · Lời dặn không thành địa chỉ; phường không lấy tên huyện; phí báo thẳng cả hai mức lúc "ok"; tiện ích theo AI; giá cuối tin (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026 sau test Zalo tin Hóc Môn 10:30 và 10:50: "tiện ích phải gom vào đúng tiện ích các thứ, giá để ở cuối cùng, nó hỏi có xem lại
+trước khi hỏi ko"; "mà chú biết phí bên cháu chưa ạ, thì nói là xin phép báo mức phí của bên cháu khi giao dịch thành công luôn"; "với chính chủ đăng bán thì bên
+cháu sẽ lấy mức phí … khi giao dịch thành công, môi giới thì …"; "có đoạn nào cần bot hiểu ko, nếu mà là mệnh lệnh hoặc kiểu ok… báo phí từ lúc khách ok, báo 1
+lần thôi, lồng ghép báo phí vào"]`
+
+**Ca gốc.** (a) Hỏi địa chỉ, chú nhắn "Con đăng theo nội dung này cho Chú nhé" → ghi làm địa chỉ; bài rao sau đó cho địa chỉ "Bùi Công Trừng 200m" (từ "cách
+Bùi Công Trừng 200m"). (b) Hỏi "phường nào, quận nào", cô đáp "nhà cô ở Hóc Môn" → phường "Xã Hóc Môn". (c) Bản nháp: "🏫 Tiện ích: mặt tiền 6m" trong khi "gần
+chợ Gấu" nằm ở "📝 Thêm"; "sân rộng, phòng khách rộng, bếp riêng" không lên Quy mô; giá ở dòng 4. (d) Lên kệ hỏi "Mà chú biết phí bên cháu chưa ạ?". (e) Bot hỏi
+"Nhà chú trệt, lửng, mấy lầu" dù vừa nghe "có gác lửng gỗ".
+
+**Lớp lỗi.** (a) Câu treo địa chỉ / phường là chỗ "AI trống thì luật đỡ" — nhưng "AI trống" gồm cả lúc AI ĐÃ đọc và nói tin không trả lời câu đang hỏi; luật dò
+địa chỉ trên chữ bỏ dấu thấy "cho" = "chợ" (đoán bằng từ khoá trên chữ bỏ dấu). (b) Xã mới mang tên huyện cũ: trích dẫn gọi tên huyện trơn vẫn qua kiểm "trích
+có nhắc phường". (c) Xếp ý thêm theo vị trí fact; khớp ý AI chép lại bằng so chữ tuyệt đối. (d) Câu dẫn phí là câu hỏi, khách phải hỏi lại mới biết phí.
+
+**Sửa.** (a) `chat-reply`: câu treo `vi_tri` — AI đã đọc (`tra_loi.co_tra_loi = false`) và không đưa ô địa chỉ nào (vị trí / đường / phường / quận) → lệch, luật
+không ghi; AI im hẳn thì luật đỡ như cũ. `boc-rao.ts`: "cách đường X 200m" là `cach_mat_tien`, không phải `vi_tri`. (b) `kiemDeXuat` phường: xã có tên trùng huyện
+cũ (đọc `quan_cu` trong bảng phường, không chép tay danh sách) mà trích gọi tên trơn, không có chữ "xã / phường / thị trấn" đứng trước → bỏ
+(`phuong_la_ten_huyen_cu`). (c) Lượt câu khen trả thêm `tien_ich` (ý thêm về xung quanh căn) → dòng 🏫 Tiện ích; ý AI chép lại so lỏng (`chuanY`: bỏ dấu, bỏ "có"
+đầu); dòng 💰 in cuối thân tin. (d) `cauBaoPhiLenKe`: lúc tin lên kệ (sau "ok", một lần — `daNoiPhiRoi`) báo thẳng "Em xin phép báo luôn, phí bên em …". Chưa rõ
+vai: `PHI_THAN.chung` nay nêu CẢ HAI mức ("chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt") — thay quyết định 09/10 "chưa rõ vai thì không số"; lưới
+`chanPhiChuaXacNhan` nhận câu hai mức, `FEE_RULES` (code + bản đè DB `fee_rules`) nói cùng ý; bất biến e2e PHÍ cho phép câu hai mức. (e) Câu lệnh CẦN HỎI r2 dặn
+đọc ĐÃ BIẾT, chỉ hỏi phần còn thiếu của ý.
+
+**Chỗ khác cùng lớp.** (a) Câu treo phường giữ đường cũ (gật phường bot gợi ý "ừ" — AI có thể nói `tra_loi` false; đã có lưới riêng `tenPhuongCot` + gợi ý); luật
+dò phường `timPhuongTrongCau` đã bỏ cụm trùng tên quận cũ. (d) Câu hỏi vai lần hai (`hoiVaiPhi`) giữ — khách hỏi phí lần nữa khi chưa rõ vai.
+
+**Kiểm.** e2e VITRI-LENH-01/01b (đỏ khi bỏ nhánh `vi_tri`), PHIKE-01/01b «ok» (báo phí hai mức một lần), PHI-*/RN-*/ZZZZO-02/ZZZZZ-10/11 cập nhật theo luật hai mức
+(`motMuc`); `kiem-bang-chung.mjs` PHUONG-HUYEN (Hóc Môn, Bình Chánh, Gò Vấp; đối chứng "xã Hóc Môn", "phường Gò Vấp", "Đông Thạnh, Hóc Môn"); `tin-nhap-rao.mjs`
+TIENICH-AI-1/2, giá cuối. Cách nói mới: "để chú gửi bài rao cho cháu đăng nha", "cách trường cấp 2 khoảng 300m". e2e **1306/1306**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
