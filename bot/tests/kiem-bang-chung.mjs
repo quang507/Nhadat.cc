@@ -598,6 +598,15 @@ for (const [la, td, tin, mong] of [
   ["chinh_chu", "chính chủ gửi bán", "chính chủ gửi bán căn góc 2 mặt hẻm Phan Xích Long", "chinh_chu"],
   ["chinh_chu", "giấy tờ chính chủ", "bán nhà hẻm 4m, giấy tờ chính chủ đầy đủ", null],
 ]) ok(`VAI-ZZZZK «${td}» (${la}) → ${mong ?? "không nhận"}`, (docVai({ la, trich_dan: td }, tin)?.la ?? null) === mong, JSON.stringify(docVai({ la, trich_dan: td }, tin)));
+// SRS-5.1zzzzzo (test Zalo 13/10): xã mới mang tên huyện cũ — "nhà cô ở Hóc Môn" là HUYỆN, không ghi phường Xã Hóc Môn.
+for (const [gt, td, tin, mong] of [
+  ["Xã Hóc Môn", "nhà cô ở Hóc Môn", "nhà cô ở Hóc Môn", false],
+  ["Xã Bình Chánh", "ở Bình Chánh em", "đất ở Bình Chánh em", false],
+  ["Phường Gò Vấp", "nhà quận Gò Vấp", "bán nhà quận Gò Vấp", false],
+  ["Phường Gò Vấp", "phường Gò Vấp", "nhà ở phường Gò Vấp", true],
+  ["Xã Hóc Môn", "xã Hóc Môn", "nhà ở xã Hóc Môn", true],
+  ["Xã Đông Thạnh", "Đông Thạnh, Hóc Môn", "gần chợ Gấu Đông Thạnh, Hóc Môn", true],
+]) ok(`PHUONG-HUYEN «${td}» → ${mong ? "nhận" : "bỏ"} ${gt}`, kiemDeXuat([{ khoa: "phuong", gia_tri: gt, trich_dan: td }], tin).dat.length === (mong ? 1 : 0), JSON.stringify(kiemDeXuat([{ khoa: "phuong", gia_tri: gt, trich_dan: td }], tin)));
 ok("VAI-02 khong_noi → null; trích bịa → null", docVai({ la: "khong_noi", trich_dan: null }, "x") === null && docVai({ la: "chinh_chu", trich_dan: "nhà của tôi" }, "mấy bên môi giới gọi suốt") === null);
 
 ok("CK-01 câu kế AI chọn có trong danh sách → nhận; ngoài danh sách / null → null",

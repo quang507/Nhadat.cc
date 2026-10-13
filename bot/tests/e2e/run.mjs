@@ -204,6 +204,8 @@ function soatLuotBatBien(body, r) {
       if (/^\s*(?:🤖|💾|📝|📋)/u.test(x)) continue;
       for (const c of x.split(/(?<=[.!?])\s+/)) {
         if (/\?/.test(c) || !/(?<!\p{L})ph[ií](?!\p{L})|hoa hồng|giá chốt|giao dịch|chính chủ|môi giới/iu.test(c)) continue;
+        // SRS-5.1zzzzzo (chủ dự án 13/10): chưa rõ vai thì câu nêu CẢ HAI mức (chính chủ 1%, môi giới 0,5%) là đúng — không phải gán vai.
+        if (deal !== "cho_thue" && /chính chủ[^.]*1\s*%/iu.test(c) && /môi giới[^.]*0[.,]5\s*%/iu.test(c)) continue;
         for (const m of c.matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)) {
           const n = m[1].replace(".", ",");
           if (n !== dung) BB.phi.push(`${nhan} → "${c.slice(0, 100)}" (vai ${s.seller_type}/${s.seller_type_source ?? "suy_doan"}: được nói ${dung ?? "không số"})`);
@@ -243,6 +245,9 @@ const db = () => globalThis.__db;
 // bản nháp. Ca đo bản nháp qua chuỗi hỏi đáp thì trả lời hết các câu đó (`quaPhapLy`, trả phản hồi lượt cuối); ca dựng tin
 // bằng tay thì ghi sẵn các fact đó (`coSanPhapLy`) để lượt đang đo vẫn là lượt ra bản nháp.
 // SRS-5.1zzzzzm: câu hiện trạng sử dụng (20261013a) đứng ngay sau câu sổ — chung bộ câu "sau câu sổ" của các ca đo bản nháp.
+// SRS-5.1zzzzzo (chủ dự án 13/10): chưa rõ vai thì câu phí nêu CẢ HAI mức — "không chỉ một mức" = bỏ cụm hai mức rồi không còn con số %.
+const HAI_MUC_PHI = "chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt";
+const motMuc = (x) => /\d\s*%/.test(String(x ?? "").split(HAI_MUC_PHI).join(""));
 const DAP_PHAP_LY = { nguoi_dung_ten: "tên anh", the_chap: "cầm tay", quy_hoach: "không dính", tranh_chap: "không", dien_tich_khop_so: "khớp", hien_trang_su_dung: "đang ở", so_phong_ngu: "3" };
 async function quaPhapLy(uid, r) {
   for (let i = 0; i < 6; i++) {
@@ -1365,7 +1370,7 @@ fresh(seedKho);
   check("H8 chủ GẬT → chu_duyet_at, tin lên kệ (dang_ban), câu duyệt đóng, bong bóng báo đã ghi nhận",
     r.body.duyet === true && !!H.chu_duyet_at && H.status === "dang_ban" && !pend("duyet_tin") && /lên kệ|lên web/.test(r.body.replies[0]),
     JSON.stringify({ body: r.body, H }));
-  check("AOND-06 đã nói phí ở lượt 'phí sao em?' → tin lên kệ KHÔNG dẫn phí lần hai", r.body.dan_phi !== true && !/biết phí bên em chưa/.test(r.body.replies.join("\n")), JSON.stringify(r.body.replies));
+  check("AOND-06 đã nói phí ở lượt 'phí sao em?' → tin lên kệ KHÔNG dẫn phí lần hai", r.body.dan_phi !== true && !/xin phép báo luôn, phí bên em/.test(r.body.replies.join("\n")), JSON.stringify(r.body.replies));
   // FR-177 f (09/09): chúc mừng kèm ĐIỂM + cách thêm điểm; điểm là tiền định (diem_tin).
   // 22/09/2026 (bộ đo giọng B09, chủ dự án chốt): câu chúc rút còn HAI câu ≤ 30 từ, cách thêm điểm tách bong
   // bóng riêng, bỏ câu hẹn "có thể em sẽ hỏi thêm" — "Chúc mừng" không còn là chữ bắt buộc.
@@ -1720,7 +1725,7 @@ fresh(seedKho);
   // SRS-5.1zzzzj (bắn production 09/10: "phí sao em" → "1% giá chốt" khi người rao chưa nói vai): "anh có nhà … muốn gửi bán" mở hồ sơ
   // nhãn chính chủ ĐOÁN (FR-159) — chưa phải điều khách nói, nên câu phí không có con số.
   check("RAO-HOI-02 'phí bao nhiêu vậy? anh có nhà … muốn gửi bán' → tạo tin + trả lời phí (chỉ thu khi thành công), KHÔNG con số khi vai chưa xác nhận",
-    db().t.listings.length === 1 && r.body.replies.some((x) => /chỉ thu khi giao dịch thành công/.test(x) && /phí/i.test(x)) && !r.body.replies.some((x) => /\d\s*%/.test(x)), JSON.stringify(r.body.replies));
+    db().t.listings.length === 1 && r.body.replies.some((x) => /chỉ thu khi giao dịch thành công/.test(x) && /phí/i.test(x)) && !r.body.replies.some(motMuc), JSON.stringify(r.body.replies));
   // Cùng lượt bắn: hai căn một tin — "hẻm Nguyễn Tri Phương" từng thành "hẻm Nguyễn Tri", căn 2 thành "2 căn hộ Hà Đô".
   fresh();
   r = await send({ external_user_id: "hai-can-ten", text: "cô có 2 căn: căn 1 nhà hẻm Nguyễn Tri Phương quận 10 giá 8 tỷ, căn 2 căn hộ Hà Đô quận 10 75m2 giá 5 tỷ" });
@@ -3065,7 +3070,7 @@ fresh(seedKho);
     check("CX-05 bực rồi nghi ngờ → 2 việc (mỗi mức một); nghi ngờ → lời đầu là trấn an (không thu trước, phí khi giao dịch thành công); câu nghi ngờ KHÔNG ghi vào tin",
       esc5.length === 2 && /không thu đồng nào trước/.test(rC5.body.replies.find((x) => !/^🤖/.test(x)) ?? "") &&
         // SRS-5.1zzzzj: nhãn chính chủ ĐOÁN (người rao chưa tự nói) → câu phí không con số.
-        /phí chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới/.test(rC5.body.replies.find((x) => !/^🤖/.test(x)) ?? "") &&
+        /phí chỉ thu khi giao dịch thành công: chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(rC5.body.replies.find((x) => !/^🤖/.test(x)) ?? "") &&
         !db().t.listing_facts.some((f) => f.listing_id === L.id && /lừa/.test(f.answer ?? "")),
       JSON.stringify({ esc: esc5.map((x) => x.note), rep: rC5.body.replies }));
     // Bắn thử v317 (lx-cx-12): bực → hoãn, rồi "nói thật chứ chị sợ mấy bên online lừa lắm" → ghi vào ô NỘI THẤT.
@@ -4495,7 +4500,7 @@ fresh(seedKho);
       // SRS-5.1zzzzk: sổ AI THẬT của lượt bắn này cho vai chinh_chu với trích «chú có», «chú có căn nhà», «chú» — không gọi tên vai, nên
       // nhãn vẫn là ĐOÁN và câu phí tiền định không có con số (trước đó kỳ vọng "1% giá chốt" mã hoá đúng lỗi production 09/10).
       check("SRS-5.1zzzq-a phát lại …kb2chau: 'phí sao cháu' → bong bóng phí tiền định có (không con số — vai chưa xác nhận), câu lệnh viết lời KHÔNG còn câu hỏi phí",
-        repPhi.some((x) => /phí bên (?:em|cháu) chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới/.test(x)) && !repPhi.some((x) => /\d\s*%/.test(x)) && ndPhi2.length > 0 && !/phí sao/i.test(ndPhi2), JSON.stringify(repPhi) + " | " + ndPhi2.slice(0, 400));
+        repPhi.some((x) => /phí bên (?:em|cháu) chỉ thu khi giao dịch thành công: chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(x)) && !repPhi.some(motMuc) && ndPhi2.length > 0 && !/phí sao/i.test(ndPhi2), JSON.stringify(repPhi) + " | " + ndPhi2.slice(0, 400));
       await phatLai("kb4thue", "web-pl-kb4b", async (i, t, r, calls) => { if (t.text === "phí bên em tính sao") ndPhi4 = nd(calls); });
       check("SRS-5.1zzzq-b phát lại …kb4thue: 'phí bên em tính sao' (thuê) → câu lệnh viết lời KHÔNG còn câu hỏi phí",
         ndPhi4.length > 0 && !/phí bên em tính sao/i.test(ndPhi4), ndPhi4.slice(0, 600));
@@ -5747,7 +5752,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)) && !rp.body.replies.some((r) => /Em sẽ rao như vầy|Em sửa lại rồi/.test(r)),
     JSON.stringify({ l: { chu_duyet_at: tin().chu_duyet_at }, facts: db().t.listing_facts.map((f) => [f.question, f.answer]), rep: rp.body.replies }));
   check("AOND-05 tin lên kệ mà chưa từng nói phí → DẪN PHÍ một câu hỏi (demo AOND), body.dan_phi",
-    rp.body.dan_phi === true && rp.body.replies.some((r) => /biết phí bên em chưa/.test(r)), JSON.stringify({ rep: rp.body.replies, dan_phi: rp.body.dan_phi }));
+    rp.body.dan_phi === true && rp.body.replies.some((r) => /xin phép báo luôn, phí bên em/.test(r)), JSON.stringify({ rep: rp.body.replies, dan_phi: rp.body.dan_phi }));
   // Vế sau có LỜI SỬA ("mà giá 9 tỷ 8") → FR-164 ghi giá mới trước, phần còn lại "ok đăng đi" là gật (FR-177 g:
   // "đủ rồi, đăng đi" lúc duyệt là GẬT) → tin duyệt với giá MỚI. Không được mất giá mới, không được vào bo_sung.
   fresh();
@@ -9175,7 +9180,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   dungThue("phi-u2", "unknown", "ban");
   rP = await send({ external_user_id: "phi-u2", text: "phi ben minh sao em" });
   check("PHI-02 vai chưa rõ (unknown) hỏi phí → nói thu khi giao dịch thành công, KHÔNG báo con số",
-    !!rP.body.hoi_nguoc && /chỉ thu khi giao dịch thành công/.test(loiBot(rP)) && !/1%|0,5%/.test(loiBot(rP)), JSON.stringify(rP.body));
+    !!rP.body.hoi_nguoc && /chỉ thu khi giao dịch thành công/.test(loiBot(rP)) && !motMuc(loiBot(rP)), JSON.stringify(rP.body));
   // PHI-02b đối chứng: môi giới tin bán → vẫn 0,5% giá chốt (câu cũ không đổi).
   dungThue("phi-m3", "nmg", "ban", "admin");
   rP = await send({ external_user_id: "phi-m3", text: "phi ben minh sao em" });
@@ -9184,7 +9189,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   dungThue("phi-c4", "ccrb", "ban");
   rP = await send({ external_user_id: "phi-c4", text: "phi ben minh sao em" });
   check("PHI-02c nhãn chính chủ ĐOÁN (suy_doan) hỏi phí → không báo 1%, nói thu khi giao dịch thành công",
-    /chỉ thu khi giao dịch thành công/.test(loiBot(rP)) && !/1%|0,5%/.test(loiBot(rP)), loiBot(rP));
+    /chỉ thu khi giao dịch thành công/.test(loiBot(rP)) && !motMuc(loiBot(rP)), loiBot(rP));
   // Lưới chống bịa con số phí trong LỜI MODEL (model nói "1%" khi vai chưa xác nhận) → thay bằng đúng câu cauPhi, giữ câu hỏi.
   dungThue("phi-c6", "ccrb", "ban");
   { const cuM = globalThis.__model;
@@ -9193,7 +9198,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     rP = await send({ external_user_id: "phi-c6", text: "ok em, cảm ơn em nha" });
     globalThis.__model = cuM; }
   check("PHI-03m lời MODEL nói '1% giá chốt' khi nhãn còn ĐOÁN → thay bằng câu cauPhi không số, câu hỏi giữ nguyên",
-    !/1%/.test(loiBot(rP)) && /\?/.test(loiBot(rP)), loiBot(rP));
+    !motMuc(loiBot(rP)) && /\?/.test(loiBot(rP)), loiBot(rP));
   // Cách nói mới: người rao TỰ NÓI "chủ nhà luôn" trong câu hỏi phí → vai xác nhận ngay lượt đó → 1%.
   dungThue("phi-c5", "ccrb", "ban");
   rP = await send({ external_user_id: "phi-c5", text: "tôi là chính chủ, phí bên em sao" });
@@ -9217,7 +9222,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   });
   rP = await send({ external_user_id: "phi-d5", text: "đăng đi em" });
   check("PHI-04 'đăng đi' lên kệ ngay → có câu dẫn phí 'biết phí bên em chưa' (body.dan_phi), đúng một lần",
-    rP.body.dang_luon === true && rP.body.dan_phi === true && rP.body.replies.filter((x) => /biết phí bên em chưa/.test(x)).length === 1, JSON.stringify(rP.body.replies));
+    rP.body.dang_luon === true && rP.body.dan_phi === true && rP.body.replies.filter((x) => /xin phép báo luôn, phí bên em/.test(x)).length === 1, JSON.stringify(rP.body.replies));
   // PHI-04b đã nói phí trước đó → "đăng đi" không dẫn phí lần hai.
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "phi-d6", seller_type: "ccrb", name: null, active_listing_id: null }).data;
@@ -9228,7 +9233,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     d.insert("messages", { conversation_id: c.id, sender: "bot", body: "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ." });
   });
   rP = await send({ external_user_id: "phi-d6", text: "đăng đi em" });
-  check("PHI-04b đã nói phí rồi → 'đăng đi' KHÔNG dẫn phí lần hai", rP.body.dang_luon === true && rP.body.dan_phi !== true && !/biết phí bên em chưa/.test(rP.body.replies.join("\n")), JSON.stringify(rP.body.replies));
+  check("PHI-04b đã nói phí rồi → 'đăng đi' KHÔNG dẫn phí lần hai", rP.body.dang_luon === true && rP.body.dan_phi !== true && !/xin phép báo luôn, phí bên em/.test(rP.body.replies.join("\n")), JSON.stringify(rP.body.replies));
 }
 // ── 06/10/2026 (SRS-5.1zzr): ô quan trọng ghi NGUYÊN VĂN cụm khách gõ — ca gốc test Zalo 14:06 "hẻm 137 Nguyễn Trãi" → bot ghi "137 hẻm Nguyễn Trãi" ──
 {
@@ -9377,7 +9382,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   rN = await send({ external_user_id: "rn-4", text: "phí sao em" });
   rep7 = rN.body.replies.join("\n");
   // SRS-5.1zzzzj: người này chỉ gật câu hỏi vai ("đúng rồi") — chưa nói chủ nhà hay môi giới → câu phí không con số.
-  check("RN-07c đang treo loại, 'phí sao em' → trả lời phí (chỉ thu khi thành công, KHÔNG con số khi vai chưa xác nhận) TRƯỚC, rồi mới hỏi loại", /chỉ thu khi giao dịch thành công/.test(rep7) && !/\d\s*%/.test(rep7) && /nhà phố/.test(rep7), JSON.stringify(rN.body.replies));
+  check("RN-07c đang treo loại, 'phí sao em' → trả lời phí (chỉ thu khi thành công, KHÔNG con số khi vai chưa xác nhận) TRƯỚC, rồi mới hỏi loại", /chỉ thu khi giao dịch thành công/.test(rep7) && !motMuc(rep7) && /nhà phố/.test(rep7), JSON.stringify(rN.body.replies));
   globalThis.__model = { parse: ai({ y_dinh: { loai: "du_roi", trich_dan: "ok đăng đi" } }), create: () => "Dạ em chưa rõ lắm ạ." };
   rN = await send({ external_user_id: "rn-4", text: "ok đăng đi" });
   rep7 = rN.body.replies.join("\n");
@@ -9449,7 +9454,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     rN = await send({ external_user_id: uid, text: "phí sao em, mà sao tin em được" });
     const loiN = rN.body.replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
     check(`RN-VAI-${uid.slice(-1)} AI vai chinh_chu «${vaiAi.trich_dan}» → nhãn ${mongXacNhan ? "XÁC NHẬN, phí 1%" : "vẫn ĐOÁN, phí không con số"}`,
-      (sB?.seller_type_source === "tu_nhan") === mongXacNhan && (mongXacNhan ? /1% giá chốt/.test(loiN) : !/\d\s*%/.test(loiN) && /chỉ thu khi giao dịch thành công/.test(loiN)),
+      (sB?.seller_type_source === "tu_nhan") === mongXacNhan && (mongXacNhan ? /1% giá chốt/.test(loiN) : !motMuc(loiN) && /chỉ thu khi giao dịch thành công/.test(loiN)),
       JSON.stringify({ src: sB?.seller_type_source, loi: loiN }));
     // SRS-5.1zzzzv (thu-cmp46-3): AI đọc ra nghi ngờ → câu lệnh model nói bong bóng trấn an đã gửi, model không trấn an / nhắc phí lại.
     const pTA = createCalls().slice(nTruocN).map((c) => c.params?.messages?.[0]?.content ?? "").join("\n---\n");
@@ -9643,7 +9648,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     treo(L.id).join() === "phap_ly" && /sổ|pháp lý/i.test(loiThuong(b.rep)) && !/phòng ngủ/.test(loiThuong(b.rep)),
     JSON.stringify({ treo: treo(L.id), rep: b.rep, ir: db().t.info_requests.filter((q) => q.listing_id === L.id).map((q) => [q.question, q.status]) }));
   check("ZZZZO-02 lượt hỏi phí (vai chưa rõ) → câu phí KHÔNG số, đứng trước; câu lệnh model nói khách hỏi bên lề, chưa trả lời câu đang hỏi",
-    /mức tuỳ chính chủ hay môi giới/.test(b.rep.join("\n")) && !/\d\s*%/.test(b.rep.join("\n")) &&
+    /chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(b.rep.join("\n")) && !motMuc(b.rep.join("\n")) &&
       b.cl.some((x) => /chưa trả lời câu em đang hỏi/.test(x) && /Em vừa hỏi "pháp lý/.test(x)),
     JSON.stringify({ rep: b.rep, cl: b.cl.map((x) => x.slice(-600)) }));
   check("ZZZZO-03 lượt hỏi phí → không lượt CHỐT TIN nào (không bản nháp), 🤖 KHÔNG in lại phường / giá / diện tích / kết cấu của câu rao",
@@ -10082,7 +10087,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   // (1b) AI không nói "không biết" → đường cũ (luật địa chỉ đỡ khi AI trống) — chứng minh chặn chỉ theo tín hiệu AI, không theo chữ.
   {
     const { uid, L } = dung({ tin: TIN_DAT, cauTreo: "vi_tri", xung: "anh" });
-    await goi(uid, "đường Nguyễn Văn Khạ nha em", {});
+    // AI thật đọc câu này là trả lời câu địa chỉ (tra_loi có) — mock theo đúng điều đó (SRS-5.1zzzzzo: AI nói "không trả lời" thì luật không ghi).
+    await goi(uid, "đường Nguyễn Văn Khạ nha em", { tra_loi: { co_tra_loi: true, gia_tri: "đường Nguyễn Văn Khạ", trich_dan: "đường Nguyễn Văn Khạ" } });
     check("ZZZZZ-04 (đối chứng) AI không có khong_biet → địa chỉ 'đường Nguyễn Văn Khạ' vẫn ghi như cũ", /Nguyễn Văn Khạ/.test(lr(L).location_raw ?? "") || fq(L, "vi_tri").some((x) => /Nguyễn Văn Khạ/.test(x ?? "")),
       JSON.stringify({ loc: lr(L).location_raw, f: fq(L, "vi_tri") }));
   }
@@ -10139,20 +10145,20 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   }
 
   // (5) Phí: hỏi lại khi vai chưa rõ → hỏi vai; gật duyệt kèm hỏi phí → trả lời phí, không dẫn phí lần hai.
-  const CAU_PHI_CU = "Dạ phí bên em chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới ạ.";
+  const CAU_PHI_CU = "Dạ phí bên em chỉ thu khi giao dịch thành công: chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt ạ.";
   for (const [ma, cau] of [["10 (ca gốc)", "Mà chị hỏi lại, mỗi lần bán như vậy thì phải trả bao nhiêu phí cho bên em vậy?"],
     ["11 (cách nói mới)", "vậy rốt cuộc bên em ăn bao nhiêu phần trăm hả em?"]]) {
     const { uid, L } = dung({ tin: { ...TIN_NHA, ward: "Phường Cầu Kiệu" }, cauTreo: "huong", loaiNguoi: "ccrb", botNoi: [CAU_PHI_CU, "Nhà mình hướng gì vậy chị?"] });
     const f = await goi(uid, cau, { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "phi" } });
     check(`ZZZZZ-${ma} đã nghe câu phí không số, «${cau.slice(0, 40)}…» → hỏi vai để báo đúng mức, không con số %, câu hướng vẫn mở`,
-      /Cho em hỏi chị là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé\./.test(f.rep) && !/%/.test(f.rep) && treo(L).includes("huong"), JSON.stringify({ rep: f.rep, treo: treo(L) }));
+      /Cho em hỏi chị là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé\./.test(f.rep) && !motMuc(f.rep) && treo(L).includes("huong"), JSON.stringify({ rep: f.rep, treo: treo(L) }));
   }
   {
     const { uid, L } = dung({ tin: { ...TIN_NHA, ward: "Phường Cầu Kiệu" }, cauTreo: "duyet_tin", loaiNguoi: "ccrb" });
     const cau = "Được rồi em ơi, rao đi. Mà em nói rõ xíu, nếu có khách mua thì chị phải trả bao nhiêu tiền hoa hồng hay gì vậy em?";
     const g = await goi(uid, cau, { dong_y: "dong_y_dang", dong_y_trich: "Được rồi em ơi, rao đi", hoi_lai: { co_hoi: true, cau_hoi: "nếu có khách mua thì chị phải trả bao nhiêu tiền hoa hồng hay gì vậy em?", chu_de: "phi" } });
     check("ZZZZZ-12 (ca gốc) gật duyệt kèm hỏi hoa hồng → tin lên kệ, có câu trả lời phí + hỏi vai, không 'biết phí bên em chưa'",
-      lr(L).status === "dang_ban" && /chỉ thu khi giao dịch thành công/.test(g.rep) && /chính chủ hay môi giới để em báo/.test(g.rep) && !/biết phí bên em chưa/.test(g.rep),
+      lr(L).status === "dang_ban" && /chỉ thu khi giao dịch thành công/.test(g.rep) && /chính chủ hay môi giới để em báo/.test(g.rep) && !/xin phép báo luôn, phí bên em/.test(g.rep),
       JSON.stringify({ st: lr(L).status, rep: g.rep }));
   }
   // (6) Ghi fact ngoài câu treo → lời ghi nhận đọc tên ô ngắn, không đọc câu hỏi trong FACT_LABELS.
@@ -11042,16 +11048,33 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     check(`PHIKE-${ma} «ok» duyệt bản nháp → tin lên kệ, 🤖 nói điều đã hiểu (đồng ý bản nháp), KHÔNG "Không trích xuất được gì"`,
       lrL(L).status !== "cho_thong_tin" && (bOk.replies ?? []).some((x) => /^🤖 Hiểu: đồng ý bản nháp/.test(x)) && !(bOk.replies ?? []).some((x) => /Không trích xuất được gì/.test(x)),
       JSON.stringify(bOk.replies));
+    // SRS-5.1zzzzzo (chủ dự án 13/10): lúc khách "ok" → BÁO THẲNG phí, nêu cả hai mức (vai chưa xác nhận), một lần, không hỏi "biết phí chưa".
+    const rOk = (bOk.replies ?? []).join("\n");
+    check(`PHIKE-${ma} «ok» → lời lên kệ có "xin phép báo luôn" + cả hai mức phí (chính chủ 1%, môi giới 0,5%), không câu hỏi "biết phí … chưa"`,
+      (rOk.match(/xin phép báo luôn/g) ?? []).length === 1 && rOk.includes("chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt") && !/biết phí/.test(rOk), JSON.stringify(bOk.replies));
     const b1 = await goiH(uid, hoiPhi, { hoi_lai: { co_hoi: true, cau_hoi: hoiPhi, chu_de: "phi" } });
     const r1 = (b1.replies ?? []).join("\n");
-    check(`PHIKE-${ma} «${hoiPhi}» (tin đã lên kệ, không câu treo, vai chưa xác nhận) → câu phí KHÔNG số + câu hỏi vai của chủ dự án, không %`,
-      /mức tuỳ chính chủ hay môi giới/.test(r1) && r1.includes("là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé.") && !/\d\s*%/.test(r1),
+    check(`PHIKE-${ma} «${hoiPhi}» (tin đã lên kệ, không câu treo, vai chưa xác nhận) → câu phí nêu CẢ HAI mức (chính chủ 1%, môi giới 0,5%), không chỉ một mức`,
+      /chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(r1) && !r1.includes("để em báo mức phí cho mình") && !motMuc(r1), // SRS-5.1zzzzzo: nêu đủ hai mức, không hỏi vai
       JSON.stringify(b1.replies));
     const b2 = await goiH(uid, vaiCau, { vai: { la: "chinh_chu", trich_dan: vaiCau } });
     const r2 = (b2.replies ?? []).join("\n");
     check(`PHIKE-${ma} «${vaiCau}» ngay sau câu hỏi vai → vai thành tu_nhan, bot BÁO SỐ phí (1% giá chốt) một lần, không hỏi lại vai`,
       db().t.sellers.find((x) => x.zalo_user_id === uid)?.seller_type_source === "tu_nhan" && (r2.match(/1% giá chốt/g) ?? []).length === 1 && !/chính chủ hay môi giới/.test(r2),
       JSON.stringify(b2.replies));
+  }
+  // SRS-5.1zzzzzo (test Zalo 13/10 10:50): đang hỏi địa chỉ, khách dặn "Con đăng theo nội dung này cho Chú nhé" (nội dung gửi sau) → luật thấy
+  // "cho" = "chợ" từng ghi câu đó làm địa chỉ. AI đã đọc và nói tin KHÔNG trả lời câu đang hỏi → không ghi địa chỉ.
+  for (const [ma, cau] of [["01 (ca gốc)", "Con đăng theo nội dung này cho Chú nhé"], ["01b (cách nói mới)", "để chú gửi bài rao cho cháu đăng nha"]]) {
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+    const { uid, L } = choDuyet();
+    db().t.info_requests.forEach((x) => { if (x.listing_id === L.id) x.status = "expired"; });
+    lrL(L).location_raw = null; lrL(L).street = null;
+    db().insert("info_requests", { listing_id: L.id, question: "vi_tri", status: "pending" });
+    await goiH(uid, cau, { tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } });
+    const fVt = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "vi_tri");
+    check(`VITRI-LENH-${ma} «${cau}» lúc hỏi địa chỉ, AI nói không trả lời câu đó → không ghi địa chỉ, location_raw vẫn trống`,
+      !fVt.length && !lrL(L).location_raw, JSON.stringify({ fVt, loc: lrL(L).location_raw }));
   }
   {
     // Ảnh liền nhau lúc chờ duyệt: câu nhắc "Bản nháp ở trên … nhắn ok" chỉ một lần.

@@ -464,7 +464,9 @@ export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null
     // SRS-5.1zzzzze (khách mô phỏng lần bảy: "phí 1% kia lấy từ bên bán hay bên mua?" → "Dạ bên em chỉ có đúng khoản phí đó thôi ạ"):
     // câu soạn sẵn chọn theo CHỦ ĐỀ nên trả lời một câu khác câu khách hỏi. Con số đã nói rồi thì khách đang hỏi điều KHÁC về phí (ai
     // trả, khi nào thu, còn gì nữa) — để model trả lời theo luật phí (lượt soát nhận luật phí làm nguồn), không ghép câu soạn sẵn.
-    if (!(botDaNoi.includes(phi) && /\d/.test(phi))) ra.push(`Dạ ${phi} ạ.`);
+    // SRS-5.1zzzzzo: câu chưa rõ vai nay nêu CẢ HAI mức (có số) — vẫn coi là "chưa theo vai": nói lại để nơi gọi nối câu hỏi vai.
+    const haiMuc = /chính chủ/.test(phi) && /môi giới/.test(phi);
+    if (!(botDaNoi.includes(phi) && /\d/.test(phi) && !haiMuc)) ra.push(`Dạ ${phi} ạ.`);
   }
   if (dung("dich_vu", "khac") && /\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
     ra.push(`Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`);
@@ -1753,12 +1755,15 @@ const HE_THONG_LAM_RE = /\bhe thong\s+(?:(?:da|vua|se|tu|dang|cung|co)\s+)*(?:gu
  * `cauPhi` sinh) ở câu đầu, bỏ các câu sau. Lưới chống bịa (luôn bật), không sửa văn. Không đụng câu hỏi (có "?") — câu hỏi là
  * của `damBaoCauHoi`; không đụng bong bóng 🤖 / 📝 / 📋 / 💾 (chữ code từ DB).
  */
-export function chanPhiChuaXacNhan(replies: string[], phanTram: string | null, cauThay: string): string[] {
+export function chanPhiChuaXacNhan(replies: string[], phanTram: string | null, cauThay: string, haiMuc = false): string[] {
   const so = (x: string) => x.replace(".", ",").replace(/^0+(?=\d)/, "");
   const sai = (c: string): boolean => {
     // Câu nói về phí: có chữ phí / hoa hồng, hoặc con số % đi với giá chốt / giao dịch / vai ("chính chủ thì 1% giá chốt").
     if (/\?/.test(c) || !/\b(?:phi|hoa hong|gia chot|giao dich|chinh chu|moi gioi)\b/.test(boDau(c))) return false;
     const cac = [...c.matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)].map((m) => so(m[1]));
+    // SRS-5.1zzzzzo (chủ dự án 13/10): vai chưa rõ (tin bán) thì câu nêu CẢ HAI mức "chính chủ 1%, môi giới 0,5%" là đúng.
+    const kd = boDau(c);
+    if (haiMuc && cac.includes("1") && cac.includes("0,5") && cac.every((n) => n === "1" || n === "0,5") && /\bchinh chu\b/.test(kd) && /\bmoi gioi\b/.test(kd)) return false;
     return cac.length > 0 && cac.some((n) => n !== phanTram);
   };
   let daThay = false;

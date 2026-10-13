@@ -31,6 +31,10 @@ const HIEN_TRANG_KD: Array<[RegExp, string]> = [
   [/^dang o$/, "đang ở"], [/^(?:dang )?cho thue$|^dang cho thue$|^dang thue$/, "đang cho thuê"], [/^(?:de|bo) trong$/, "để trống"],
   [/^con o$/, "còn ở"], [/^khong cho thue,? dang o$/, "không cho thuê, đang ở"],
 ];
+/** SRS-5.1zzzzzo: so một ý thêm với ý AI chép lại — bỏ dấu, bỏ "có / nhà có" đầu câu, gộp dấu câu (AI hay bỏ chữ "có"). */
+export const chuanY = (x: string): string =>
+  boDau(x ?? "").replace(/[^a-z0-9]+/g, " ").trim().replace(/^(?:nha co|can co|co)\s+/, "");
+
 export function chuanHienTrang(v: string | null | undefined): string | null {
   const t = (v ?? "").trim();
   if (!t) return null;
@@ -84,6 +88,8 @@ export type ThamSoNhap = {
   khen?: string | null;
   /** SRS-5.1zzzzzn: ý thêm (`bo_sung`) AI xếp là QUY MÔ / không gian căn ("nhà bếp - phòng khách rộng", "sân rộng") — in ở dòng Quy mô. */
   quyMo?: string[];
+  /** SRS-5.1zzzzzo: ý thêm AI xếp là tiện ích / xung quanh (chỉ nhận ý có trong danh sách ý thêm) → dòng 🏫 Tiện ích. */
+  tienIch?: string[];
   cauTD:(khoa: string, o?: Record<string, string | number | null | undefined>) => string;
 };
 
@@ -263,7 +269,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
  * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
  */
 export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
-  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen, quyMo } = t;
+  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen, quyMo, tienIch: tienIchAi } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
   // "thuê tối thiểu thuê tối thiểu 3 năm". So theo TỪNG CHỮ của nhãn.
@@ -295,7 +301,8 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   // tin rao thật không bắt đầu bằng chữ thường.
   const dc = diaChiHienThi(l);
   dong.push(`📍 ${dc.charAt(0).toLocaleUpperCase("vi") + dc.slice(1)}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
-  // GIÁ đứng ngay dưới địa chỉ như mọi tin rao thật (bản cũ để tận cuối).
+  // SRS-5.1zzzzzo (chủ dự án 13/10/2026: "giá để ở cuối cùng"): dòng giá soạn ở đây, in ở CUỐI thân tin (bản 09/09 để ngay dưới địa chỉ).
+  let dongGia: string | null = null;
   const gia = giaHienThi(l);
   if (gia) {
     const giaDaNoi = /thuong luong|\btl\b|con bot|fix|co dinh/.test(boDau(gia));
@@ -306,11 +313,9 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
       : l.negotiable === false
       ? " (giá cố định)"
       : "";
-    dong.push(
-      `💰 ${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}${tl}${
-        fact("ly_do_ban") ? ` · lý do bán: ${fact("ly_do_ban")}` : ""
-      }`,
-    );
+    dongGia = `💰 ${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}${tl}${
+      fact("ly_do_ban") ? ` · lý do bán: ${fact("ly_do_ban")}` : ""
+    }`;
   }
   // SRS-5.1zzzzzl (chủ dự án 13/10: "Ko ghi ngang ghi mặt tiền, Mặt tiền đi chung với tiện ích" — chọn "Gộp chung một dòng"): bề ngang
   // in là "mặt tiền Nm" ở dòng 🏫 Tiện ích; dòng diện tích còn diện tích, dài, nở hậu, thổ cư, hình dạng.
@@ -341,9 +346,11 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   // SRS-5.1zzzzzn (chủ dự án 13/10/2026, ảnh bản nháp Hóc Môn: "kết cấu sửa thành quy mô, Nhà bếp - Phòng khách rộng · sân rộng thì sẽ đưa
   // lên chỗ quy mô, còn mới, hiện đang ở đưa xuống chỗ mô tả thêm"): dòng "Quy mô" = số tầng / phòng / WC / sân… + ý thêm AI xếp là không gian
   // (`quyMo`, chỉ nhận ý có đúng trong danh sách ý thêm); tình trạng nhà + hiện trạng sử dụng xuống dòng "Thêm".
-  const laQuyMo = new Set((quyMo ?? []).map((x) => boDau(x).replace(/\s+/g, " ").trim()));
-  const boSungQuyMo = boSung.filter((x) => laQuyMo.has(boDau(x).replace(/\s+/g, " ").trim()));
-  const boSungThem = boSung.filter((x) => !boSungQuyMo.includes(x));
+  const laQuyMo = new Set((quyMo ?? []).map(chuanY));
+  const laTienIch = new Set((tienIchAi ?? []).map(chuanY));
+  const boSungQuyMo = boSung.filter((x) => laQuyMo.has(chuanY(x)));
+  const boSungTienIch = boSung.filter((x) => !boSungQuyMo.includes(x) && laTienIch.has(chuanY(x)));
+  const boSungThem = boSung.filter((x) => !boSungQuyMo.includes(x) && !boSungTienIch.includes(x));
   them("🏗", "Quy mô", [
     l.floors_text ?? (l.floors ? `${l.floors} tầng` : fact("ket_cau")),
     nhan("toà", fact("toa_thap")),
@@ -447,13 +454,14 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   // tách thành từng mục (chữ khách, không thêm bớt).
   const tienIch = (fact("tien_ich_gan") ?? "").split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean)
     .map((x, i) => i === 0 ? thuongDau(x).replace(/^Gần(?=\s)/u, "gần") : x);
-  them("🏫", "Tiện ích", [matTien, ...tienIch]);
+  them("🏫", "Tiện ích", [matTien, ...tienIch, ...boSungTienIch.filter((x) => !tienIch.some((y) => chuanY(y) === chuanY(x)))]);
   // FR-211: nhãn tìm kiếm — khách mua lọc được ("yên tĩnh", "gần chợ"…).
   // 25/09/2026: nhãn mà các dòng trên đã nói ("sân thượng" trong kết cấu) không in lặp.
   them("🏷", "Nhãn", [l.nhan?.length ? tenNhanKhongTrung(l.nhan, dong.join("\n")) || null : null]);
   // Tiềm năng CHỈ khi chủ nhà nói (không bịa thay họ).
   them("💡", "Phù hợp", [fact("tiem_nang") ?? fact("muc_dich") ?? fact("nganh_hang_phu_hop")]);
   if (soAnh) dong.push(`📷 ${soAnh} ảnh`);
+  if (dongGia) dong.push(dongGia);
   const hetThan = dong.length;
   // SRS-5.1zzzzzl: câu khen (AI viết, đã soát) mở đầu bong bóng thứ hai; không có thì thôi.
   if (khen?.trim()) dong.push(khen.trim());

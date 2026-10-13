@@ -12,6 +12,8 @@ const KhenNhap = z.object({
   khen: z.string().nullable().describe("MỘT câu khen, ≤ 30 chữ, không câu hỏi. Không viết được câu đúng luật → null."),
   dua_tren: z.array(z.string()).describe("Các cụm COPY NGUYÊN VĂN từ BẢN TIN mà câu khen nhắc tới (mỗi điểm mạnh một cụm)."),
   // SRS-5.1zzzzzn: xếp ý thêm vào dòng "Quy mô" theo NGHĨA (không dò từ khoá) — cùng lượt model này, không thêm lượt gọi.
+  // SRS-5.1zzzzzo ("tiện ích phải gom vào đúng tiện ích"): ý thêm nói về xung quanh căn → dòng 🏫 Tiện ích. Cùng lượt model.
+  tien_ich: z.array(z.string()).optional().describe("Trong danh sách Ý THÊM: các ý nói về TIỆN ÍCH / XUNG QUANH căn (gần chợ, trường, bệnh viện, công viên, siêu thị, khu dân cư, cách đường lớn bao xa, an ninh khu). Chép NGUYÊN VĂN từng ý như trong danh sách. Ý về bên trong căn, tình trạng, pháp lý → không đưa. Không có → []."),
   quy_mo: z.array(z.string()).optional().describe("Trong danh sách Ý THÊM: các ý nói về QUY MÔ / KHÔNG GIAN của căn (phòng, bếp, phòng khách, sân, sân thượng, ban công, gara, kho, độ rộng không gian bên trong). Chép NGUYÊN VĂN từng ý như trong danh sách. Ý về vị trí, tiện ích quanh nhà, tình trạng, pháp lý → không đưa. Không có → []."),
 });
 const FORMAT = dinhDangLong(KhenNhap);
@@ -28,6 +30,8 @@ gửi chủ nhà, đặt ngay dưới bản tin.
 - dua_tren: mỗi điểm mạnh câu khen nhắc tới là một cụm chép NGUYÊN VĂN từ bản tin.
 - quy_mo: xếp riêng (không liên quan câu khen) — trong danh sách Ý THÊM, ý nào nói về quy mô / không gian bên trong căn (bếp, phòng khách, sân rộng,
   sân thượng…) thì chép nguyên văn vào quy_mo; ý về vị trí, tiện ích quanh nhà, tình trạng nhà thì không.
+- tien_ich: xếp riêng — ý nào nói về xung quanh căn (gần chợ / trường / công viên, khu dân cư, cách đường lớn…) thì chép nguyên văn vào tien_ich.
+  Một ý chỉ vào MỘT trong hai danh sách.
 Bản tin không có điểm mạnh nào để nhắc → khen = null.`;
 
 type ClientModel = {
@@ -37,7 +41,7 @@ type ClientModel = {
 /** Hỏi model câu khen. Kết quả THÔ — đưa qua `khenHopLe`. Model hỏng thì NÉM. */
 export async function vietKhenNhapBangModel(
   ai: ClientModel, model: string, banTin: string, cachGoi: string, yThem: string[] = [],
-): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; usage: unknown }> {
+): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; tienIch: string[]; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
     max_tokens: 200,
@@ -46,5 +50,5 @@ export async function vietKhenNhapBangModel(
     messages: [{ role: "user", content: `Cách gọi chủ nhà: "${cachGoi}"\nBẢN TIN:\n${banTin.slice(0, 2500)}\nÝ THÊM:\n${yThem.length ? yThem.map((y) => `- ${y}`).join("\n") : "(không có)"}` }],
   });
   const k = docLong(KhenNhap, r.parsed_output);
-  return { khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], quyMo: k.success ? k.data.quy_mo ?? [] : [], usage: r.usage };
+  return { khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], quyMo: k.success ? k.data.quy_mo ?? [] : [], tienIch: k.success ? k.data.tien_ich ?? [] : [], usage: r.usage };
 }

@@ -524,6 +524,13 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ng
       // chỉ xác nhận: phường có thật VÀ trích dẫn nhắc nó (tên mới hoặc tên cũ, lệch 1–2 chữ cái).
       const chuan = phuongChuan(v) ?? phuongTuTenCu(v);
       if (chuan) {
+        // SRS-5.1zzzzzo (test Zalo 13/10: hỏi "phường nào, quận nào", cô đáp "nhà cô ở Hóc Môn" → phường "Xã Hóc Môn"): xã mới mang TÊN
+        // HUYỆN cũ. Trích chỉ gọi tên đó trơn (không chữ "xã / phường / thị trấn" đứng trước) là đang nói HUYỆN, không phải xã.
+        const boTien = (x: string | null | undefined) => x ? chuanSo(x).replace(/^(?:quan|huyen|thanh pho|tp|thi xa)\s+/, "") : null;
+        const qCum = boTien(bocQuan(chuanSo(cum), cum));
+        // Xã mang đúng tên huyện cũ của nó (Hóc Môn, Củ Chi, Bình Chánh, Nhà Bè, Cần Giờ…) — từ bảng phường, không chép tay danh sách.
+        const tenQ = qCum === chuanSo(chuan.ten) || boTien(chuan.quan_cu) === chuanSo(chuan.ten) ? chuanSo(chuan.ten) : null;
+        if (tenQ && new RegExp(`\\b${tenQ}\\b`).test(chuanSo(cum)) && !new RegExp(`\\b(?:xa|phuong|thi tran|tt|p)\\s*\\.?\\s*${tenQ}\\b`).test(chuanSo(cum))) return "phuong_la_ten_huyen_cu";
         if (cauNhacPhuong(cum, chuan)) return null;
         // SRS-5.1zzzzc (thu-kg2): trích «phường 13», quận cũ Phú Nhuận nói trong tin (hay tin đã biết) → bảng phường cũ gộp Phường 13
         // Phú Nhuận vào Phường Phú Nhuận: AI đổi tên cũ → mới đúng bảng, không phải bịa.

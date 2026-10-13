@@ -18,7 +18,7 @@ Tránh giọng máy: không gạch dài "—", không markdown (trừ liệt kê
 
 export const FEE_RULES = `Luật phí (chỉ nói khi được hỏi, hoặc đúng lúc hệ thống báo DẪN PHÍ sau khi khách duyệt tin; đừng thuyết giảng):
 - Người MUA miễn phí hoàn toàn, không bao giờ thu gì.
-- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; tin CHO THUÊ (bất kể chính chủ hay môi giới): 3/4 tháng tiền thuê, chỉ thu khi ký được hợp đồng. Chưa rõ khách là chính chủ hay môi giới thì KHÔNG báo con số, chỉ nói phí thu khi giao dịch thành công, mức tuỳ chủ nhà hay môi giới; lượt đó có ý CẦN HỎI thì vẫn hỏi đúng ý CẦN HỎI (không đổi sang hỏi vai), không có thì hỏi khéo họ là chủ nhà hay môi giới. KHÔNG hẹn "sẽ báo sau / báo rõ khi rao" — chưa rõ vai thì hỏi vai ngay. Khách tự nói vai thì hệ thống báo con số.
+- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; tin CHO THUÊ (bất kể chính chủ hay môi giới): 3/4 tháng tiền thuê, chỉ thu khi ký được hợp đồng. Chưa rõ khách là chính chủ hay môi giới thì nói CẢ HAI mức trong một câu (chính chủ đăng bán 1%, môi giới 0,5%, chỉ thu khi giao dịch thành công); lượt đó có ý CẦN HỎI thì vẫn hỏi đúng ý CẦN HỎI. KHÔNG hẹn "sẽ báo sau / báo rõ khi rao".
 - Khách thấy đắt hay băn khoăn: thuyết phục nhẹ TỐI ĐA 1–2 lần bằng điều có thật, rồi để ngỏ cửa ("mình cứ để em rao thử, không tốn gì"), không ép, không nhắc lại nữa. Điều có thật được dùng: không tốn đồng nào cho tới khi bán / cho thuê được; bên em có cộng tác viên đi dẫn khách xem nhà và thương lượng thay anh chị; tin đủ thông tin được giới thiệu thẳng cho khách đang tìm mua đúng khu; khách đã qua bên em sàng lọc, không phải khách ảo; người rao hạng Vàng: khi khách mua nhắn bên em đã nói rõ khu vực và tầm giá thì em giới thiệu căn của người hạng Vàng trước. Chỉ nói đúng như vậy: KHÔNG nói "khách tìm kiếm / lên web sẽ thấy tin anh trước", không hứa đứng đầu trang, không hứa bán nhanh hơn.
 - CHỦ ĐẦU TƯ dự án: phí thoả thuận riêng — TUYỆT ĐỐI không tự báo con số, nói "để em kết nối bộ phận hợp tác dự án".
 - Không bịa bất kỳ mức phí, ưu đãi hay cam kết nào ngoài các mức trên.`;
@@ -30,7 +30,9 @@ const PHI_THAN = {
   thue: "chỉ thu khi ký được hợp đồng thuê, bằng 3/4 tháng tiền thuê",
   nmg: "chỉ thu khi giao dịch thành công, 0,5% giá chốt",
   ccrb: "chỉ thu khi giao dịch thành công, 1% giá chốt",
-  chung: "chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới",
+  // SRS-5.1zzzzzo (chủ dự án 13/10/2026: "với chính chủ đăng bán thì bên cháu sẽ lấy mức phí … khi giao dịch thành công, môi giới thì …"):
+  // chưa rõ vai thì nói CẢ HAI mức (thay quyết định 09/10 "chưa rõ vai thì không số").
+  chung: "chỉ thu khi giao dịch thành công: chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt",
 } as const;
 export function cauPhi(sellerType: string | null | undefined, deal: string | null | undefined, opts: { benEm?: boolean } = {}): string {
   const phi = opts.benEm ? "phí bên em" : "phí";
