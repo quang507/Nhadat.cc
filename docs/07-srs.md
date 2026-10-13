@@ -4271,6 +4271,36 @@ nguồn "chủ nhà kể" (chưa kiểm chứng), dùng để trả lời "em bi
 **Kiểm.** `kiem-bang-chung.mjs` ZZZZZW-K1/K1b (9 tiện ích giữ đủ; ý 81–160 ký tự giữ; 13 ý → 12); e2e ZZZZZW-01/01b (bài rao Cầu Tràm → 9 ghi
 chú, 🤖 in đủ). Đỏ khi hoàn một trong ba chỗ sửa.
 
+### SRS-5.1zzzzzx · "Diện tích đất 80m²" không bao giờ là mặt tiền; gật câu bot xác nhận có giá trị (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 15:59–16:03, bài rao The Sholi (311 An Dương Vương, Bình Tân); chủ dự án: "Đưa chữ tiện ích mặt tiền 80m trong khi
+80m đó là diện tích nhà mà", "có tiện ích trong đó rồi đưa thêm tin rồi mà ko lấy để ra tin"]`
+
+**Ca gốc.** Bài rao có "Diện tích đất 80m²*". AI bóc tách đưa `ngang = 80` trích "Diện tích đất 80m²"; kiểm bằng chứng cho qua (số 80 có trong
+cụm) → fact `mat_tien = 80m`, bản nháp in "🏫 Tiện ích: mặt tiền 80m" (cột `frontage_m` DB không nhận nhưng dòng in đọc fact thô). Vì diện tích
+không được ghi, lượt tạo tin hỏi "Diện tích đất mỗi căn là 80m² đó có đúng không ạ?" (model soạn), khách "đúng rồi" → AI trả "đúng, diện tích
+đất 80m²" trích "đúng rồi" → số 80 không có trong cụm trích → bỏ, câu hết hạn, bot hỏi giá rồi 4 lượt sau hỏi lại diện tích. Tiện ích (Aeon Mall,
+Metro, Bến xe Miền Tây, trường / bệnh viện) chỉ còn một ý: cùng lớp SRS-5.1zzzzzw (deploy 16:05, sau chat này).
+
+**Lớp lỗi.** (1) Kiểm ô số đo mét chỉ đòi "số có trong cụm trích", không đòi cụm nói đúng chuyện — số kèm m² là diện tích mà vẫn qua (SRS-5.1zzzp
+đã chặn hẻm/đường/ngang lẫn nhau, bỏ sót diện tích). (2) `soDoMet` đọc "80m2" ra 80 (và "2" sau chữ m). (3) Dòng in bản nháp đọc fact thô `mat_tien`
+khi cột `frontage_m` trống — hai nguồn, cái DB đã từ chối vẫn lên tin. (4) Lời gật cho câu XÁC NHẬN do model soạn không có đường ghi: bằng chứng
+nằm ở câu bot, không ở lời khách; cơ chế `xac_nhan_goi_y` chỉ phủ câu code soạn cho 6 ô chữ.
+
+**Sửa.** (1) `soDoSaiChuDe`: ô số đo mét (ngang / dài / nở hậu / hẻm / đường / cách mặt tiền) mà cụm trích có "diện tích" hay số kèm m² →
+`so_do_la_dien_tich` (cả kiểm đủ và kiểm nhẹ). (2) `soDoMet` không nhận số đứng trước m2 và không đọc chữ số sau "m". (3) `tin-nhap.ts` mặt tiền
+chỉ in từ cột `frontage_m`. (4) `kiemTraLoiCau`: khách CHỈ GẬT (`laChiGat`) câu bot là câu hỏi xác nhận (`laCauHoiXacNhan`: "đúng không / phải
+không") → nhận giá trị khi mọi số của nó nằm trong câu bot; ô số đo thì giá trị là đúng cụm số (kèm đơn vị) trong câu bot; `chat-reply` câu SỐ
+CHẶT (`CAU_SO_CHAT`) không có ô chuẩn hoá thì lấy giá trị này (`gatCauXacNhanBot`). Prompt `boc-rao.ts`: số
+có m² là dien_tich, "2 mặt tiền" là nhà góc; ví dụ mẫu mới (trần bản chữ 13000 → 14000).
+
+**Chỗ khác cùng lớp.** Ô `mat_tien` không nằm trong `KHOA_SO_DO_M` (giá trị dạng chữ "ngang 4.1m dài 28.4m") — đi đường khác, chưa đụng. Câu xác
+nhận do CODE soạn (`xac_nhan_goi_y`) vẫn là đường riêng cho 6 ô chữ.
+
+**Kiểm.** `kiem-bang-chung.mjs` ZZZZZX-K1/K1b/K1c (ngang 80 từ "Diện tích đất 80m²" bỏ; "80m2" không ra 80 hay 2; "12m", "ngang 4,1m" vẫn nhận),
+K2/K2b/K2c (gật câu xác nhận → "80m2"; câu không xác nhận → không; số lạ → không); e2e ZZZZZX-01/02/02b/03; vi-du-boc-rao ví dụ mới. Đỏ khi hoàn
+một trong bốn chỗ sửa.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

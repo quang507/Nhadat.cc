@@ -22,6 +22,15 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // SRS-5.1zzzzzx (Zalo thật 13/10/2026, The Sholi): "Diện tích đất 80m²*" bị đọc thành ngang 80 → "mặt tiền 80m". Cách nói khác ca gốc.
+    cau_dang_hoi: null,
+    tin: "Nhà phố 2 mặt tiền đường Tên Lửa & số 7. Thiết kế 1 trệt 1 lửng 2 lầu. Diện tích đất 72m²*. Chỉ 600m tới Aeon Mall.",
+    so_can: 1,
+    truong: [t("loai_bds", "nha_pho", "Nhà phố"), t("ket_cau", "1 trệt 1 lửng 2 lầu", "1 trệt 1 lửng 2 lầu"), t("dien_tich", "72", "Diện tích đất 72m²")],
+    kien_thuc: ["2 mặt tiền đường Tên Lửa & số 7", "Chỉ 600m tới Aeon Mall"],
+    luu_y: "72m² là DIỆN TÍCH đất, không phải ngang / mặt tiền (ô số đo mét không bao giờ nhận số có m²); \"2 mặt tiền\" là nhà góc, vào kien_thuc.",
+  },
+  {
     // SRS-5.1zzzzy (khách mô phỏng 11/10: "con chị bây giờ ở Úc", "sẽ tăng giá lắm" lên dòng "Thêm" của tin rao). Cách nói khác ca gốc.
     cau_dang_hoi: null,
     tin: "nhà gần chợ Bà Chiểu, con cái đi làm xa hết nên bán, nghe nói khu này sắp lên giá",

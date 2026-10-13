@@ -10502,6 +10502,29 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const bong = w.reps.find((x) => /^🤖/.test(x)) ?? db().t.messages.filter((m) => m.sender === "bot" && /^🤖/.test(m.body ?? "")).map((m) => m.body).at(-1) ?? "";
     check("ZZZZZW-01b 🤖 báo lại dòng thông tin bổ sung đủ các tiện ích (không chỉ 'thông ra ĐT 835D')", /Khu công nghiệp Cầu Tràm/.test(bong) && /Chợ Bình Chánh/.test(bong), bong.slice(0, 900));
   }
+  // ── SRS-5.1zzzzzx (Zalo thật 13/10 16:00, The Sholi): "Diện tích đất 80m²*" → ngang 80 → "🏫 Tiện ích: mặt tiền 80m"; gật câu bot xác nhận bị bỏ.
+  {
+    const cau = "Nhà phố 2 mặt tiền đường An Dương Vương & Phan Đình Thông. Thiết kế: 1 trệt, 1 lửng, 3 lầu và sân thượng. Diện tích đất 80m²*.";
+    const { uid, L } = dung({ tin: { ...TIN_NHA, area_m2: null, frontage_m: null, length_m: null, floors: null, floors_text: null }, cauTreo: "gia" });
+    const x1 = await goi(uid, cau, { truong: [T("ngang", "80", "Diện tích đất 80m²"), T("ket_cau", "1 trệt, 1 lửng, 3 lầu và sân thượng", "1 trệt, 1 lửng, 3 lầu và sân thượng")], kien_thuc: ["2 mặt tiền đường An Dương Vương & Phan Đình Thông"] });
+    check("ZZZZZX-01 (ca gốc) AI đọc 'Diện tích đất 80m²' thành ngang 80 → code BỎ (m² là diện tích), không fact mặt tiền, không cột ngang, không lời nào nói 'mặt tiền 80'",
+      !fq(L, "mat_tien").length && lr(L).frontage_m == null && !/mặt tiền 80|ngang 80/.test(x1.rep), JSON.stringify({ mt: fq(L, "mat_tien"), fr: lr(L).frontage_m, rep: x1.rep }));
+  }
+  {
+    const { uid, L } = dung({ tin: { ...TIN_NHA, area_m2: null }, cauTreo: "dien_tich_dat", botNoi: ["Vâng ạ. Diện tích đất mỗi căn là 80m² đó có đúng không ạ?"] });
+    const x2 = await goi(uid, "đúng rồi", { dong_y: "dong_y", dong_y_trich: "đúng rồi", tra_loi: { co_tra_loi: true, gia_tri: "đúng, diện tích đất 80m²", trich_dan: "đúng rồi" } });
+    check("ZZZZZX-02 (ca gốc) bot hỏi xác nhận '80m² đó có đúng không', khách «đúng rồi» → diện tích 80 được ghi, không hỏi lại diện tích",
+      Number(lr(L).area_m2) === 80 && !treo(L).includes("dien_tich_dat") && !/diện tích .*bao nhiêu/i.test(x2.rep), JSON.stringify({ area: lr(L).area_m2, treo: treo(L), rep: x2.rep }));
+    const { uid: uid2, L: L2 } = dung({ tin: { ...TIN_NHA, area_m2: null }, cauTreo: "dien_tich_dat", botNoi: ["Nhà mình diện tích đất bao nhiêu m² vậy anh chị?"] });
+    const x3 = await goi(uid2, "đúng rồi", { dong_y: "dong_y", dong_y_trich: "đúng rồi", tra_loi: { co_tra_loi: true, gia_tri: "đúng, diện tích đất 80m²", trich_dan: "đúng rồi" } });
+    check("ZZZZZX-02b đối chứng: câu bot KHÔNG phải câu xác nhận → gật trơn không ghi diện tích (AI bịa số không có trong câu bot)", lr(L2).area_m2 == null, JSON.stringify({ area: lr(L2).area_m2, rep: x3.rep }));
+  }
+  {
+    const { uid, L } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z", frontage_m: null }, botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
+    db().insert("listing_facts", { listing_id: L.id, question: "mat_tien", answer: "80m", source: "seller_chat" });
+    const x4 = await goi(uid, "đưa lại bản tin mà bạn rao đi", { yeu_cau: "hoi_noi_dung", yeu_cau_trich: "đưa lại bản tin mà bạn rao đi" });
+    check("ZZZZZX-03 fact mặt tiền thô '80m' mà cột frontage_m trống (DB không nhận) → bản tin KHÔNG in 'mặt tiền 80m'", /📋/.test(x4.rep) && !/mặt tiền 80/.test(x4.rep), x4.rep.slice(0, 600));
+  }
   {
     // Gật trơn sau câu ĐÓNG của bot → im (không gửi gì, không gọi model); sau câu chưa đóng → "Dạ vâng ạ." tiền định.
     const { uid } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z" }, botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
