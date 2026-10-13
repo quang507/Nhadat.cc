@@ -150,7 +150,10 @@ export class FakeDB {
       if (!coKc) thieu.push("mấy tầng"); if (!coPn) thieu.push("mấy phòng ngủ");
     }
     let pl = 0;
-    if (l.legal_status || has("phap_ly") || l.property_type === "phong_tro") pl = 10; else thieu.push("pháp lý (sổ hồng riêng/chung, hoàn công)");
+    // 20261013c (SRS-5.1zzzzzu): tin cho thuê (không phải đất) → điều kiện thuê thay cho sổ; tin bán → "pháp lý (loại sổ, hoàn công)".
+    const laThueDiem = l.deal === "cho_thue" && !/^dat/.test(l.property_type ?? "");
+    if (laThueDiem) { if (has("tien_coc") || has("thoi_han_thue") || has("phap_ly") || l.legal_status || l.property_type === "phong_tro") pl = 10; else thieu.push("điều kiện thuê (cọc, thời hạn)"); }
+    else if (l.legal_status || has("phap_ly") || l.property_type === "phong_tro") pl = 10; else thieu.push("pháp lý (loại sổ, hoàn công)");
     const gia = l.price_vnd != null ? 10 : 0; if (!gia) thieu.push("giá");
     let tn = 0;
     const moTa = String(l.description ?? "").toLowerCase();

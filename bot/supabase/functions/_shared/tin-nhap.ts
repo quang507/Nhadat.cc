@@ -444,7 +444,8 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   them("📝", "Thêm", [htNha, htSuDung0 && htNha && trungY(htSuDung0, htNha) ? null : htSuDung, ...boSungThem]);
   if (thue) {
     them("📝", "Điều kiện thuê", [
-      fact("tien_coc"),
+      // SRS-5.1zzzzzu (chủ dự án 13/10: "Điều kiện thuê là cọc 2 tháng chứ không phải là 2 tháng không"): ô cọc in kèm chữ "cọc" khi khách chỉ nói số.
+      nhan("cọc", fact("tien_coc")),
       nhan("thuê tối thiểu", fact("thoi_han_thue")),
       nhan("tăng", fact("truot_gia")),
       nhan("sửa chữa miễn phí", fact("fit_out")),

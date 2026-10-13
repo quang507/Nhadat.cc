@@ -57,7 +57,7 @@ const DAT = {
     area_m2: 100, price_raw: "900tr", gap: true,
   },
   facts: [{ question: "tho_cu", answer: "100m2" }],
-  diem: 47, thieu: ["chiều ngang mặt tiền", "pháp lý (sổ hồng riêng/chung, hoàn công)"], soAnh: 0,
+  diem: 47, thieu: ["chiều ngang mặt tiền", "pháp lý (loại sổ, hoàn công)"], soAnh: 0,
 };
 
 const dung = (m, lai = false) => soanTinNhap({ ...m, lai, cauTD });
@@ -184,6 +184,9 @@ la("cho thuê: giá kèm '/tháng', có khối điều kiện thuê, có ảnh",
   /📷 2 ảnh/.test(thue), thue);
 la("cho thuê: tầng 15 và nội thất vào đúng khối kết cấu / nội thất",
   /🏗 Quy mô: tầng 15 · 2 phòng ngủ · 2 WC · view sông/.test(thue) && /🛋 Nội thất: full nội thất/.test(thue), thue);
+// SRS-5.1zzzzzu (chủ dự án 13/10: "Điều kiện thuê là cọc 2 tháng chứ không phải là 2 tháng không"): khách chỉ nói số → in kèm chữ "cọc".
+const thue2 = dung({ ...CAN_HO_THUE, facts: CAN_HO_THUE.facts.map((f) => f.question === "tien_coc" ? { ...f, answer: "2 tháng" } : f) });
+la("cho thuê: tiền cọc '2 tháng' → in 'cọc 2 tháng' (không 'cọc cọc' khi khách đã nói chữ cọc)", /📝 Điều kiện thuê: cọc 2 tháng · /.test(thue2) && !/cọc cọc/.test(thue), thue2);
 
 const datNhap = dung(DAT);
 la("tin nghèo thông tin: chỉ có mấy dòng, không bịa dòng nào",

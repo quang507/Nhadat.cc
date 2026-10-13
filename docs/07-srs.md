@@ -4172,6 +4172,38 @@ nào" cho kiểm bằng chứng; đây là luật đầu, ghi vào OPEN nếu l�
 nội dung này" / "đủ rồi em" → mời gửi, câu treo còn, không đóng); `kiem-bang-chung.mjs` ZZZZZT-K1…K1c ("thuê lâu dài", "cho thuê dài hạn 5
 năm", đối chứng "sổ lâu dài" của đất). Đỏ khi bỏ `moCauChoThue`, bỏ luật `thoi_han_su_dung_khong_phai_thue`, hoặc bỏ nhánh tin rỗng.
 
+### SRS-5.1zzzzzu · Tiêu đề "cachy" cho cả bán lẫn thuê; số đo không vào "Thêm"; "cọc 2 tháng"; chấm điểm ngay lượt lên kệ; điểm đầy đủ tin thuê không đòi sổ (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026 sau chat cho thuê Dương Bá Trạc: "tiêu đề phải thu hút người mua và cachy hơn", "lâu 1+2 3.5x65m dư, thông
+tin ghi đủ đúng vào trong ô bóc tách thôi ko dc ghi nhiều chỗ quá", "Điều kiện thuê là cọc 2 tháng chứ không phải là 2 tháng không", "pháp
+lý nhà cho thuê phải khác"; nghi ngờ B (đổi chữ "sổ hồng riêng/chung") và D (chấm điểm sau lên kệ) → "sửa từ gốc đi nhé"]`
+
+**Ca gốc.** Bản tin thuê 13:44: tiêu đề máy "Cho thuê nhà hẻm xe hơi 5m Dương Bá Trạc … giá 6 triệu/tháng" (luật tiêu đề AI bắt mở bằng
+"Chỉ <giá>" nên tin thuê không bao giờ có tiêu đề AI); "📝 Thêm" in "Lầu 1 + 2 : 3,5m x 6,5m" (số đo đã thành diện tích); "Điều kiện thuê:
+2 tháng" (khách gõ "cọc 2 tháng" lượt sau mới có chữ cọc); điểm đầy đủ 80/100 đòi "pháp lý (sổ hồng riêng/chung, hoàn công)" cho tin CHO
+THUÊ; lượt lên kệ 13:57 có câu phí nên không xin chấm điểm.
+
+**Lớp lỗi.** (1) Khuôn tiêu đề viết cho tin bán ("Chỉ <giá>") áp cho mọi tin → tin thuê rớt kiểm. (2) Kiến thức thêm nhận mọi mảnh có
+trong tin, kể cả mảnh thuần số đo — số đo thuộc ô số, in lại ở "Thêm" là ghi hai chỗ. (3) Ô cọc in giá trị trần, mất nhãn. (4) `diem_tin`
+đánh giá pháp lý một kiểu cho bán lẫn thuê. (5) Câu chấm điểm nhường chỗ cho câu phí (SRS-5.1zzzzzl) — chủ dự án muốn cả hai.
+
+**Sửa.** (1) `khen-nhap.ts` `tieu_de`: tiêu đề thu hút 40–90 ký tự, tự chọn thứ tự, tin thuê mở "Cho thuê / Thuê ngay"; `tieuDeHopLe` bỏ
+điều kiện mở bằng "Chỉ", đòi ít nhất một con số, mọi số vẫn phải có trong bản tin, chữ cấm giữ. (2) `kiemKienThuc` bỏ mảnh có "A x B" hay
+chỉ là số + m2/m. (3) `tin-nhap.ts` `nhan("cọc", tien_coc)` — khách đã nói "cọc" thì không lặp. (4) Migration `20261013c_diem_tin_thue.sql`:
+tin cho thuê (không phải đất) đạt mục pháp lý khi có cọc / thời hạn thuê / pháp lý, thiếu thì "điều kiện thuê (cọc, thời hạn)"; tin bán chữ
+thiếu "pháp lý (loại sổ, hoàn công)"; mock e2e `diemTin` cùng luật. (5) `xinDiemDuyet` không còn điều kiện `!cauDanPhi`.
+
+**Chỗ khác cùng lớp.** (2) `bo_sung` từ luật (`nhanDienNhieuFact`) không đi qua `kiemKienThuc` — soát sau nếu còn thấy số đo ở "Thêm".
+(4) Câu hỏi bù / `required_facts` tin thuê đã không hỏi sổ (nhóm `chuyen_mon` thuê là cọc / thời hạn), chỉ `diem_tin` lệch.
+(5) kéo theo một mâu thuẫn cũ lộ ra: lượt lên kệ nay mở câu `danh_gia`, nên câu hỏi phí kế đó đi vào nhánh CÂU TREO (r1/r2) thay vì r3 —
+nhánh đó (SRS-5.1zzzzz, 11/10) còn nối "Cho em hỏi … chính chủ hay môi giới để em báo mức phí" sau câu phí, trong khi r3 đã bỏ từ SRS-5.1zzzzzo
+(câu phí chưa rõ vai nay nêu cả hai mức). Cùng một câu hỏi, hai nhánh trả lời khác nhau tuỳ có câu treo hay không. Nay cả ba đường (r1/r2 câu
+treo, gật duyệt kèm hỏi phí `dapKemDuyet`, r3) chỉ nói câu `cauPhi()`, không nối câu hỏi vai; vai vẫn học khi khách tự nói (`dapPhiRoVai`).
+
+**Kiểm.** `khen-nhap.mjs` TD-6/6b/7; `kiem-bang-chung.mjs` ZZZZZU-K1/K1b; `tin-nhap-rao.mjs` "cọc 2 tháng"; e2e AOND-05b, ZZZZZL-03c (lên kệ
+có câu phí vẫn xin chấm điểm), PHIKE-01/01b (hỏi phí khi câu `danh_gia` treo → hai mức, không hỏi vai), ZZZZZ-10/11/12 (đổi kỳ vọng theo (5)).
+Đỏ khi hoàn một trong năm chỗ sửa.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

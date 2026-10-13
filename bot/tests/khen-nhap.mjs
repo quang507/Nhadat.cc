@@ -50,6 +50,12 @@ import { tieuDeHopLe } from "../supabase/functions/_shared/extraction/khen-hop-l
   ok3("TD-2 con số ngoài bản tin ('150m²') → bỏ", tieuDeHopLe("Chỉ 3,9 tỷ nhà cấp 4 150m² tại Hóc Môn", TIN) === null);
   ok3("TD-3 nói thị trường ('dễ bán', 'đầu tư') → bỏ", tieuDeHopLe("Chỉ 3,9 tỷ nhà cấp 4 dễ bán tại Hóc Môn", TIN) === null && tieuDeHopLe("Chỉ 3,9 tỷ nhà đầu tư sinh lời tại Hóc Môn", TIN) === null);
   ok3("TD-4 không mở bằng 'Chỉ' / có '!' / quá dài → bỏ", tieuDeHopLe("Nhà cấp 4 hẻm xe hơi 3,9 tỷ tại Hóc Môn", TIN) === null && tieuDeHopLe("Chỉ 3,9 tỷ nhà đẹp lắm!", TIN) === null && tieuDeHopLe("Chỉ 3,9 tỷ " + "nhà xinh ".repeat(15), TIN) === null);
+  // SRS-5.1zzzzzu: tiêu đề "cachy" không bắt mở bằng "Chỉ"; tin thuê cũng có; vẫn phải có con số và mọi số nằm trong bản tin.
+  const TIN_THUE = "📋 Em sẽ rao như vầy nhé anh:\nCho thuê nhà hẻm xe hơi 5m Dương Bá Trạc Phường Chánh Hưng Q.8, 21.5m², trệt + 2 lầu, 2PN, giá 6 triệu/tháng\n📍 Dương Bá Trạc, Phường Chánh Hưng, Quận 8\n💰 GIÁ 6 TRIỆU/THÁNG";
+  ok3("TD-6 tiêu đề thuê 'Cho thuê nguyên căn hẻm 5m Dương Bá Trạc, 2PN, dọn vào ngay, 6 triệu/tháng' → nhận",
+    tieuDeHopLe("Cho thuê nguyên căn hẻm 5m Dương Bá Trạc, 2PN, dọn vào ngay, 6 triệu/tháng", TIN_THUE) !== null);
+  ok3("TD-6b tiêu đề bán giá đứng cuối 'Nhà hẻm xe hơi Đông Thạnh 132m², sân rộng, chỉ 3,9 tỷ' → nhận", tieuDeHopLe("Nhà hẻm xe hơi Đông Thạnh 132m², sân rộng, chỉ 3,9 tỷ", TIN) !== null);
+  ok3("TD-7 tiêu đề không có con số nào → bỏ", tieuDeHopLe("Nhà xinh hẻm xe hơi Đông Thạnh, về ở liền", TIN) === null);
   ok3("TD-5 null / rỗng → null", tieuDeHopLe(null, TIN) === null && tieuDeHopLe("", TIN) === null);
 }
 

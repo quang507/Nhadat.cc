@@ -3796,8 +3796,6 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
     const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
       dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ten: tenBot, ...o });
-    /** SRS-5.1zzzzz: câu hỏi vai để báo đúng mức phí (một chỗ viết). SRS-5.1zzzzzn: lời chủ dự án 13/10/2026. */
-    const cauHoiVaiPhi = () => `Cho em hỏi ${cachGoi} là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé.`;
     /**
      * SRS-5.1zzzzzo (chủ dự án 13/10/2026: "mà chú biết phí bên cháu chưa ạ, thì nói là xin phép báo mức phí của bên cháu khi giao dịch
      * thành công luôn"): lúc tin lên kệ BÁO THẲNG phí thay cho câu hỏi "biết phí bên em chưa" (khoá `dang_xong_phi` cũ). Con số chỉ do
@@ -7221,14 +7219,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
       if (hoiNguoc && hoiNguocDap) cauDaDap = hoiNguoc;
-      // SRS-5.1zzzzz (khách mô phỏng 11/10, hoi-phi: hỏi phí bốn lần, lần nào cũng nghe "mức tuỳ chính chủ hay môi giới", có lần model hẹn
-      // "em sẽ báo rõ khi chị quyết định rao"): câu phí không số chỉ đúng MỘT lần — khách hỏi lại mà em vẫn chưa biết vai thì việc của
-      // lượt là HỎI VAI (rồi `dapPhiRoVai` báo số, SRS-5.1zzzzo). Câu đang hỏi vẫn mở (lượt bên lề), lượt sau quay lại nó.
-      const daNoiPhiKhongSo = lichSuRows.some((m) => !laTinNguoi(m.sender) && coCauPhiChuaRoVai(m.body ?? ""));
-      const hoiVaiPhi = !!hoiNguocDap && coCauPhiChuaRoVai(hoiNguocDap) && daNoiPhiKhongSo;
-      if (hoiVaiPhi && hoiAi?.caTin && pendingReq.question !== "duyet_tin" && !humanActive) {
-        return await traLoiSeller([`${hoiNguocDap}\n${cauHoiVaiPhi()}`], { hoi_nguoc: hoiNguoc, hoi_vai_phi: true, reask: pendingReq.question });
-      }
+      // SRS-5.1zzzzz (khách mô phỏng 11/10, hoi-phi) từng nối câu hỏi vai sau câu phí không số khi khách hỏi lại. SRS-5.1zzzzzo (13/10) đổi
+      // câu phí chưa rõ vai thành CẢ HAI mức, r3 đã bỏ câu hỏi vai; SRS-5.1zzzzzu bỏ nốt ở đây — câu phí là MỘT câu `cauPhi()`, không
+      // nối thêm gì ở bất kỳ nhánh nào (lượt lên kệ nay mở câu `danh_gia`, nên câu hỏi phí sau đó đi vào nhánh câu treo này).
       // SRS-5.1zzzzv (bắn production 10/10, thu-cmp46-3: "sao chị biết em không lừa"): bong bóng trấn an tiền định (`traLoiSeller`, chủ của
       // lời trấn an) đã nói "không thu đồng nào trước, phí chỉ khi giao dịch thành công, đã báo người phụ trách" — model không biết nên
       // trấn an lại cùng ý. Một ý một nguồn: AI đọc ra nghi ngờ thì câu lệnh báo model ý đó đã được nói, model chỉ đi tiếp việc của lượt.
@@ -7976,8 +7969,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // 05/10/2026 (demo AOND `build_fee_followup_system`): tin lên kệ → DẪN PHÍ một lần bằng câu hỏi, nếu em chưa từng nói phí với người này.
         // SRS-5.1zzzzz (khách mô phỏng hoi-phi: "Được rồi em ơi, rao đi. Mà … chị phải trả bao nhiêu tiền hoa hồng" → tin lên kệ, câu hỏi
         // phí bị bỏ qua): gật kèm câu hỏi thì câu hỏi được trả lời ở đây (bong bóng tiền định đã soạn, `hoiNguocDap`), không dẫn phí lần hai;
-        // câu phí không số thì hỏi luôn vai (câu chúc mừng không có câu hỏi nào khác).
-        const dapKemDuyet = hoiNguoc && hoiNguocDap ? (coCauPhiChuaRoVai(hoiNguocDap) ? `${hoiNguocDap}\n${cauHoiVaiPhi()}` : hoiNguocDap) : null;
+        // SRS-5.1zzzzzu: câu phí chưa rõ vai nêu cả hai mức, không nối câu hỏi vai (một luật với r1/r2/r3).
+        const dapKemDuyet = hoiNguoc && hoiNguocDap ? hoiNguocDap : null;
         const cauDanPhi = len && !daNoiPhiRoi() && !(dapKemDuyet && coCauPhi(dapKemDuyet)) ? cauBaoPhiLenKe((lstOk as { deal?: string | null } | null)?.deal ?? dealNguoi) : "";
         // SRS-5.1zzs: dòng hạng đi cùng bong bóng "thêm điểm" (chuyện điểm / hạng ở một chỗ) — bong bóng đầu giữ hai câu ≤ 30 từ (H8e).
         const dongHang = len ? await dongHangRao() : "";
@@ -7992,7 +7985,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const bongDiem = len && loiHuaDuyet ? loiHuaDuyet : len && themDiem ? themDiem : "";
         const bongDiemHang = dongHang ? (bongDiem ? `${bongDiem}\n${dongHang}` : dongHang) : bongDiem;
         // SRS-5.1zzzzzl: tin lên kệ, lượt không còn câu hỏi nào khác → xin chấm điểm (một lần mỗi người rao).
-        const xinDiemDuyet = len && !cauDanPhi && !dapKemDuyet && !huaSauDuyet ? await xinChamDiem(pendingReq.listing_id) : null;
+        // SRS-5.1zzzzzu (chủ dự án 13/10, nghi ngờ D: "sửa từ gốc"): xin chấm điểm ngay lượt lên kệ kể cả khi có câu phí — câu phí là bong bóng riêng.
+        const xinDiemDuyet = len && !dapKemDuyet && !huaSauDuyet ? await xinChamDiem(pendingReq.listing_id) : null;
         return await traLoiSeller([cau, ...(bongDiemHang ? [bongDiemHang] : []), ...(dapKemDuyet ? [dapKemDuyet] : []), ...(xinDiemDuyet ? [xinDiemDuyet] : [])], {
           duyet: true, listing_status: lstOk?.status ?? null, diem: dk?.diem ?? null, du_roi: noiDu || undefined, ...(cauDanPhi ? { dan_phi: true } : {}), ...(thieuDuyet?.meta ?? {}),
           ...(xinDiemDuyet ? { xin_danh_gia: true } : {}),
@@ -9110,11 +9104,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // hỏi ngược mà không qua bong bóng tiền định — câu phí phải do `cauPhi(vaiPhi(…))` nói như r1 / r2; chưa rõ vai thì câu không số +
         // câu hỏi vai, và lượt khách tự nói vai sau đó báo số (`dapPhiRoVai`, cùng điều kiện nhánh câu treo).
         const cauHoiR3 = hoiR3 ? (hoiR3.caTin ? text : hoiR3.cau) : null;
-        const dapR3Tho = cauHoiR3 ? dapHoiNguocTienDinh(cauHoiR3, cachGoi, cauPhi(vaiPhi(sellerRow), dealNguoi, { benEm: true }), hoiR3?.chuDe, botDaNoiGan()) : null;
         // SRS-5.1zzzzzo: câu phí chưa rõ vai nay nêu cả hai mức — không nối câu hỏi vai.
-        const dapR3 = dapR3Tho;
+        const dapR3 = cauHoiR3 ? dapHoiNguocTienDinh(cauHoiR3, cachGoi, cauPhi(vaiPhi(sellerRow), dealNguoi, { benEm: true }), hoiR3?.chuDe, botDaNoiGan()) : null;
         if (dapR3 && cauHoiR3) cauDaDap = cauHoiR3;
-        if (dapR3 && hoiR3?.caTin) return await traLoiSeller([dapR3], { hoi_nguoc: cauHoiR3, ...(dapR3 !== dapR3Tho ? { hoi_vai_phi: true } : {}) });
+        if (dapR3 && hoiR3?.caTin) return await traLoiSeller([dapR3], { hoi_nguoc: cauHoiR3 });
         const vaiPhiR3 = vaiPhi(sellerRow);
         const botDaNoiR3 = lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => m.body ?? "");
         const dapPhiR3 = !cauHoiR3 && vaiTuNoiLuot && vaiPhiR3 !== "unknown" && botDaNoiR3.some(coCauPhiChuaRoVai) && !botDaNoiR3.some(coCauPhiTheoVai)

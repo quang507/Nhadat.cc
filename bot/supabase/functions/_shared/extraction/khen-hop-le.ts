@@ -70,7 +70,8 @@ export function cauDuAnCoNguon(
  */
 export function tieuDeHopLe(td: string | null | undefined, banTin: string): string | null {
   const k = (td ?? "").replace(/\s+/g, " ").trim();
-  if (k.length < 20 || k.length > 100 || /[?!\n—]/.test(td ?? "") || !/^Chỉ\s/u.test(k)) return null;
+  // SRS-5.1zzzzzu: không bắt mở bằng "Chỉ" nữa (tiêu đề "cachy" cho cả tin bán lẫn thuê) — vẫn phải có ít nhất một con số (giá / diện tích).
+  if (k.length < 20 || k.length > 100 || /[?!\n—]/.test(td ?? "") || !/\d/.test(k)) return null;
   const CAM = /\b(?:dễ bán|bán nhanh|khách chuộng|đắt khách|sinh lời|đầu tư|thanh khoản|giá tốt|giá rẻ|rẻ nhất|hời|lời|cam kết|đảm bảo|hot|vip|luxury|premium|view)\b/iu;
   if (CAM.test(k)) return null;
   // "nhà cấp 4" là LOẠI nhà, không phải con số — chỉ nhận khi bản tin cũng nói cấp 4 (AI gọi nhà trệt lửng là "cấp 4" thì bỏ).
