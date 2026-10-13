@@ -3099,11 +3099,26 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       }
     };
     const vetDuAnBangModel = async (): Promise<void> => {
-      if (daVetDuAn || daGhiFactDuAn || !anthropicS || !coMuiDuAn(text)) return;
-      daVetDuAn = true;
-      const lid = pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null;
+      if (daVetDuAn || !anthropicS) return;
+      // SRS-5.1zzzzzzd: tin vừa tạo trong lượt (`tinTrongLuot`) đứng trước — `active_listing_id` đọc đầu lượt chưa trỏ tới nó.
+      const lid = tinTrongLuot ?? pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null;
       if (!lid) return;
-      const r = await bocDuAnBangModel(anthropicS as unknown as Parameters<typeof bocDuAnBangModel>[0], MODEL, text);
+      // SRS-5.1zzzzzze (chủ dự án 13/10, Khu dân cư Cầu Tràm: "nó có lưu thêm thông tin dự án được không"): tin THUỘC DỰ ÁN (có
+      // `project_id` hay chủ nhà đã nêu tên dự án) mà chủ nhà gửi BÀI RAO DÀI (≥ 200 chữ) thì luôn vét — tiện ích, hạ tầng, bàn giao,
+      // phí… vào hàng chờ duyệt `project_facts` (nguồn `llm`, admin gật mới vào kho `projects`). Van cũ (mùi dự án + luật chưa ghi gì)
+      // giữ cho mọi tin khác.
+      // Van rẻ trước (không truy vấn): tin ngắn không mùi dự án / luật đã ghi → thôi, như cũ (TOIUU-07 giữ số truy vấn).
+      const baiDai = text.replace(/\s+/g, " ").trim().length >= 200;
+      if (!baiDai && (daGhiFactDuAn || !coMuiDuAn(text))) return;
+      const { data: l } = await client.from("listings").select("project_id").eq("id", lid).maybeSingle();
+      const { data: fDuAn } = l?.project_id ? { data: null } : await client.from("listing_facts")
+        .select("answer").eq("listing_id", lid).eq("question", "du_an_ten")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const thuocDuAn = !!l?.project_id || !!fDuAn?.answer;
+      const baiRaoDuAn = thuocDuAn && baiDai;
+      if (!baiRaoDuAn && (daGhiFactDuAn || !coMuiDuAn(text))) return;
+      daVetDuAn = true;
+      const r = await bocDuAnBangModel(anthropicS as unknown as Parameters<typeof bocDuAnBangModel>[0], MODEL, text, baiRaoDuAn);
       if (!r) return;
       await doTien(client, r.usage as Parameters<typeof doTien>[1]);
       const k = donKetQua(r.ket);
@@ -3111,12 +3126,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // (`du_an_ten` lúc tạo tin), thêm một dòng trống nghĩa vào hàng chờ duyệt
       // chỉ làm admin mỏi mắt.
       if (!k.facts.length) return;
-      const { data: l } = await client.from("listings").select("project_id").eq("id", lid).maybeSingle();
       let tenNhac: string | null = null;
       if (!l?.project_id) {
-        const { data: fDuAn } = await client.from("listing_facts")
-          .select("answer").eq("listing_id", lid).eq("question", "du_an_ten")
-          .order("created_at", { ascending: false }).limit(1).maybeSingle();
         tenNhac = fDuAn?.answer ?? k.ten_du_an ?? null;
         if (!tenNhac) return;
       }
@@ -6444,6 +6455,25 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       }
       return { thieu, khoaMo };
     };
+    /**
+     * SRS-5.1zzzzzzd: câu rao có đáng gửi bản nháp NGAY không — công tắc `app_config.nhap_som` (mặc định bật, `tat` để về đường cũ),
+     * `diem_tin` ≥ 70 và giá đã đọc ra số (bản nháp không gửi khi `price_vnd` trống — cùng luật `guiBanNhap`). Không gọi model, không đổi DB.
+     */
+    /** Ô CỨNG phải có trước khi nháp sớm: còn thiếu một trong các ô này thì hỏi như cũ (địa chỉ chưa chắc, hẻm / pháp lý / giá chưa có → bản nháp sai bản chất). */
+    const KHOA_CUNG_TRUOC_NHAP = new Set(["vi_tri", "phuong", "quan", "loai_bds", "dien_tich", "dien_tich_dat", "gia", "phap_ly", "do_rong_hem", "loai_duong_vao", "ket_cau", "so_tang", "tho_cu"]);
+    const nhapSomDuDiem = async (listingId: string): Promise<boolean> => {
+      const { data: cd } = await client.rpc("cau_hinh", { p_key: "nhap_som" });
+      if (String(cd ?? "").trim().toLowerCase() === "tat") return false;
+      const [{ data: dt, error: dErr }, { data: l }] = await Promise.all([
+        client.rpc("diem_tin", { p_listing_id: listingId }),
+        client.from("listings").select("price_vnd").eq("id", listingId).maybeSingle(),
+      ]);
+      if (dErr) { await ghiLoi(client, "chat-reply diem_tin(nhap som)", dErr.message); return false; }
+      const d = (dt ?? null) as { diem?: number } | null;
+      const du = (d?.diem ?? 0) >= 70 && (l as { price_vnd?: number | null } | null)?.price_vnd != null;
+      if (du) console.log("chat-reply: cau rao du diem, gui nhap ngay", d?.diem);
+      return du;
+    };
     // Tự kiểm 02/09: chủ nhà đang bị hỏi dở (pendingReq) mà nhắn RAO THÊM CĂN
     // KHÁC → bản cũ ghi cả câu rao làm CÂU TRẢ LỜI cho câu hỏi đang treo, vì
     // khối pendingReq đứng trước khối wantsSell và không hỏi gì thêm. Câu rao
@@ -8968,14 +8998,18 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // tầng, hẻm… mà không bao giờ hỏi quận (phường ưu tiên 22, gần cuối). Có địa chỉ mà chưa rõ quận → hỏi phường/quận trước.
         let firstKey: string | null = (!quanDoc && viTriRao && thieuDau.some((f) => f.fact_key === "phuong") ? "phuong" : null) ??
           chonCauKe(vuaRao, thieuDau) ?? null;
-        if (firstKey) {
+        // SRS-5.1zzzzzzd: ô chờ câu đầu chỉ mở SAU khi biết câu rao có đủ điểm để gửi bản nháp ngay không (gửi nháp thì không hỏi).
+        let cauDauDaMo = false;
+        const moCauDau = async () => {
+          if (!firstKey || cauDauDaMo) return;
+          cauDauDaMo = true;
           const { error: ir1Err } = await client.from("info_requests").insert({
             listing_id: newLst.id, question: firstKey, status: "pending",
           });
           if (ir1Err && ir1Err.code !== "23505") {
             await ghiLoi(client, "chat-reply mo cau hoi dau", ir1Err.message);
           }
-        }
+        };
         // Chủ dự án 09/09/2026: "đã bóc tách được cái gì, viết gửi lại cho khách
         // luôn" — bong bóng TIỀN ĐỊNH liệt kê những gì vừa ghi (không liệt kê
         // thứ trống), đứng trước lời chào/câu hỏi của model. Số liệu đúng từng
@@ -9030,12 +9064,23 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // bot hứa "Em lên tin đăng cho nhà mình liền nha" trong khi tin vẫn chờ, không bản nháp, không câu hỏi. Nay đi cùng đường với
         // nhánh trả lời câu treo: gửi bản nháp; chưa đủ điểm thì mở ô cho mục còn thiếu và hỏi nó. Tên đường còn chờ xác nhận thì để
         // câu xác nhận đi trước (bản nháp không gửi khi địa chỉ chưa chắc).
-        if (!firstKey && !duongRao?.goiY) {
-          const het = await hetCauTruocNhap(newLst.id, (newLst as { property_type?: string | null }).property_type,
-            { listing_code: newLst.code, ghi_nhan: ghiNhan }, [bongGhiNhanCho(null), ...(dapRao ? [dapRao] : [])].filter(Boolean));
-          if ("res" in het) return het.res;
-          firstKey = het.khoaMo;
+        if (!duongRao?.goiY) {
+          const truocNhap = [bongGhiNhanCho(null), ...(dapRao ? [dapRao] : [])].filter(Boolean);
+          if (!firstKey) {
+            const het = await hetCauTruocNhap(newLst.id, (newLst as { property_type?: string | null }).property_type,
+              { listing_code: newLst.code, ghi_nhan: ghiNhan }, truocNhap);
+            if ("res" in het) return het.res;
+            firstKey = het.khoaMo;
+            cauDauDaMo = true; // `hetCauTruocNhap` đã mở ô cho mục thiếu
+          } else if (quanDoc && !thieuDau.some((f) => KHOA_CUNG_TRUOC_NHAP.has(f.fact_key)) && await nhapSomDuDiem(newLst.id)) {
+            // SRS-5.1zzzzzzd (chủ dự án 13/10: "tin đợt trước nó đọc đủ thông tin rồi mà không ra tin nháp mà ra cái bảng nhỏ nhỏ là vì
+            // sao"): câu rao ĐÃ đủ điểm (≥ 70, giá đọc ra số) → bản nháp NGAY, không hỏi thêm; mục còn thiếu nằm ở dòng "Độ đầy đủ" và
+            // hỏi bù sau khi lên kệ (`seller_hoi_bu_tick`). Chỉ áp cho lượt CÂU RAO; trả lời từng câu vẫn hỏi hết nhóm cơ bản trước nháp.
+            const nhap = await guiBanNhap(newLst.id, { listing_code: newLst.code, ghi_nhan: ghiNhan, nhap_som: true, cau_bo_qua: firstKey }, false, truocNhap);
+            if (!Array.isArray(nhap)) return nhap;
+          }
         }
+        await moCauDau();
         // OPEN-30: tin rao ĐÃ tạo xong (mã đã cấp) — model chỉ soạn lời chào.
         // Model hỏng thì chào bằng câu mẫu, kèm luôn câu hỏi đầu nếu có.
         // 11/09/2026 (42 ca): lý do "để em kiểm tra giá khu vực" chỉ nói ở lần hỏi

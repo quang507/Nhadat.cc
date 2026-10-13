@@ -23,9 +23,10 @@
 //     cache_read/cache_write ghi 0. Nhìn thẻ Chi phí Model thấy tỷ lệ đọc lại
 //     tụt trong ngày chạy dự phòng là ĐÚNG, không phải hỏng.
 //   · Các model Groq đang bật (gpt-oss-120b, qwen3.8-27b) KHÔNG nhìn được ảnh.
-//     Lượt phân loại ảnh / đọc sổ có ảnh sẽ ném lỗi để tầng gọi đi đúng nhánh
-//     "không phân loại được → cất RIÊNG TƯ" như cũ (FR-185), thay vì bịa ra
-//     nhãn ảnh từ chỗ không nhìn thấy gì.
+//     Lượt có ảnh bỏ qua nguồn Groq; chỉ Gemini đọc ảnh (SRS-5.1zzzzzzf, 13/10/2026 —
+//     `image_url` dạng data URL qua cổng OpenAI). Không nguồn nào nhìn được thì ném
+//     lỗi để tầng gọi đi đúng nhánh "không phân loại được → cất RIÊNG TƯ" (FR-185),
+//     thay vì bịa ra nhãn ảnh từ chỗ không nhìn thấy gì. PDF (`document`) vẫn chỉ Claude.
 //
 // GEMINI (23/09/2026, chủ dự án đưa khoá sau khi Anthropic hết số dư lần hai và Groq
 // bậc miễn phí chạm trần ngay với 3 khách): Gemini cũng có cổng nói giọng OpenAI
@@ -137,6 +138,47 @@ function gopNoiDung(content: TinNhan["content"]): string {
   return content.map((k) => k.text ?? "").filter(Boolean).join("\n");
 }
 
+// ─── SRS-5.1zzzzzzf (chủ dự án 13/10/2026: "gemini đọc ảnh các thứ còn dùng dc ko" → "Fix hết") ───
+// Trước đây MỌI nguồn dự phòng mù ảnh: Claude quá hạn ở lượt phân loại ảnh (sổ lỗi 13/10 15:35 "Request timed out") → Gemini nhận
+// lượt → ném "không nhìn được ảnh" → ảnh cất riêng tư, không đọc sổ. Gemini qua cổng OpenAI NHÌN được ảnh (`image_url` dạng data URL),
+// nên nguồn Gemini đọc ảnh; Groq (gpt-oss / qwen) vẫn mù → lượt có ảnh bỏ qua nguồn Groq. PDF (`document`) vẫn chỉ Claude.
+/** Trần một tấm ảnh gửi dự phòng (byte). Ảnh Zalo CDN vài trăm KB; quá trần thì thôi, để nhánh cất riêng tư. */
+const TRAN_ANH_DU_PHONG = 6 * 1024 * 1024;
+/** Khối ảnh Anthropic (`url` / `base64`) → data URL cho `image_url`. Ảnh `url` tải về (hạn 8 giây) rồi mã hoá — cổng Gemini chắc nhận data URL. */
+async function anhThanhDataUrl(k: Khoi): Promise<string> {
+  const src = (k.source ?? {}) as { type?: string; media_type?: string; data?: string; url?: string };
+  if (src.type === "base64" && src.data) return `data:${src.media_type || "image/jpeg"};base64,${src.data}`;
+  if (src.type === "url" && src.url) {
+    const huy = new AbortController();
+    const hen = setTimeout(() => huy.abort(), 8_000);
+    try {
+      const r = await fetch(src.url, { signal: huy.signal });
+      if (!r.ok) throw new Error(`tải ảnh cho dự phòng: HTTP ${r.status}`);
+      const mt = (r.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim() || "image/jpeg";
+      const b = new Uint8Array(await r.arrayBuffer());
+      if (b.byteLength > TRAN_ANH_DU_PHONG) throw new Error(`ảnh ${b.byteLength} byte quá trần dự phòng`);
+      let s = "";
+      for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+      return `data:${mt};base64,${btoa(s)}`;
+    } finally {
+      clearTimeout(hen);
+    }
+  }
+  throw new Error("Khối ảnh không có url / base64");
+}
+/** Nội dung một tin cho nguồn OpenAI: Gemini nhận mảng phần (chữ + ảnh); Groq chỉ chữ (gặp ảnh thì ném như cũ). */
+async function noiDungCho(nguon: NguonOpenAI, content: TinNhan["content"]): Promise<string | Array<Record<string, unknown>>> {
+  if (nguon.ten !== "Gemini" || typeof content === "string") return gopNoiDung(content);
+  if (!content.some((k) => k.type === "image" || k.type === "document")) return gopNoiDung(content);
+  const phan: Array<Record<string, unknown>> = [];
+  for (const k of content) {
+    if (k.type === "document") throw new Error("Model dự phòng không đọc được tài liệu PDF — để tầng gọi đi nhánh cất riêng tư");
+    if (k.type === "image") phan.push({ type: "image_url", image_url: { url: await anhThanhDataUrl(k) } });
+    else if (k.text) phan.push({ type: "text", text: k.text });
+  }
+  return phan;
+}
+
 /**
  * Groq strict KHÔNG hiểu `$ref`. Bắt tại trận 15/09/2026 (lượt thật đầu tiên sau khi
  * đảo Groq lên trước): `zodOutputFormat()` biến `z.number().int().nullable()` (trường
@@ -206,7 +248,8 @@ async function goiOpenAI(
 ): Promise<KetQua> {
   const messages = [
     ...(gopHeThong(p.system) ? [{ role: "system", content: gopHeThong(p.system) }] : []),
-    ...p.messages.map((m) => ({ role: m.role, content: gopNoiDung(m.content) })),
+    // SRS-5.1zzzzzzf: Gemini nhận ảnh (mảng phần), Groq chỉ chữ — `noiDungCho`.
+    ...(await Promise.all(p.messages.map(async (m) => ({ role: m.role, content: await noiDungCho(nguon, m.content) })))),
   ];
   const than: Record<string, unknown> = {
     model,
@@ -337,7 +380,10 @@ export function bocDuPhong(
     let cuoi: unknown = null;
     // SRS-5.1zzzzo: cả chuỗi dự phòng chung MỘT hạn (một lượt gọi) — xoay model / nguồn không được cộng dồn thời gian chờ của khách.
     const het = Date.now() + (o.hanMs ?? hanGoiMs)(p);
+    const anh = coAnh(p);
     for (const n of dsNguon) {
+      // SRS-5.1zzzzzzf: lượt có ảnh chỉ đi nguồn nhìn được ảnh (Gemini); Groq mù — bỏ qua, không ghi sổ lỗi (đường đi bình thường).
+      if (anh && n.ten !== "Gemini") { console.log(`${n.ten} khong nhin duoc anh, bo qua nguon`); continue; }
       for (const m of n.models) {
         const con = het - Date.now();
         if (con < 1_500) throw cuoi ?? Object.assign(new Error("Dự phòng: hết hạn trước khi thử được nguồn nào"), { hetHan: true });
