@@ -11,6 +11,8 @@ import { dinhDangLong, docLong } from "./doc-long.ts";
 const KhenNhap = z.object({
   khen: z.string().nullable().describe("MỘT câu khen, ≤ 30 chữ, không câu hỏi. Không viết được câu đúng luật → null."),
   dua_tren: z.array(z.string()).describe("Các cụm COPY NGUYÊN VĂN từ BẢN TIN mà câu khen nhắc tới (mỗi điểm mạnh một cụm)."),
+  // SRS-5.1zzzzzn: xếp ý thêm vào dòng "Quy mô" theo NGHĨA (không dò từ khoá) — cùng lượt model này, không thêm lượt gọi.
+  quy_mo: z.array(z.string()).optional().describe("Trong danh sách Ý THÊM: các ý nói về QUY MÔ / KHÔNG GIAN của căn (phòng, bếp, phòng khách, sân, sân thượng, ban công, gara, kho, độ rộng không gian bên trong). Chép NGUYÊN VĂN từng ý như trong danh sách. Ý về vị trí, tiện ích quanh nhà, tình trạng, pháp lý → không đưa. Không có → []."),
 });
 const FORMAT = dinhDangLong(KhenNhap);
 
@@ -24,6 +26,8 @@ gửi chủ nhà, đặt ngay dưới bản tin.
 - KHÔNG chấm căn tốt / xấu / vừa, KHÔNG con số nào ngoài bản tin, KHÔNG hỏi, KHÔNG hứa, KHÔNG tiếng Anh, không gạch ngang dài.
 - Gọi chủ nhà đúng cách gọi được đưa; em xưng "em".
 - dua_tren: mỗi điểm mạnh câu khen nhắc tới là một cụm chép NGUYÊN VĂN từ bản tin.
+- quy_mo: xếp riêng (không liên quan câu khen) — trong danh sách Ý THÊM, ý nào nói về quy mô / không gian bên trong căn (bếp, phòng khách, sân rộng,
+  sân thượng…) thì chép nguyên văn vào quy_mo; ý về vị trí, tiện ích quanh nhà, tình trạng nhà thì không.
 Bản tin không có điểm mạnh nào để nhắc → khen = null.`;
 
 type ClientModel = {
@@ -32,15 +36,15 @@ type ClientModel = {
 
 /** Hỏi model câu khen. Kết quả THÔ — đưa qua `khenHopLe`. Model hỏng thì NÉM. */
 export async function vietKhenNhapBangModel(
-  ai: ClientModel, model: string, banTin: string, cachGoi: string,
-): Promise<{ khen: string | null; duaTren: string[]; usage: unknown }> {
+  ai: ClientModel, model: string, banTin: string, cachGoi: string, yThem: string[] = [],
+): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
     max_tokens: 200,
     output_config: { effort: "low", format: FORMAT },
     system: [{ type: "text", text: LUAT_KHEN, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: `Cách gọi chủ nhà: "${cachGoi}"\nBẢN TIN:\n${banTin.slice(0, 2500)}` }],
+    messages: [{ role: "user", content: `Cách gọi chủ nhà: "${cachGoi}"\nBẢN TIN:\n${banTin.slice(0, 2500)}\nÝ THÊM:\n${yThem.length ? yThem.map((y) => `- ${y}`).join("\n") : "(không có)"}` }],
   });
   const k = docLong(KhenNhap, r.parsed_output);
-  return { khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], usage: r.usage };
+  return { khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], quyMo: k.success ? k.data.quy_mo ?? [] : [], usage: r.usage };
 }

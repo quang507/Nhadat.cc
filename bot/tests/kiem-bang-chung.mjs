@@ -593,6 +593,10 @@ for (const [la, td, tin, mong] of [
   ["chinh_chu", "nhà của tôi", "nhà của tôi ở hẻm 5", "chinh_chu"],
   ["chinh_chu", "không phải môi giới", "anh không phải môi giới đâu em", "chinh_chu"],
   ["moi_gioi", "em làm bên sàn", "à em làm bên sàn nha anh", "moi_gioi"],
+  // SRS-5.1zzzzzn (test Zalo 13/10/2026): bài rao mở bằng "Nhà chính chủ cần bán!" là tự nói vai; "giấy tờ chính chủ" vẫn không.
+  ["chinh_chu", "Nhà chính chủ cần bán", "Nhà chính chủ cần bán! Khu dân cư, Gần chợ Gấu - Đông Thạnh, Hóc Môn. 6x22", "chinh_chu"],
+  ["chinh_chu", "chính chủ gửi bán", "chính chủ gửi bán căn góc 2 mặt hẻm Phan Xích Long", "chinh_chu"],
+  ["chinh_chu", "giấy tờ chính chủ", "bán nhà hẻm 4m, giấy tờ chính chủ đầy đủ", null],
 ]) ok(`VAI-ZZZZK «${td}» (${la}) → ${mong ?? "không nhận"}`, (docVai({ la, trich_dan: td }, tin)?.la ?? null) === mong, JSON.stringify(docVai({ la, trich_dan: td }, tin)));
 ok("VAI-02 khong_noi → null; trích bịa → null", docVai({ la: "khong_noi", trich_dan: null }, "x") === null && docVai({ la: "chinh_chu", trich_dan: "nhà của tôi" }, "mấy bên môi giới gọi suốt") === null);
 

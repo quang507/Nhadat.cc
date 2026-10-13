@@ -23,3 +23,16 @@ la("KHEN-K7 (cách nói khác) 'gần chợ, công viên' + số có trong tin '
 
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) process.exitCode = 1;
+
+// SRS-5.1zzzzzn: lời nhận ảnh giấy tờ do AI viết — code kiểm số / câu hỏi.
+import { loiNhanGiayToHopLe } from "../supabase/functions/_shared/extraction/khen-hop-le.ts";
+{
+  const ok2 = (ten, dk) => { console.log(`${dk ? "✓" : "✗"} ${ten}`); if (!dk) process.exitCode = 1; };
+  ok2("GIAYTO-1 (ca gốc) «…sổ ghi 132m2, khớp với số em đã ghi» + sổ 132, đang ghi 132 → nhận",
+    loiNhanGiayToHopLe("Dạ em nhận được ảnh sổ rồi anh chị, em cất riêng không đưa lên web. Sổ ghi 132m2, khớp với số em đã ghi ạ.", 132, 132) !== null);
+  ok2("GIAYTO-2 (cách nói mới) chưa ghi diện tích, «trên sổ 85,5 m2 em lấy làm diện tích luôn nha» → nhận",
+    loiNhanGiayToHopLe("Dạ sổ đỏ em nhận rồi chú, em giữ riêng không đăng lên web. Trên sổ 85,5 m2 em lấy làm diện tích luôn nha.", 85.5, null) !== null);
+  ok2("GIAYTO-3 lộ số thửa «thửa 245» → bỏ (dùng câu soạn sẵn)", loiNhanGiayToHopLe("Dạ em nhận ảnh sổ rồi ạ, thửa 245, em cất riêng.", 132, 132) === null);
+  ok2("GIAYTO-4 lời có câu hỏi → bỏ", loiNhanGiayToHopLe("Dạ em nhận ảnh sổ rồi ạ, anh còn bản nào nữa không?", 132, 132) === null);
+  ok2("GIAYTO-5 số diện tích bịa (120 khi sổ 132) → bỏ", loiNhanGiayToHopLe("Dạ sổ ghi 120m2, em cất riêng rồi ạ.", 132, 132) === null);
+}

@@ -47,6 +47,8 @@ export const DAU_BAO_LAI = "🤖";
 // một lần; không tìm được cụm khách gõ (giá trị code suy ra: thông số, nhãn) thì chỉ in phần làm chuẩn. Một mục một dòng.
 export const BOC_DUOC = `${DAU_BAO_LAI} Đã trích xuất:`;
 export const KHONG_BOC = `${DAU_BAO_LAI} Không trích xuất được gì từ tin này.`;
+/** SRS-5.1zzzzzn: lượt không có dữ liệu để trích nhưng em hiểu việc của nó (gật bản nháp, khách hỏi, tự nói vai): "🤖 Hiểu: …". */
+export const HIEU_LUOT = `${DAU_BAO_LAI} Hiểu:`;
 /** Dấu mở bong bóng lượt ẢNH (không có chữ để trích): "🤖 Đã trích xuất từ ảnh: mặt tiền". */
 export const TU_ANH = `${DAU_BAO_LAI} Đã trích xuất từ ảnh:`;
 const LAM_CHUAN = "làm chuẩn";

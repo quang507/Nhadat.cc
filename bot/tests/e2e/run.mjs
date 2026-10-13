@@ -10132,7 +10132,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const { uid, L } = dung({ tin: { ...TIN_NHA, ward: "Phường Cầu Kiệu" }, cauTreo: "huong", loaiNguoi: "ccrb", botNoi: [CAU_PHI_CU, "Nhà mình hướng gì vậy chị?"] });
     const f = await goi(uid, cau, { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "phi" } });
     check(`ZZZZZ-${ma} đã nghe câu phí không số, «${cau.slice(0, 40)}…» → hỏi vai để báo đúng mức, không con số %, câu hướng vẫn mở`,
-      /chính chủ hay môi giới để em báo đúng mức phí/.test(f.rep) && !/%/.test(f.rep) && treo(L).includes("huong"), JSON.stringify({ rep: f.rep, treo: treo(L) }));
+      /Cho em hỏi chị là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé\./.test(f.rep) && !/%/.test(f.rep) && treo(L).includes("huong"), JSON.stringify({ rep: f.rep, treo: treo(L) }));
   }
   {
     const { uid, L } = dung({ tin: { ...TIN_NHA, ward: "Phường Cầu Kiệu" }, cauTreo: "duyet_tin", loaiNguoi: "ccrb" });
@@ -10911,9 +10911,9 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const cuCH = globalThis.__cauHinh;
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
   const KHEN = "Căn mình hẻm xe hơi, mặt tiền 6m lại gần trường mầm non, chợ, anh giới thiệu chi tiết quá ạ.";
-  const goiL = async (uid, text, y, { khen = KHEN, soat = [] } = {}) => {
+  const goiL = async (uid, text, y, { khen = KHEN, soat = [], quyMo } = {}) => {
     globalThis.__model = {
-      parse: (p) => laYL(p) ? { ...rongL, ...y } : laBocL(p) ? rongL : laKhenL(p) ? { khen, dua_tren: ["hẻm xe hơi", "mặt tiền 6m", "gần trường mầm non"] }
+      parse: (p) => laYL(p) ? { ...rongL, ...y } : laBocL(p) ? rongL : laKhenL(p) ? { khen, dua_tren: ["hẻm xe hơi", "mặt tiền 6m", "gần trường mầm non"], ...(quyMo ? { quy_mo: quyMo } : {}) }
         : laSoatL(p) ? { nhan_xet: soat } : OUT(),
       create: () => "Dạ vâng ạ.",
     };
@@ -10973,6 +10973,24 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     check("ZZZZZL-02b soát bỏ câu khen (không căn cứ) → bong bóng hai mở bằng dòng điểm, không còn mảnh khen nào",
       j >= 0 && /^Độ đầy đủ/.test(b2.replies[j + 1] ?? "") && !(b2.replies ?? []).some((x) => x.includes("giới thiệu chi tiết")), JSON.stringify(b2.replies));
   }
+  // SRS-5.1zzzzzn: ý thêm AI xếp vào "Quy mô" (theo nghĩa, cùng lượt khen) → lên dòng 🏗 Quy mô; ý khác (còn mới, hiện trạng) ở 📝 Thêm;
+  // ý AI đưa mà KHÔNG có trong danh sách ý thêm (bịa) → không in.
+  for (const [ma, ys, qm, coQM, coThem] of [
+    ["01 (ca gốc)", ["Nhà bếp - Phòng khách rộng", "sân rộng", "còn mới"], ["Nhà bếp - Phòng khách rộng", "sân rộng", "phòng gym riêng"],
+      ["Nhà bếp - Phòng khách rộng", "sân rộng"], ["còn mới", "đang ở"]],
+    ["01b (cách nói mới)", ["có sân thượng phơi đồ thoáng", "gần chợ Bình Tây"], ["có sân thượng phơi đồ thoáng"], ["có sân thượng phơi đồ thoáng"], ["gần chợ Bình Tây"]],
+  ]) {
+    const { uid, L } = choDuyet();
+    db().insert("listing_facts", { listing_id: L.id, question: "hien_trang_su_dung", answer: "đang ở", source: "seller_chat" });
+    for (const y of ys) db().insert("listing_facts", { listing_id: L.id, question: "bo_sung", answer: y, source: "ai_kiem" });
+    const b = await goiL(uid, "Tiêu đề: Chỉ 7,6 tỷ hẻm xe hơi Chợ Lớn", { tieu_de: "Chỉ 7,6 tỷ hẻm xe hơi Chợ Lớn" }, { quyMo: qm });
+    const nhap = (b.replies ?? []).find((x) => x.startsWith("📋")) ?? "";
+    const dQM = nhap.split("\n").find((x) => x.startsWith("🏗 Quy mô:")) ?? "";
+    const dThem = nhap.split("\n").find((x) => x.startsWith("📝 Thêm:")) ?? "";
+    check(`QUYMO-${ma} ý thêm ${JSON.stringify(ys)} → 🏗 Quy mô có ${JSON.stringify(coQM)}, 📝 Thêm có ${JSON.stringify(coThem)}, không in ý AI bịa, không còn "Kết cấu" / "🏠 Hiện trạng"`,
+      coQM.every((x) => dQM.includes(x)) && coThem.every((x) => dThem.includes(x)) && !coThem.some((x) => dQM.includes(x)) && !coQM.some((x) => dThem.includes(x))
+        && !nhap.includes("phòng gym") && !/Kết cấu|🏠 Hiện trạng/.test(nhap), JSON.stringify({ dQM, dThem, nhap }));
+  }
   // (c) Tin lên kệ (đã nói phí trước đó, lượt không còn câu hỏi khác) → bong bóng cuối xin chấm điểm, mở câu danh_gia; một lần mỗi người rao.
   {
     const { uid, L } = choDuyet({ daNoiPhi: true });
@@ -10991,6 +11009,57 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const b = await goiL(uid, "ok em", { dong_y: "dong_y", dong_y_trich: "ok em" });
     check("ZZZZZL-03c đối chứng: lượt lên kệ còn câu dẫn phí → không xin chấm điểm", lrL(L).status !== "cho_thong_tin" && !treoL(L).includes("danh_gia") && !/mấy điểm trên 10/.test((b.replies ?? []).join(" ")),
       JSON.stringify({ st: lrL(L).status, rep: b.replies }));
+  }
+  // ── SRS-5.1zzzzzn (test Zalo 13/10/2026, tin Hóc Môn): tin lên kệ, bot hỏi "Mà anh chị biết phí bên em chưa ạ?", khách "Phí như thế nào
+  // em ?" → model tự hỏi vai; khách "Mình là chính chủ" → "Dạ vâng anh chị.", phí không bao giờ được báo. "ok" → "🤖 Không trích xuất được
+  // gì". Ba lượt ảnh liền → ba lần "Bản nháp ở trên … nhắn ok".
+  const goiH = async (uid, text, boc = {}, y = {}, extra = {}) => {
+    globalThis.__model = {
+      parse: (p) => laLuotAnh(p) ? ANH() : laYL(p) ? { ...rongL, ...y } : laBocL(p) ? { ...rongL, ...boc } : laKhenL(p) ? { khen: null, dua_tren: [] } : laSoatL(p) ? { nhan_xet: [] } : OUT(),
+      create: () => "Dạ vâng ạ.",
+    };
+    return (await send({ external_user_id: uid, text, ...extra })).body;
+  };
+  for (const [ma, hoiPhi, vaiCau] of [["01 (ca gốc)", "Phí như thế nào em ?", "Mình là chính chủ"], ["01b (cách nói mới)", "bên em lấy phí sao vậy", "anh là chủ nhà luôn nè"]]) {
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    const { uid, L } = choDuyet();
+    const sH = db().t.sellers.find((x) => x.zalo_user_id === uid);
+    sH.seller_type_source = "suy_doan"; // nhãn ĐOÁN (FR-159) — chưa được nói con số phí
+    const bOk = await goiH(uid, "ok", {}, { dong_y: "dong_y", dong_y_trich: "ok" });
+    check(`PHIKE-${ma} «ok» duyệt bản nháp → tin lên kệ, 🤖 nói điều đã hiểu (đồng ý bản nháp), KHÔNG "Không trích xuất được gì"`,
+      lrL(L).status !== "cho_thong_tin" && (bOk.replies ?? []).some((x) => /^🤖 Hiểu: đồng ý bản nháp/.test(x)) && !(bOk.replies ?? []).some((x) => /Không trích xuất được gì/.test(x)),
+      JSON.stringify(bOk.replies));
+    const b1 = await goiH(uid, hoiPhi, { hoi_lai: { co_hoi: true, cau_hoi: hoiPhi, chu_de: "phi" } });
+    const r1 = (b1.replies ?? []).join("\n");
+    check(`PHIKE-${ma} «${hoiPhi}» (tin đã lên kệ, không câu treo, vai chưa xác nhận) → câu phí KHÔNG số + câu hỏi vai của chủ dự án, không %`,
+      /mức tuỳ chính chủ hay môi giới/.test(r1) && r1.includes("là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé.") && !/\d\s*%/.test(r1),
+      JSON.stringify(b1.replies));
+    const b2 = await goiH(uid, vaiCau, { vai: { la: "chinh_chu", trich_dan: vaiCau } });
+    const r2 = (b2.replies ?? []).join("\n");
+    check(`PHIKE-${ma} «${vaiCau}» ngay sau câu hỏi vai → vai thành tu_nhan, bot BÁO SỐ phí (1% giá chốt) một lần, không hỏi lại vai`,
+      db().t.sellers.find((x) => x.zalo_user_id === uid)?.seller_type_source === "tu_nhan" && (r2.match(/1% giá chốt/g) ?? []).length === 1 && !/chính chủ hay môi giới/.test(r2),
+      JSON.stringify(b2.replies));
+  }
+  {
+    // Ảnh liền nhau lúc chờ duyệt: câu nhắc "Bản nháp ở trên … nhắn ok" chỉ một lần.
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+    const { uid } = choDuyet();
+    const nhac = (b) => (b.replies ?? []).filter((x) => /Bản nháp ở trên/.test(x)).length;
+    const a1 = await goiH(uid, "", {}, {}, { image_url: "https://f9-zpg.zdn.vn/hm-1.jpg" });
+    const a2 = await goiH(uid, "", {}, {}, { image_url: "https://f9-zpg.zdn.vn/hm-2.jpg" });
+    const a3 = await goiH(uid, "", {}, {}, { image_url: "https://f9-zpg.zdn.vn/hm-3.jpg" });
+    // Ảnh sổ: lời nhận do AI viết (qua kiểm số) thay câu soạn sẵn; AI lộ số thửa → câu soạn sẵn.
+    for (const [ma, loi, laAi] of [["03 (ca gốc)", "Dạ em nhận được ảnh sổ đỏ rồi anh, em cất riêng không đưa lên web. Sổ ghi 60m2, đúng với số em đã ghi ạ.", true],
+      ["03b (lộ số thửa)", "Dạ sổ thửa 245 tờ 12 em nhận rồi anh, em cất riêng nha.", false]]) {
+      const { uid: uS } = choDuyet();
+      globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH({ loai: "giay_to", mo_ta: "hình như sổ đỏ", loi_nhan: loi, giay_to: { loai_giay: "sổ đỏ", dien_tich_m2: 60, dia_chi: null, so_thua: "245", so_to: "12", ro_net: true } }) : laYL(p) ? rongL : laBocL(p) ? rongL : OUT(), create: () => "Dạ vâng ạ." };
+      const bS = await send({ external_user_id: uS, text: "", image_url: `https://f9-zpg.zdn.vn/so-${ma[1]}.jpg` });
+      const rS = (bS.body.replies ?? []).join("\n");
+      check(`GIAYTO-E${ma} ảnh sổ, AI viết lời nhận → ${laAi ? "gửi đúng lời AI" : "bỏ lời AI (lộ số thửa), dùng câu soạn sẵn"}`,
+        laAi ? rS.includes(loi) && !/khớp với số em đã ghi/.test(rS) : !rS.includes("245") && /em cất riêng, không đưa lên web/.test(rS), JSON.stringify(bS.body.replies));
+    }
+    check("PHIKE-02 ba lượt ảnh liền khi chờ duyệt → câu nhắc «Bản nháp ở trên … nhắn ok» đúng một lần (lượt đầu), hai lượt sau không lặp",
+      nhac(a1) === 1 && nhac(a2) === 0 && nhac(a3) === 0, JSON.stringify([a1.replies, a2.replies, a3.replies]));
   }
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };

@@ -3926,6 +3926,47 @@ DB (`bot_prompts.cau_hoi_mau`, `seller_fewshot`) cập nhật đúng các câu �
 **Kiểm.** e2e HTSD-01…05 (01, 02 đỏ khi bỏ dòng migration / mock và bỏ kích nhánh), THUTU-tt-np / mt / cc (thêm câu hiện trạng vào trình tự, ≤ 8); 30 ca cũ
 đo việc khác (bản nháp, câu phường, câu sổ) dựng tin có sẵn câu trả lời hiện trạng (`daHtsd`, `DAP_PHAP_LY`). e2e **1291/1291**.
 
+### SRS-5.1zzzzzn · Quy mô trong bản nháp; lời nhận ảnh sổ do AI viết; phí sau khi lên kệ đọc câu bot vừa hỏi; 🤖 nói điều đã hiểu; kết chuyện gọn (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026 sau test Zalo tin Hóc Môn: "kết cấu sửa thành quy mô, Nhà bếp - Phòng khách rộng · sân rộng thì sẽ đưa lên chỗ quy mô, còn mới,
+hiện đang ở đưa xuống chỗ mô tả thêm"; "Em nhận được hình ảnh sổ rồi ạ… phần này để AI quyết"; "sao nó ko đọc dc câu hỏi của chính nó lúc trước ta. với tin
+người ta nói là nhà chính chủ rồi sao lại ko lưu. Cho em hỏi anh chị là chính chủ hay môi giới để em báo mức phí cho mình khi rao bán thành công nhé"; "kết thúc
+câu chuyện xem cảm xúc của khách, rồi dạ vâng, cảm ơn anh chị là dc. nó bị lặp"]`
+
+**Ca gốc** (hội thoại production 13/10 10:05–10:24): bản nháp in "🏗 Kết cấu: gác lửng gỗ · 2 phòng ngủ · 2 WC · còn mới, hiện đang ở" và "📝 Thêm: … Nhà bếp -
+Phòng khách rộng · sân rộng"; ba lượt ảnh liền, lượt nào cũng "Bản nháp ở trên … nhắn ok"; "ok" duyệt → "🤖 Không trích xuất được gì"; lên kệ kèm "Mà anh chị
+biết phí bên em chưa ạ?" → khách "Phí như thế nào em ?" → model tự hỏi vai → "Mình là chính chủ" → "Dạ vâng anh chị." — phí không bao giờ được báo, dù bài rao
+mở bằng "Nhà chính chủ cần bán!".
+
+**Lớp lỗi.** (1) Xếp ý thêm vào dòng nào của bản nháp theo VỊ TRÍ fact (mọi `bo_sung` vào "Thêm", `hien_trang` vào "Kết cấu"), không theo nghĩa. (2) Lời bot ở
+nhánh ảnh sổ là câu soạn sẵn. (3) **Đường r3 (chăm sóc sau lên kệ, không câu treo) là đường DUY NHẤT trả lời câu hỏi ngược mà không qua bong bóng tiền định** —
+r1 / r2 / r2b đã dùng `dapHoiNguocTienDinh` + `cauPhi(vaiPhi(…))` + `dapPhiRoVai`; r3 để model tự viết, nên câu phí không do chủ của con số phí nói, và lượt
+khách trả lời vai không nối lại với câu hỏi phí. (4) 🤖 chỉ biết "đã trích" hoặc "không trích được gì", không biết lượt không có dữ liệu mà vẫn có việc. (5) Câu
+treo nhắc lại sau MỖI lượt ảnh mà không xem bot vừa nói câu đó chưa. (6) Lượt AI đọc vai bỏ sót vai trong bài rao dài (luật vai chỉ nêu câu tự giới thiệu).
+
+**Sửa.** (1) Dòng "🏗 Quy mô" thay "Kết cấu" (`tin-nhap.ts`): số tầng / phòng / WC / sân… + ý thêm mà **AI xếp là quy mô / không gian** — cùng lượt model câu khen
+(`khen-nhap.ts` ô `quy_mo`, không thêm lượt gọi), code chỉ nhận ý có đúng trong danh sách ý thêm (`chat-reply` `khenChoNhap`, `tin-nhap.ts` so lại lần nữa); tình
+trạng nhà + hiện trạng sử dụng xuống "📝 Thêm", bỏ dòng 🏠. (2) `phan-loai-anh.ts` ô `loi_nhan`: model viết lời nhận ảnh giấy tờ; `loiNhanGiayToHopLe`
+(`extraction/khen-hop-le.ts`) kiểm: không hỏi, không gạch dài, mọi con số là diện tích đọc trên giấy / đang ghi (chặn lộ số thửa / số tờ); diện tích LỆCH > 5% giữ
+câu hỏi xác nhận + báo admin soạn sẵn; không qua → câu soạn sẵn. (3) r3 đi cùng đường r1/r2: câu hỏi ngược có đáp án tiền định → bong bóng tiền định (cả tin
+là câu hỏi thì không gọi model); câu phí không số kèm `cauHoiVaiPhi()` (lời chủ dự án: "Cho em hỏi {ac} là chính chủ hay môi giới để em báo mức phí cho mình
+khi rao bán thành công nhé." — một chỗ viết, cũng là câu hỏi vai ở nhánh câu treo); khách tự nói vai sau câu không số → báo số (`dapPhiR3`, cùng điều kiện
+`dapPhiRoVai`). (4) `HIEU_LUOT` (`bao_lai.ts`): lượt không có dữ liệu nhưng đã hiểu việc → "🤖 Hiểu: đồng ý bản nháp, em đăng tin" / "tự nói là chính chủ" /
+"hỏi em "…", em trả lời câu đó". `vaiTuNoiLuot` khai trước `baoLaiDaLuu` (closure đọc nó ở các đường trả lời sớm). (5) Câu treo sau ảnh chỉ khi 4 tin bot gần
+nhất chưa nói đúng câu đó. (6) `boc-rao.ts` luật VAI: bài rao mở bằng "Nhà chính chủ cần bán" / "Chính chủ bán" là tự nói vai (trích cụm đó; `vaiTuCau` đã
+nhận). Kết chuyện: câu lệnh r3 mang cảm xúc AI đọc lượt đó (`camXucAi`) và dặn khách chỉ khép lại thì "Dạ vâng, em cảm ơn {ac} ạ." (bực / nghi ngờ thì xin lỗi /
+trấn an), không lặp ý mấy tin gần đây — đổi giọng bằng prompt, không thêm van.
+
+**Chỗ khác cùng lớp.** (3) Soát mọi đường model trả lời câu hỏi ngược: r1 (`dapRao`), r2 / r2b (`hoiNguocDap`), duyệt (`dapKemDuyet`) đã có bong bóng tiền định;
+r3 là chỗ còn lại, nay đã nối. Nhánh câu treo vẫn giữ "câu phí không số lần đầu + quay lại câu đang hỏi, lần hai mới hỏi vai" (một câu hỏi một lượt) — r3 không
+có câu treo nên hỏi vai ngay. (5) Các chỗ khác nhắc "Bản nháp ở trên…" (emoji, lời meta, chờ ảnh, ghi thêm) là lượt khách nói chữ, không lặp theo từng ảnh. (1)
+Dòng "🏫 Tiện ích" vẫn xếp theo vị trí fact (`tien_ich_gan`, mặt tiền) — chưa thấy ý lạc dòng; để nguyên.
+
+**Kiểm.** e2e QUYMO-01/01b (đỏ khi bỏ `quyMo`), PHIKE-01/01b (ok → 🤖 Hiểu; hỏi phí → câu không số + câu hỏi vai; tự nói vai → 1% một lần — đỏ khi tắt r3 /
+`HIEU_LUOT`), PHIKE-02 (ảnh liền → nhắc một lần, đỏ khi bỏ lọc), GIAYTO-E03/03b (đỏ khi tắt `loiAi`); `khen-nhap.mjs` GIAYTO-1…5; `tin-nhap-rao.mjs` QUYMO-1/2;
+`kiem-bang-chung.mjs` VAI-ZZZZK "Nhà chính chủ cần bán" / "chính chủ gửi bán" / "giấy tờ chính chủ" (đối chứng). Cách nói mới: "bên em lấy phí sao vậy",
+"anh là chủ nhà luôn nè", "có sân thượng phơi đồ thoáng". e2e **1302/1302**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
