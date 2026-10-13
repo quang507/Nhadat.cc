@@ -229,7 +229,15 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const tin = "shr, nhà ở từ 2019 rồi, gần chợ Bình Tây, khu an ninh, gần chợ bình tây";
   const kt = kiemKienThuc(["gần chợ Bình Tây", "khu an ninh", "gần chợ bình tây", "có hồ bơi", "nhà ở từ 2019 rồi"], tin, [dx("hien_trang", "nhà ở từ 2019 rồi", "nhà ở từ 2019 rồi")]);
   ok("kiến thức: nguyên văn giữ, trùng bỏ, bịa ('có hồ bơi') bỏ, trùng trích dẫn đã có khoá bỏ", kt.join("|") === "gần chợ Bình Tây|khu an ninh", JSON.stringify(kt));
-  ok("kiến thức: tối đa 3", kiemKienThuc(["a1 b", "c2 d", "e3 f", "g4 h"], "a1 b c2 d e3 f g4 h", []).length === 3);
+  // SRS-5.1zzzzzw: trần 3 ý / 80 ký tự từng cắt bài rao KDC Cầu Tràm còn một tiện ích — nay 12 ý / 160 ký tự.
+  ok("kiến thức: tối đa 12 (không còn cắt ở 3)", kiemKienThuc(["a1 b", "c2 d", "e3 f", "g4 h"], "a1 b c2 d e3 f g4 h", []).length === 4);
+  ok("kiến thức: 13 ý → giữ 12", kiemKienThuc(Array.from({ length: 13 }, (_, i) => `y so ${i} x`), Array.from({ length: 13 }, (_, i) => `y so ${i} x`).join(". "), []).length === 12);
+  const TIN_CT = "Tiện ích xung quanh:\nChợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút.\nUBND xã và trạm y tế ~ 2 - 3 phút.\nHệ thống trường học các cấp ~ 10 phút.\nKhu công nghiệp Cầu Tràm ~ 10 phút.\nChợ Bình Chánh ~ 20 phút.\nVinhomes Hưng Long Bình Chánh ~ 20 phút.\nThuận tiện kết nối các trục giao thông huyết mạch như: DT835, DT826, Quốc lộ 1A, cao tốc Bến Lức - Long Thành, cao tốc TP Hồ Chí Minh - Trung Lương, Đại lộ Võ Văn Kiệt, Đại lộ Nguyễn Văn Linh.";
+  const Y_CT = ["Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút", "UBND xã và trạm y tế ~ 2 - 3 phút", "Hệ thống trường học các cấp ~ 10 phút", "Khu công nghiệp Cầu Tràm ~ 10 phút",
+    "Chợ Bình Chánh ~ 20 phút", "Vinhomes Hưng Long Bình Chánh ~ 20 phút", "cao tốc Bến Lức - Long Thành", "cao tốc TP Hồ Chí Minh - Trung Lương", "Đại lộ Võ Văn Kiệt"];
+  const ktCT = kiemKienThuc(Y_CT, TIN_CT, []);
+  ok("ZZZZZW-K1 (ca gốc KDC Cầu Tràm) 9 tiện ích nguyên văn → giữ ĐỦ 9, không cắt", ktCT.length === 9 && ktCT.includes("Khu công nghiệp Cầu Tràm ~ 10 phút"), JSON.stringify(ktCT));
+  ok("ZZZZZW-K1b ý dài 81–160 ký tự nguyên văn → giữ", kiemKienThuc(["Thuận tiện kết nối các trục giao thông huyết mạch như: DT835, DT826, Quốc lộ 1A, cao tốc Bến Lức - Long Thành"], TIN_CT, []).length === 1);
 }
 
 // ── 21/09/2026 chế độ `chinh` — AI là đường chính: `docAiChinh` + câu treo mặt tiền / diện tích từ ngang×dài ──

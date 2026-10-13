@@ -2054,7 +2054,10 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daG
   for (const k of [...(pnTang ? [pnTang] : []), ...(kienThuc ?? [])]) {
     const v = String(k ?? "").replace(/\s+/g, " ").trim().replace(/[.!?,;]+$/, "");
     const kd = chuanSo(v);
-    if (kd.length < 3 || v.length > 80) continue;
+    // SRS-5.1zzzzzw (Zalo thật 13/10 15:47, bài rao KDC Cầu Tràm: 7 tiện ích + trục giao thông → "📝 Thêm" chỉ còn "thông ra ĐT 835D chỉ 200
+    // mét"): trần cũ 80 ký tự / 3 ý một lượt là cái kéo cắt bài rao dài. Ý thêm tối đa 160 ký tự, một lượt tối đa 12 ý — AI đã lọc chuyện
+    // riêng / lời chào, code chỉ kiểm nguyên văn và trùng.
+    if (kd.length < 3 || v.length > 160) continue;
     if (!kdTin.includes(kd)) continue;
     // SRS-5.1zzzzzu (chủ dự án 13/10: "lầu 1+2 3.5x6.5m dư, thông tin ghi đủ đúng vào trong ô bóc tách thôi ko dc ghi nhiều chỗ quá"):
     // mảnh chỉ là SỐ ĐO (kích thước "3,5m x 6,5m", "45m2", "ngang 4") thuộc về ô số, không phải kiến thức thêm — không in ra "📝 Thêm".
@@ -2068,7 +2071,7 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daG
     // trệt…" cùng vào bổ sung — vế nằm trọn trong vế đã giữ là lặp.
     if (ra.some((r) => chuanSo(r).includes(kd) || kd.includes(chuanSo(r)))) continue;
     ra.push(v);
-    if (ra.length >= 3) break;
+    if (ra.length >= 12) break;
   }
   return ra;
 }

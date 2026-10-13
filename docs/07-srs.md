@@ -4245,6 +4245,32 @@ làm lại đi"), 03 (AI không ra gì → không ghi chú), 04 (đọc thêm h�
 (14:41 mời gửi nội dung), 07/07b (xem lại tin, cách nói mới "gửi lại cho chị cái tin em đăng coi"), 08/08b/08c/08d (ví dụ 89 triệu; vai chưa rõ không
 ví dụ; thuê 4,5 triệu), 09/09b (im sau câu đóng; "Dạ vâng ạ." sau câu chưa đóng). Bất biến PHÍ: ví dụ chỉ khi vai gọi tên trong lời khách.
 
+### SRS-5.1zzzzzw · Bài rao dài: tiện ích xung quanh không bị cắt còn một ý (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 15:47, bài rao nhà KDC Cầu Tràm (Long An) 7 tiện ích + trục giao thông; chủ dự án: "xem cái tin dự án khu dân cư
+cầu tràm sao tiện ích xung quanh bị rút ngắn lại thế", "nó có lưu thêm thông tin dự án được không"]`
+
+**Ca gốc.** Bài rao liệt kê "Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút / UBND xã và trạm y tế ~ 2 - 3 phút / trường học ~ 10 phút / KCN Cầu
+Tràm ~ 10 phút / Chợ Bình Chánh ~ 20 phút / Vinhomes Hưng Long ~ 20 phút / kết nối DT835, DT826, QL1A, cao tốc…". Ghi chú lưu được 2 ý ("sân
+trước và giếng trời sân sau", "thông ra ĐT 835D chỉ 200 mét"); 🤖 chỉ in một ý. Mọi tiện ích mất.
+
+**Lớp lỗi.** Ba cái kéo chồng nhau, không cái nào nhìn thấy cái kia: (1) `kiemKienThuc` giữ tối đa **3** ý một lượt và bỏ ý dài hơn **80** ký tự
+(đặt từ 09/2026 cho tin ngắn); (2) prompt bóc tách dặn mỗi ý "≤ 12 chữ" nên AI tự tóm / bỏ; (3) bong bóng 🤖 (`dongVuaLuu`) mỗi khoá chỉ in MỘT
+giá trị, `bo_sung` là nhiều dòng một lượt → chỉ còn ý đầu, admin nhìn bong bóng tưởng AI chỉ đọc ra một ý. Cùng lớp với SRS-5.1zzzzzu (2): "ghi
+đủ đúng vào ô" — ở đây là ghi ĐỦ.
+
+**Sửa.** (1) `kiemKienThuc`: 12 ý / 160 ký tự; vẫn kiểm nguyên văn, trùng, chuyện riêng. (2) Prompt `kien_thuc` (`boc-rao.ts`): chép đủ cụm kèm
+khoảng cách / thời gian, bài rao dài liệt kê ĐỦ từng tiện ích, danh sách trong một câu thì tách từng tên. (3) `dongVuaLuu` in TỪNG ý `bo_sung`
+của lượt một dòng (một dòng gộp lại bị cắt ở 120 ký tự). Kèm: chỉ dẫn chủ đề `du_an` — tin đang rao CHƯA có địa chỉ mà khách hỏi "em biết khu X không" thì hỏi căn có nằm trong khu đó
+không (ghi làm vị trí), không hỏi "có căn ở đó cần bán" như với người đã có địa chỉ; bỏ "Vâng ạ." trống.
+
+**Chưa làm (chờ chủ dự án):** "lưu thêm thông tin dự án" — kho `projects` hiện chỉ nạp từ mogi (`thu-du-an.mjs`) và tài liệu khách gửi
+(`du_an_tai_lieu`); điều một chủ nhà kể về khu / dự án chưa có chỗ lưu riêng, chỉ nằm ở ghi chú của tin đó. Phương án: bảng ghi chú dự án theo
+nguồn "chủ nhà kể" (chưa kiểm chứng), dùng để trả lời "em biết khu X không" bằng "theo chủ nhà đã rao kể…" — không trộn vào dữ liệu kho.
+
+**Kiểm.** `kiem-bang-chung.mjs` ZZZZZW-K1/K1b (9 tiện ích giữ đủ; ý 81–160 ký tự giữ; 13 ý → 12); e2e ZZZZZW-01/01b (bài rao Cầu Tràm → 9 ghi
+chú, 🤖 in đủ). Đỏ khi hoàn một trong ba chỗ sửa.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

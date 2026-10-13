@@ -385,13 +385,23 @@ const O_TIEN: ReadonlySet<string> = new Set(["gia", "tien_coc", "doanh_thu", "th
 export function dongVuaLuu(facts: FactBaoLai[], nhan: Record<string, string>, ngu: NguCanhIn = {}): string[] {
   const moiNhat = new Map<string, string>();
   const goc = new Map<string, FactBaoLai["goc"]>();
+  // SRS-5.1zzzzzw (Zalo thật 13/10 15:47, bài rao KDC Cầu Tràm: 🤖 in "thông tin bổ sung: … 'thông ra ĐT 835D chỉ 200 mét'" trong khi lượt
+  // ghi nhiều ý): ghi chú `bo_sung` là NHIỀU dòng một lượt — mỗi khoá chỉ giữ một giá trị thì bong bóng chỉ còn ý đầu. Gộp đủ các ý " · ".
+  // Mỗi ý một dòng (một dòng gộp 120 ký tự lại cắt mất ý sau), thứ tự như lúc ghi.
+  const boSung: string[] = [];
   for (const f of facts) {
     const a = (f.answer ?? "").replace(/\s+/g, " ").trim();
-    if (!a || BO_QUA.has(f.question) || moiNhat.has(f.question)) continue;
+    if (!a || BO_QUA.has(f.question)) continue;
+    if (f.question === "bo_sung") {
+      for (const y of a.split(" · ")) if (y.trim() && !boSung.includes(y.trim())) boSung.push(y.trim());
+      continue;
+    }
+    if (moiNhat.has(f.question)) continue;
     moiNhat.set(f.question, a);
     goc.set(f.question, f.goc ?? null);
   }
-  if (!moiNhat.size) return [];
+  const dongBoSung = boSung.reverse().map((y) => `• ${nhanNgan("bo_sung", nhan)}: "${gon(y, 170)}"`);
+  if (!moiNhat.size && !dongBoSung.length) return [];
   // 25/09/2026 (chủ dự án test Zalo): "5x12" → "diện tích đất: "5x12" · diện tích: "5x12"" — cùng một câu trả lời ghi vào
   // hai khoá diện tích. Cùng họ diện tích mà cùng giá trị thì in một lần.
   const daIn = new Set<string>();
@@ -404,7 +414,7 @@ export function dongVuaLuu(facts: FactBaoLai[], nhan: Record<string, string>, ng
   // 23/09/2026 (chủ dự án: "ghi thật đầy đủ"): trần 12 khoá / 50 ký tự từng cắt mất fact và đuôi câu trả lời.
   // SRS-5.1zzzzh / 5.1zzzzj: phần LÀM CHUẨN đọc qua bộ in một nguồn (`lamChuanFact`: tiền `donViGiaDep`, địa chỉ `duongHienThi`,
   // phường + quận cũ, kích thước); fact trong DB giữ nguyên chữ. SRS-5.1zzzzn: phần NGUYÊN MẪU là cụm khách gõ (`dongFact`).
-  return [...moiNhat].reverse().slice(0, 40).map(([k, v]) => dongFact({ question: k, answer: v, goc: goc.get(k) }, nhan, ngu));
+  return [...[...moiNhat].reverse().slice(0, 40).map(([k, v]) => dongFact({ question: k, answer: v, goc: goc.get(k) }, nhan, ngu)), ...dongBoSung];
 }
 /** "🤖 Đã trích xuất:\n• giá: "9 ty 5" → làm chuẩn "9 tỷ 5"\n• pháp lý: "sổ hồng riêng"" — fact lượt này, null khi không có. */
 export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>, ngu: NguCanhIn = {}): string | null {
