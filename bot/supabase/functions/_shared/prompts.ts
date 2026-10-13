@@ -65,6 +65,28 @@ export function phanTramPhi(vai: string | null | undefined, deal: string | null 
   if (deal === "cho_thue") return null;
   return vai === "ccrb" ? "1" : vai === "nmg" ? "0,5" : null;
 }
+/** Số tiền đọc cho khách: 89_000_000 → "89 triệu"; 4_500_000 → "4,5 triệu"; 1_250_000_000 → "1 tỷ 250 triệu". Chỉ để in. */
+export function tienDocLen(v: number): string {
+  const ty = Math.floor(v / 1e9);
+  const du = v - ty * 1e9;
+  const trieu = Math.round(du / 1e5) / 10; // một chữ số lẻ triệu
+  const chuTrieu = trieu ? `${String(trieu).replace(".", ",")} triệu` : "";
+  if (!ty) return chuTrieu || "0 đồng";
+  return chuTrieu ? `${ty} tỷ ${chuTrieu}` : `${ty} tỷ`;
+}
+/**
+ * SRS-5.1zzzzzv (chủ dự án 13/10/2026: khách "đưa xem thử cách tính phí"): ví dụ con số do CODE tính từ giá tin đã ghi — bán: giá × % theo
+ * vai; thuê: 3/4 tháng tiền thuê. Vai chưa rõ / chưa có giá → null (không bịa số). Một nguồn với `cauPhi` / `phanTramPhi`.
+ */
+export function viDuPhi(vai: string | null | undefined, deal: string | null | undefined, giaVnd: number | null | undefined): string | null {
+  if (!giaVnd || !Number.isFinite(giaVnd) || giaVnd <= 0) return null;
+  if (deal === "cho_thue") {
+    return `Ví dụ giá thuê ${tienDocLen(giaVnd)}/tháng thì phí là ${tienDocLen(Math.round(giaVnd * 0.75))}, thu một lần khi ký được hợp đồng.`;
+  }
+  const pt = phanTramPhi(vai, deal);
+  if (!pt) return null;
+  return `Ví dụ chốt đúng giá ${tienDocLen(giaVnd)} thì phí là ${tienDocLen(Math.round(giaVnd * (pt === "1" ? 0.01 : 0.005)))}, chỉ thu khi giao dịch xong.`;
+}
 /**
  * SRS-5.1zzzze (bắn production 09/10/2026, thu-kg5): MỌI câu `cauPhi()` có thể sinh ("phí …" lẫn "phí bên em …"). Lưới trùng cũ
  * (W1) dò `/phí chỉ thu khi/` nên câu "phí BÊN EM chỉ thu khi…" của bong bóng hỏi ngược lọt qua, bong bóng trấn an nói phí lần

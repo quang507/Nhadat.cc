@@ -452,7 +452,9 @@ export function motCauHoiLuot(replies: string[]): string[] {
  */
 export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null, chuDe?: string | null,
   /** SRS-5.1zzzzzc: lời bot gần đây (nguyên văn) — câu soạn sẵn đã nói y hệt thì không nói lại nguyên câu. */
-  botDaNoi = ""): string | null {
+  botDaNoi = "",
+  /** SRS-5.1zzzzzv: ví dụ con số phí do code tính từ giá tin (`viDuPhi`) — khách "đưa xem thử cách tính phí" nhận cả câu phí và ví dụ. */
+  viDu: string | null = null): string | null {
   const kd = boDau(hoi);
   const ra: string[] = [];
   // 01/10/2026: AI đã nói câu hỏi thuộc CHỦ ĐỀ nào (`hoi_lai.chu_de`) → câu tiền định chỉ dùng khi đúng chủ đề; từ khoá
@@ -479,7 +481,11 @@ export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null
     // trả, khi nào thu, còn gì nữa) — để model trả lời theo luật phí (lượt soát nhận luật phí làm nguồn), không ghép câu soạn sẵn.
     // SRS-5.1zzzzzo: câu chưa rõ vai nay nêu CẢ HAI mức (có số) — vẫn coi là "chưa theo vai": nói lại để nơi gọi nối câu hỏi vai.
     const haiMuc = /chính chủ/.test(phi) && /môi giới/.test(phi);
-    if (!(botDaNoi.includes(phi) && /\d/.test(phi) && !haiMuc)) ra.push(`Dạ ${phi} ạ.`);
+    // SRS-5.1zzzzzv: có ví dụ con số (giá tin đã ghi, vai đã rõ) thì nói kèm; ví dụ chưa nói bao giờ thì nói cả khi câu phí đã nói rồi
+    // (khách hỏi "cách tính" sau khi đã nghe mức) — ví dụ đã nói y hệt thì không lặp.
+    const viDuMoi = viDu && !botDaNoi.includes(viDu) ? viDu : null;
+    if (!(botDaNoi.includes(phi) && /\d/.test(phi) && !haiMuc)) ra.push(viDuMoi ? `Dạ ${phi} ạ. ${viDuMoi}` : `Dạ ${phi} ạ.`);
+    else if (viDuMoi) ra.push(`Dạ ${phi} ạ. ${viDuMoi}`);
   }
   if (dung("dich_vu", "khac") && /\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
     ra.push(`Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`);

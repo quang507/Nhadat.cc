@@ -4802,8 +4802,10 @@ fresh(seedKho);
       check("SRS-5.1zzzn-c phát lại …kc1tatt: 'anh dung ten' (AI đọc 'anh đứng tên') → câu lệnh model viết lời có bản AI đọc",
         /em đọc là: "anh đứng tên"/.test(ndAnh2), ndAnh2.slice(0, 500));
     }
-    check("SRS-5.1zzzj-b lượt 'ý của lượt' chỉ đọc tin vừa nhắn, không ghép tin cũ ('ờ em nhận đăng…')",
-      /dĩ nhiên rồi/.test(yl) && !/em nhận đăng giúp chị/.test(yl), yl.slice(0, 600));
+    // SRS-5.1zzzzzv: lượt không rõ ý được đọc lại kèm khối "Hội thoại trước đó" (tách riêng, có nhãn) — ô "Tin chủ nhà" vẫn chỉ là tin vừa nhắn.
+    const tinChuNhaYl = [...yl.matchAll(/Tin chủ nhà: "([^"]*)"/g)].map((m) => m[1]).join("\n");
+    check("SRS-5.1zzzj-b lượt 'ý của lượt' chỉ đọc tin vừa nhắn ở ô 'Tin chủ nhà', không ghép tin cũ ('ờ em nhận đăng…')",
+      /dĩ nhiên rồi/.test(tinChuNhaYl) && !/em nhận đăng giúp chị/.test(tinChuNhaYl), yl.slice(0, 600));
     globalThis.__khongNhoCauHinh = false;
     globalThis.__cauHinh = cuCH;
   }
@@ -10388,6 +10390,115 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     check("ZZZZZ-12 (ca gốc) gật duyệt kèm hỏi hoa hồng → tin lên kệ, có câu trả lời phí hai mức, KHÔNG hỏi vai, không dẫn phí lần hai",
       lr(L).status === "dang_ban" && /chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(g.rep) && !/chính chủ hay môi giới/.test(g.rep) && !/xin phép báo phí bên em nhé/.test(g.rep),
       JSON.stringify({ st: lr(L).status, rep: g.rep }));
+  }
+  // ── SRS-5.1zzzzzv (Zalo thật 13/10/2026 14:41–14:58, căn Dương Bá Trạc Q.8): lời VỀ bản nháp không phải dữ liệu; "sửa lại theo nội dung
+  // này" không phải gật; điểm chấm tới sau khi câu điểm hết hạn; xin xem lại tin; cách tính phí có ví dụ; gật trơn sau câu đóng thì im.
+  const NHAP_DBT = "📋 Em sẽ rao như vầy nhé chị:\nHẻm xe hơi 5m, 6 phòng ngủ, giá 8,9 tỷ\n📍 Dương Bá Trạc, Phường Chánh Hưng, Quận 8\n📐 Diện tích: 49m²\n🏗 Quy mô: trệt + 4 lầu · 6 phòng ngủ · 4 WC · rộng rãi, nhiều phòng thích hợp cho gia đình đông thành viên hay cho thuê lại\n💰 GIÁ 8,9 TỶ";
+  const DIEM_DBT = "Độ đầy đủ 85/100.\nChị thấy hấp dẫn chưa ạ? Ổn thì em đăng liền và rao tích cực cho chị.";
+  const Y_THEM = "rộng rãi, nhiều phòng thích hợp cho gia đình đông thành viên hay cho thuê lại";
+  const TIN_DBT = { ...TIN_NHA, ward: "Phường Cầu Kiệu" };
+  {
+    const cau = "sửa lại theo nội dung này giúp mình";
+    const { uid, L } = dung({ tin: TIN_DBT, cauTreo: "duyet_tin", botNoi: [NHAP_DBT, DIEM_DBT] });
+    const a = await goi(uid, cau, { dong_y: "dong_y", dong_y_trich: "giúp mình", yeu_cau: "gui_noi_dung_sau", yeu_cau_trich: cau });
+    check("ZZZZZV-01 (ca gốc) «sửa lại theo nội dung này giúp mình» lúc chờ duyệt (AI lỡ đọc gật, nhưng nói sắp gửi nội dung) → KHÔNG lên kệ, không ghi chú, mời gửi nội dung, câu duyệt treo",
+      lr(L).status === "cho_thong_tin" && !fq(L, "bo_sung").length && /gửi nội dung qua đây/.test(a.rep) && !/📋/.test(a.rep) && treo(L).includes("duyet_tin") && a.r.body.sap_gui_noi_dung === true,
+      JSON.stringify({ st: lr(L).status, bs: fq(L, "bo_sung"), rep: a.rep, treo: treo(L) }));
+  }
+  for (const [ma, cau] of [["02 (ca gốc)", "Sửa lại giúp mình nhé!"], ["02b (cách nói mới)", "chưa được em, làm lại đi"]]) {
+    const { uid, L } = dung({ tin: TIN_DBT, cauTreo: "duyet_tin", botNoi: [NHAP_DBT, DIEM_DBT] });
+    const b = await goi(uid, cau, { yeu_cau: "xin_sua", yeu_cau_trich: cau.replace(/!$/, "") });
+    check(`ZZZZZV-${ma} «${cau}» (AI: xin_sua, không giá trị) → không ghi chú, không gửi lại nháp, hỏi chỗ cần sửa, câu duyệt treo`,
+      !fq(L, "bo_sung").length && !/📋/.test(b.rep) && /chỗ cần sửa/.test(b.rep) && treo(L).includes("duyet_tin") && lr(L).status === "cho_thong_tin",
+      JSON.stringify({ bs: fq(L, "bo_sung"), rep: b.rep, treo: treo(L) }));
+  }
+  {
+    const cau = "Phần quy mô vẫn chưa đúng ý mình";
+    const { uid, L } = dung({ tin: TIN_DBT, cauTreo: "duyet_tin", botNoi: [NHAP_DBT, DIEM_DBT] });
+    const c = await goi(uid, cau, {});
+    check("ZZZZZV-03 «Phần quy mô vẫn chưa đúng ý mình» AI đọc không ra ô nào, không yêu cầu → KHÔNG ghi nguyên câu vào ghi chú, không gửi lại nháp, nói thật, câu duyệt treo",
+      !fq(L, "bo_sung").length && !/📋/.test(c.rep) && /em nghe rồi/.test(c.rep) && treo(L).includes("duyet_tin"),
+      JSON.stringify({ bs: fq(L, "bo_sung"), rep: c.rep }));
+  }
+  {
+    // Đọc thêm hội thoại khi không rõ ý: lần đầu AI không hiểu; lần đọc kèm "Hội thoại trước đó" (có câu "Quy mô chỉ cần để…" của chủ nhà) → xin bỏ ý.
+    const cau = "Phần quy mô vẫn chưa đúng ý mình";
+    const { uid, L, s } = dung({ tin: TIN_DBT, cauTreo: "duyet_tin", botNoi: [NHAP_DBT, DIEM_DBT] });
+    db().insert("listing_facts", { listing_id: L.id, question: "bo_sung", answer: Y_THEM, source: "ai_kiem" });
+    const conv = db().t.conversations.find((x) => x.seller_id === s.id);
+    db().insert("messages", { conversation_id: conv.id, sender: "seller", body: "Quy mô chỉ cần để: trệt + 4 lầu · 6 phòng ngủ · 4 WC là được" });
+    db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "Dạ em nghe rồi ạ." });
+    let lanDoc = 0, coLichSu = false, coNhap = false;
+    globalThis.__model = {
+      parse: (p) => {
+        if (laYLuotY(p)) {
+          lanDoc++;
+          const nd = String(p.messages?.[0]?.content ?? "");
+          if (/📋 Em sẽ rao như vầy/.test(nd)) coNhap = true;
+          if (/Hội thoại trước đó/.test(nd) && /Quy mô chỉ cần để/.test(nd)) { coLichSu = true; return { ...rongY, yeu_cau: "xin_bo_o", yeu_cau_trich: cau, yeu_cau_o: "bo_sung", bo_y: [Y_THEM] }; }
+          return { ...rongY };
+        }
+        return laBocY(p) ? { ...rongY } : OUT();
+      },
+      create: () => "Dạ vâng ạ.",
+    };
+    const r = await send({ external_user_id: uid, text: cau });
+    const rep = (r.body?.replies ?? []).join(" | ");
+    check("ZZZZZV-04 không rõ ý lần đầu → đọc lại kèm hội thoại phía trên (thấy 'Quy mô chỉ cần để…') → bỏ đúng ý thêm khỏi dòng Quy mô, gửi lại nháp; lượt ý ngắn đã thấy bản nháp 📋",
+      lanDoc >= 2 && coLichSu && coNhap && !fq(L, "bo_sung").some((x) => /đông thành viên/.test(x ?? "")) && /📋/.test(rep) && !/đông thành viên/.test(rep),
+      JSON.stringify({ lanDoc, coLichSu, coNhap, bs: fq(L, "bo_sung"), rep }));
+  }
+  {
+    const { uid, L } = dung({ tin: TIN_DBT, cauTreo: "duyet_tin", botNoi: [NHAP_DBT, "Chị chấm giúp em điểm trải nghiệm rao đăng vừa rồi nha. Chị cho em mấy điểm trên 10 ạ?", NHAP_DBT, DIEM_DBT] });
+    db().insert("info_requests", { listing_id: L.id, question: "danh_gia", status: "expired" });
+    const d = await goi(uid, "mình chấm 6/10 nhé", {});
+    check("ZZZZZV-05 «mình chấm 6/10 nhé» lúc chờ duyệt, câu điểm đã hết hạn vì nháp gửi lại → ghi điểm danh_gia, cảm ơn đúng 6 điểm, KHÔNG vào ghi chú, câu duyệt treo",
+      fq(L, "danh_gia").includes("mình chấm 6/10 nhé") && !fq(L, "bo_sung").length && /chấm em 6 điểm/.test(d.rep) && treo(L).includes("duyet_tin"),
+      JSON.stringify({ dg: fq(L, "danh_gia"), bs: fq(L, "bo_sung"), rep: d.rep }));
+  }
+  {
+    const cau = "Đăng bán giúp mình với nội dung sau";
+    const { uid, L } = dung({ tin: { ...TIN_NHA, location_raw: null, street: null, area_m2: null, price_raw: null, price_vnd: null, floors: null, floors_text: null, legal_status: null, district: "Quận 8" }, cauTreo: "loai_bds" });
+    const e = await goi(uid, cau, { yeu_cau: "gui_noi_dung_sau", yeu_cau_trich: cau, y_dinh: { loai: "du_roi", trich_dan: "Đăng bán giúp mình" } });
+    check("ZZZZZV-06 (ca gốc 14:41) «Đăng bán giúp mình với nội dung sau» khi đang hỏi loại nhà, tin đã có quận → mời gửi nội dung, không 'em đăng luôn không hỏi lại', câu loại nhà vẫn treo",
+      /gửi nội dung tin qua đây/.test(e.rep) && !/đăng luôn|lên kệ|thôi hỏi/.test(e.rep) && treo(L).includes("loai_bds") && !lr(L).chu_noi_du_at,
+      JSON.stringify({ rep: e.rep, treo: treo(L) }));
+  }
+  for (const [ma, cau] of [["07 (ca gốc)", "đưa lại bản tin mà bạn rao đi"], ["07b (cách nói mới)", "gửi lại cho chị cái tin em đăng coi"]]) {
+    // Có câu bot trước đó (như mọi hội thoại thật) để lượt AI chạy — cổng AI mở khi bot vừa nói / có câu treo / có mùi dữ liệu.
+    const { uid } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z" }, botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
+    const f = await goi(uid, cau, { yeu_cau: "hoi_noi_dung", yeu_cau_trich: cau });
+    check(`ZZZZZV-${ma} «${cau}» (AI: hoi_noi_dung) → gửi lại bản tin dựng từ DB (📋 Bên em đang đăng như vậy), không để model viết`,
+      /📋 Bên em đang đăng như vậy/.test(f.rep) && /Phan Xích Long/.test(f.rep) && f.r.body.hoi_ve_tin === "noi_dung" && !f.cl, JSON.stringify({ body: f.r.body, cl: f.cl.slice(0, 200) }));
+  }
+  for (const [ma, cau] of [["08 (ca gốc)", "đưa xem thử cách tính phí"], ["08b (cách nói mới)", "phí tính cụ thể ra sao em, ví dụ nhà chị thì bao nhiêu tiền"]]) {
+    const { uid } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z", price_raw: "8,9 tỷ", price_vnd: 8.9e9 }, loaiNguoi: "ccrb", nguonVai: "tu_nhan",
+      botNoi: ["Dạ em cảm ơn chị, tin nhà mình lên kệ AI Ơi Nhà Đất rồi.\nEm xin phép báo phí bên em nhé, chỉ thu khi giao dịch thành công là 1% giá chốt ạ."] });
+    db().insert("messages", { conversation_id: db().t.conversations.at(-1).id, sender: "seller", body: "Chính chủ cần bán nhà đẹp đường Dương Bá Trạc", created_at: "2026-10-13T07:42:00Z" });
+    const g = await goi(uid, cau, { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "phi" } });
+    check(`ZZZZZV-${ma} «${cau}» (AI: chủ đề phí; vai chính chủ đã xác nhận, giá 8,9 tỷ) → câu phí 1% + VÍ DỤ con số code tính "89 triệu", không bịa số khác`,
+      /1% giá chốt/.test(g.rep) && /Ví dụ chốt đúng giá 8 tỷ 900 triệu thì phí là 89 triệu/.test(g.rep), JSON.stringify(g.rep));
+  }
+  {
+    // Vai chưa rõ → không ví dụ con số (không bịa); thuê → 3/4 tháng.
+    const { uid } = dung({ tin: { ...TIN_DBT, status: "dang_ban", price_vnd: 8.9e9 }, nguonVai: "suy_doan", botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
+    const h = await goi(uid, "cách tính phí sao em", { hoi_lai: { co_hoi: true, cau_hoi: "cách tính phí sao em", chu_de: "phi" } });
+    check("ZZZZZV-08c vai chưa xác nhận → câu phí hai mức, KHÔNG ví dụ con số", /chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt/.test(h.rep) && !/Ví dụ/.test(h.rep), JSON.stringify(h.r.body));
+    const { uid: uidT } = dung({ tin: { ...TIN_DBT, status: "dang_ban", deal: "cho_thue", price_raw: "6 triệu/tháng", price_vnd: 6e6 }, nguonVai: "tu_nhan", botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
+    const i = await goi(uidT, "cách tính phí sao em", { hoi_lai: { co_hoi: true, cau_hoi: "cách tính phí sao em", chu_de: "phi" } });
+    check("ZZZZZV-08d tin cho thuê 6 triệu/tháng → ví dụ phí 3/4 tháng = 4,5 triệu", /3\/4 tháng tiền thuê/.test(i.rep) && /Ví dụ giá thuê 6 triệu\/tháng thì phí là 4,5 triệu/.test(i.rep), JSON.stringify(i.r.body));
+  }
+  {
+    // Gật trơn sau câu ĐÓNG của bot → im (không gửi gì, không gọi model); sau câu chưa đóng → "Dạ vâng ạ." tiền định.
+    const { uid } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z" }, botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
+    const j = await goi(uid, "ok", { dong_y: "dong_y", dong_y_trich: "ok" }, "Dạ vâng, em cảm ơn chị ạ.");
+    check("ZZZZZV-09 (ca gốc 14:57) bot vừa cảm ơn (câu đóng), khách «ok» (AI: gật, không dữ liệu) → im, không lặp 'em cảm ơn', không gọi model",
+      j.reps.filter((x) => !/^🤖/.test(x)).length === 0 && !j.cl && j.r.body.im === true, JSON.stringify(j.reps));
+    const { uid: uid2 } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z" }, botNoi: ["Ảnh đẹp lắm chị ạ, hẻm rộng thoáng, cây xanh, có chỗ đậu xe."] });
+    const k = await goi(uid2, "oke", { dong_y: "dong_y", dong_y_trich: "oke" }, "Dạ vâng, vậy em rao như vậy nhé chị. Độ đầy đủ tin của mình đang 95/100.");
+    check("ZZZZZV-09b (cách nói mới) «oke» sau câu khen (chưa đóng) → 'Dạ vâng ạ.' một câu tiền định, không kể lại điểm, 🤖 nói đã hiểu xác nhận",
+      k.reps.filter((x) => !/^🤖/.test(x)).join("") === "Dạ vâng ạ." && !k.cl && db().t.messages.some((m) => m.sender === "bot" && /^🤖 Hiểu: chị xác nhận, không có thông tin mới/.test(m.body ?? "")),
+      JSON.stringify({ reps: k.reps, bong: db().t.messages.filter((m) => m.sender === "bot" && /^🤖/.test(m.body ?? "")).map((m) => m.body).slice(-2) }));
   }
   // (6) Ghi fact ngoài câu treo → lời ghi nhận đọc tên ô ngắn, không đọc câu hỏi trong FACT_LABELS.
   for (const [ma, cau, truong] of [

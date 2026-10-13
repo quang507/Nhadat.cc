@@ -12,9 +12,12 @@ import { dinhDangLong } from "./doc-long.ts";
 export const DONG_Y = ["dong_y", "dong_y_dang", "khong_dong_y", "khong_noi"] as const;
 // Đợt 3 (02/10/2026, SRS-5.1zg): YÊU CẦU của chủ nhà — hỏi về chính tin của mình / hỏi bao lâu bán / xin số khách / xin xoá
 // dữ liệu / xin bỏ một ô ghi nhầm. Trước đây do `hoiVeTin`, `laXinSoKhach`, `laXinXoaDuLieu`, `laXinBoTruong` (từ khoá) quyết.
+// SRS-5.1zzzzzv (Zalo thật 13/10/2026 14:50–14:55): "Sửa lại giúp mình nhé!", "Phần quy mô vẫn chưa đúng ý mình" từng vào ghi chú "📝 Thêm";
+// "sửa lại theo nội dung này giúp mình" bị đọc là GẬT → tin lên kệ. Hai yêu cầu mới: xin_sua (bảo sửa mà chưa đưa giá trị) và
+// gui_noi_dung_sau (báo nội dung / phần sửa sắp gửi ở tin kế).
 export const YEU_CAU = [
   "hoi_khach", "hoi_gia", "hoi_dien_tich", "hoi_dia_chi", "hoi_tang", "hoi_huong", "hoi_phap_ly", "hoi_trang_thai", "hoi_ban_chua",
-  "hoi_noi_dang", "hoi_bao_lau_ban", "hoi_noi_dung", "xin_so_khach", "xin_xoa_du_lieu", "xin_bo_o", "khong",
+  "hoi_noi_dang", "hoi_bao_lau_ban", "hoi_noi_dung", "xin_so_khach", "xin_xoa_du_lieu", "xin_bo_o", "xin_sua", "gui_noi_dung_sau", "khong",
 ] as const;
 export const O_BO = ["do_rong_hem", "gia", "phuong", "dien_tich", "so_phong_ngu", "ket_cau", "phap_ly", "huong", "vi_tri", "bo_sung"] as const;
 /** SRS-5.1zzl (05/10/2026, demo AOND thao tác phá dữ liệu chờ xác nhận): ngưng rao NHIỀU căn / chỉ giữ vài căn. */
@@ -61,7 +64,9 @@ có GẬT với điều bot vừa nói không. Đọc theo NGHĨA, có viết t�
 - dong_y_dang: gật VÀ bảo đăng tin: "ok đăng đi", "cứ đăng như này trước", "triển luôn em", "lên tin luôn".
 - khong_dong_y: "không phải", "sai rồi", "không đúng", "chưa", "khoan đã".
 - khong_noi: tin chỉ đưa thông tin căn nhà, hỏi lại bot, kể chuyện khác, hoặc không rõ. Góp ý SỬA bản nháp / đưa TIÊU ĐỀ khác
-  ("tiêu đề như vầy hay hơn: …", "đổi tít thành …") là khong_noi — chưa duyệt; câu tiêu đề vào tieu_de.
+  ("tiêu đề như vầy hay hơn: …", "đổi tít thành …") là khong_noi — chưa duyệt; câu tiêu đề vào tieu_de. Bảo SỬA / LÀM LẠI / nói
+  chưa đúng ý ("sửa lại giúp mình nhé", "phần quy mô vẫn chưa đúng ý mình", "sửa lại theo nội dung này giúp mình", "làm lại đi em")
+  cũng là khong_noi — "giúp mình", "nhé", "theo nội dung này" KHÔNG phải gật.
 Gật ở VẾ ĐẦU rồi nói thêm ("đúng rồi em, phường 2 quận 5"; "ok em, mà giá 9 tỷ 8") vẫn là dong_y — trích đúng cụm gật.
 dong_y_trich phải chép NGUYÊN VĂN từ TIN chủ nhà, không lấy từ câu bot.
 
@@ -75,12 +80,23 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
 - hoi_noi_dang: hỏi tin đăng Ở ĐÂU (web nào, kênh nào).
 - hoi_bao_lau_ban: hỏi bao lâu thì bán được / mất mấy tháng / có bán nhanh không.
 - hoi_noi_dung: xin XEM LẠI / cho xin NỘI DUNG tin đăng, bản tin, bài rao của mình ("cho bác xin nội dung tin đăng của bác", "gửi lại
-  tin cho anh coi với", "tin đăng ghi sao em", "bài rao của chị như nào"). Hỏi tin đăng Ở ĐÂU → hoi_noi_dang; hỏi đăng CHƯA → hoi_trang_thai.
+  tin cho anh coi với", "đưa lại bản tin mà bạn rao đi", "tin đăng ghi sao em", "bài rao của chị như nào"). Hỏi tin đăng Ở ĐÂU →
+  hoi_noi_dang; hỏi đăng CHƯA → hoi_trang_thai.
+- xin_sua: bảo SỬA / LÀM LẠI bản nháp hay nói một phần CHƯA ĐÚNG Ý mà KHÔNG đưa giá trị mới và không chỉ ra ý cần bỏ ("sửa lại
+  giúp mình nhé", "phần quy mô vẫn chưa đúng ý mình", "làm lại tiêu đề đi em", "chưa được, sửa lại"). Có giá trị mới ("sửa giá thành 9
+  tỷ") là lời sửa dữ liệu → khong; chỉ ra ý cần bỏ → xin_bo_o.
+- gui_noi_dung_sau: báo nội dung / bài rao / phần cần sửa SẮP GỬI ở tin kế, tin này chưa có nội dung đó ("đăng bán giúp mình với nội
+  dung sau", "sửa lại theo nội dung này giúp mình", "em đăng theo bài dưới nhé", "để chị gửi bài rao cho em"). Tin đã kèm luôn nội
+  dung (có giá, diện tích, địa chỉ…) → khong.
 - xin_so_khach: xin số điện thoại / Zalo / liên hệ của NGƯỜI MUA để tự gọi.
 - xin_xoa_du_lieu: xin xoá tin / căn / hồ sơ / dữ liệu / tài khoản khỏi hệ thống (không phải ngưng rao vì bán rồi).
 - xin_bo_o: xin bỏ / xoá MỘT chi tiết đã ghi nhầm mà KHÔNG đưa giá trị mới ("xoá cái hẻm 4m ghi nhầm đi"). Có giá trị mới
   ("bỏ hẻm 4m, hẻm đúng là 3m5") là lời sửa → khong. Xin bỏ ý ở dòng "Thêm" của bản nháp ("xoá mấy câu về con chị ở Úc đi",
   "bỏ cái sẽ tăng giá ra") → xin_bo_o, yeu_cau_o = bo_sung, bo_y là các ý đó — kể cả khi cùng tin có gật ("đồng ý rồi, nhưng xoá…").
+  Chủ nhà bảo một dòng của bản nháp CHỈ CẦN / chỉ để / giữ lại một phần ("Quy mô chỉ cần để: trệt + 4 lầu · 6 phòng ngủ · 4 WC là
+  được", "phần Thêm chỉ giữ 'gần chợ' thôi") → cũng là xin_bo_o, yeu_cau_o = bo_sung, bo_y = các ý KHÁC đang in trên dòng đó trong
+  bản nháp ở "Câu BOT vừa nói" (chép nguyên văn từ bản nháp, ví dụ "rộng rãi, nhiều phòng thích hợp cho gia đình đông thành viên hay
+  cho thuê lại"); không thấy bản nháp thì bo_y = null.
 - khong: tin đưa THÔNG TIN căn nhà (kể cả kèm hỏi "giá 4 tỷ 3 được không?"), gật, chào, hỏi về PHÍ / cách bên em làm việc, kể
   chuyện khác.
 yeu_cau_trich phải chép NGUYÊN VĂN từ TIN chủ nhà.
@@ -132,6 +148,8 @@ export async function docYLuotBangModel(
   model: string,
   tin: string,
   botVuaNoi: string | null,
+  /** SRS-5.1zzzzzv: lượt đọc lại khi KHÔNG RÕ Ý — hội thoại trước đó (cũ → mới, "Chủ nhà: … / Bot: …") để hiểu tin theo mạch. */
+  hoiThoaiTruoc: string | null = null,
 ): Promise<{ ket: YLuotLLM | null; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
@@ -140,7 +158,8 @@ export async function docYLuotBangModel(
     system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
       role: "user",
-      content: `${botVuaNoi?.trim() ? `Câu BOT vừa nói: "${botVuaNoi.trim().slice(0, 600)}"\n` : ""}Tin chủ nhà: "${(tin ?? "").slice(0, 1500)}"`,
+      // SRS-5.1zzzzzv: đang chờ duyệt thì nơi gọi nối cả bản nháp 📋 vào "Câu BOT vừa nói" (để đọc "dòng X chỉ cần để…") — trần 1800 chữ.
+      content: `${hoiThoaiTruoc?.trim() ? `Hội thoại trước đó (cũ → mới), đọc để hiểu tin chủ nhà đang nói về điều gì:\n${hoiThoaiTruoc.trim().slice(0, 6000)}\n\n` : ""}${botVuaNoi?.trim() ? `Câu BOT vừa nói: "${botVuaNoi.trim().slice(0, 1800)}"\n` : ""}Tin chủ nhà: "${(tin ?? "").slice(0, 1500)}"`,
     }],
   });
   // Mỗi ô đọc RIÊNG: ô này hỏng không kéo ô kia (ô hỏng = undefined = luật đỡ đúng việc đó).

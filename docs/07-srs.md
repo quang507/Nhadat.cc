@@ -4204,6 +4204,47 @@ treo, gật duyệt kèm hỏi phí `dapKemDuyet`, r3) chỉ nói câu `cauPhi()
 có câu phí vẫn xin chấm điểm), PHIKE-01/01b (hỏi phí khi câu `danh_gia` treo → hai mức, không hỏi vai), ZZZZZ-10/11/12 (đổi kỳ vọng theo (5)).
 Đỏ khi hoàn một trong năm chỗ sửa.
 
+### SRS-5.1zzzzzv · Lời VỀ bản nháp không phải dữ liệu; "sửa theo nội dung này" không phải gật; đọc thêm hội thoại khi không rõ ý; ví dụ cách tính phí; im sau câu đóng (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 14:41–14:58, căn Dương Bá Trạc Quận 8 (BDS-NP-Q8-0001); chủ dự án 13/10: "người ta có nói đưa lại bản tin mà bạn rao đi
+và oke các thứ, mấy kiểu câu lệnh của khách như đưa xem thử cách tính phí nữa"; "nếu sau khi bot cảm ơn, khách oke rồi thì ko có lặp lại nữa, nếu 1
+lần mà khách yêu cầu, khách đưa phản hồi mà bot không rõ ý thì có thể đọc thêm chat phía bên trên, ko hiểu nữa thì lên trên nữa"]`
+
+**Ca gốc (theo giờ chat).** 14:41 "Đăng bán giúp mình với nội dung sau" (tin đã có quận) → "tin chỉ còn thiếu loại nhà … em đăng luôn không hỏi lại".
+14:50–14:52 lúc chờ duyệt: "Quy mô chỉ cần để: trệt + 4 lầu · 6 phòng ngủ · 4 WC là được", "Sửa lại giúp mình nhé!", "Phần quy mô vẫn chưa đúng ý
+mình" — cả ba vào ghi chú `bo_sung` (một câu còn in ra "📝 Thêm"), bản nháp gửi lại y nguyên kèm "Em sửa lại rồi"; "sửa lại theo nội dung này giúp
+mình" bị đọc là GẬT → tin lên kệ, báo phí, xin điểm. 14:53 "mình chấm 6/10 nhé" tới khi câu điểm đã hết hạn (nháp vừa gửi lại) → vào ghi chú, điểm
+mất, phí báo lần hai khi khách "ok nhé" lúc 14:55. 14:56–14:58 "ok" ba lượt → "Dạ vâng, em cảm ơn chị ạ." ba lượt, một lượt kể lại điểm 95/100.
+
+**Lớp lỗi.** (1) Lúc chờ duyệt, câu không gật và AI không đọc ra ô nào thì code ghi NGUYÊN CÂU làm ghi chú (`ds = [{bo_sung: dapAn}]`) — lời nói
+VỀ bản nháp / với bot bị coi là dữ liệu căn nhà; lưới `laNoiVoiBot` là regex, không có "sửa lại giúp mình". (2) "sửa lại theo nội dung này giúp mình"
+không có dấu hiệu nào trong luật ý ngắn nói đó KHÔNG phải gật; hậu quả kéo theo (3) câu điểm hết hạn vì nháp gửi lại, điểm chấm sau đó không có chủ.
+(4) Lượt ý ngắn chỉ thấy câu bot vừa nói (bong bóng điểm, không có bản nháp) nên "dòng Quy mô chỉ cần để X" không chỉ ra được ý cần bỏ, và không rõ
+ý thì không có đường đọc thêm hội thoại. (5) Câu phí chỉ nói mức %, không có con số ví dụ. (6) Gật trơn sau câu đóng vẫn gọi model → lặp lời cảm ơn.
+
+**Sửa.** (1) `doc-y-luot.ts` thêm hai yêu cầu `xin_sua` (bảo sửa mà chưa đưa giá trị / chưa chỉ ý bỏ) và `gui_noi_dung_sau` (báo nội dung sắp gửi ở
+tin kế); luật gật ghi rõ "sửa lại giúp mình", "theo nội dung này" không phải gật. chat-reply nhánh duyệt: hai yêu cầu đó không bao giờ là gật
+(`gatDuyet = !ycDuyet && …`), không kèm dữ liệu thì không ghi, không gửi lại nháp, mời gửi nội dung / hỏi chỗ cần sửa, câu duyệt treo. Nhánh câu treo
+khác: `gui_noi_dung_sau` + AI không thấy ô → mời gửi nội dung, không coi là "đủ rồi". (2) Khi AI đã đọc mà không thấy ô: chỉ ghi KIẾN THỨC AI đọc ra
+(`kiemKienThuc`), không ghi nguyên câu; không có gì → "Dạ em nghe rồi ạ…" câu duyệt treo. (3) Điểm chấm lúc chờ duyệt (`laDiemCham`, đã từng mở câu
+`danh_gia` cho tin) → `ghiDiemDanhGia` — MỘT chủ cho cả nhánh câu treo `danh_gia` và lúc chờ duyệt. (4) Đang chờ duyệt, lượt ý ngắn nhận cả bản nháp
+📋 trong "Câu BOT vừa nói" (trần 1800 chữ); luật `bo_y` đọc "dòng X chỉ cần để … là được" thành các ý khác đang in trên dòng đó. Không rõ ý (không
+gật, không yêu cầu, không ý nào, bóc tách cũng không thấy dữ liệu) → đọc lại kèm 10 tin gần nhất, vẫn mù → 30 tin (`docYLuotBangModel(…, hoiThoaiTruoc)`),
+chỉ tốn thêm khi thật sự mù. (5) `prompts.ts` `viDuPhi(vai, deal, giaVnd)` — ví dụ con số do CODE tính từ giá tin đã ghi (bán: giá × % theo vai đã xác
+nhận; thuê: 3/4 tháng), vai chưa rõ / chưa có giá → không ví dụ; `dapHoiNguocTienDinh` nhận `viDu`, bốn chỗ gọi đi qua `viDuPhiNguoi` (một chỗ); câu hỏi
+"cách tính phí" đã thuộc chủ đề `phi` của AI. `hoi_noi_dung` thêm cách nói "đưa lại bản tin mà bạn rao đi" (nhánh gửi lại bản tin dựng từ DB có sẵn,
+SRS-5.1zzzzzq). (6) Không câu treo, AI đọc gật trơn và bóc tách không thấy gì → câu bot vừa nói là câu ĐÓNG (không hỏi, có "cảm ơn / dạ vâng / báo …
+liền / rao như vậy") thì im (không gửi gì, `im: true`); chưa đóng thì "Dạ vâng ạ." tiền định; 🤖 "Hiểu: {ac} xác nhận, không có thông tin mới".
+
+**Chỗ khác cùng lớp.** Ghi nguyên câu làm `bo_sung` còn ở đường câu treo lệch (`ghiBoSung`, 7500+) — đã có cổng "AI đọc ra kiến thức thì chỉ ghi kiến
+thức" từ Đợt 2; chưa đụng. `laNoiVoiBot` (regex) vẫn là lưới đỡ khi AI không chạy. Cổng cho AI chạy (`coMuiAi || pendingReq || wantsSell || dsMo ≥ 2
+|| traLoiBot`): người có đúng một tin, không câu treo, bot chưa nói gì thì AI không chạy — thực tế bot luôn đã nói trước đó, e2e phải có `botNoi`.
+
+**Kiểm (đỏ khi tắt bản sửa).** e2e ZZZZZV-01 (gật lỡ + gui_noi_dung_sau → không lên kệ), 02/02b ("Sửa lại giúp mình nhé!", cách nói mới "chưa được em,
+làm lại đi"), 03 (AI không ra gì → không ghi chú), 04 (đọc thêm hội thoại → bỏ đúng ý thêm; lượt ý ngắn thấy 📋), 05 (điểm 6/10 lúc chờ duyệt), 06
+(14:41 mời gửi nội dung), 07/07b (xem lại tin, cách nói mới "gửi lại cho chị cái tin em đăng coi"), 08/08b/08c/08d (ví dụ 89 triệu; vai chưa rõ không
+ví dụ; thuê 4,5 triệu), 09/09b (im sau câu đóng; "Dạ vâng ạ." sau câu chưa đóng). Bất biến PHÍ: ví dụ chỉ khi vai gọi tên trong lời khách.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

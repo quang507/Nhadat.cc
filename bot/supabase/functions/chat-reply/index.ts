@@ -33,7 +33,7 @@ import {
   TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT, CAU_HOI_MAU as CAU_HOI_MAU_GOC,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
   cauBaoPhi, cauPhi, // SRS-5.1zzq: câu phí MỘT NGUỒN theo vai + loại giao dịch
-  coCauPhi, coCauPhiChuaRoVai, coCauPhiTheoVai, vaiPhi, phanTramPhi, // SRS-5.1zzzze: lượt đã nói phí chưa — đối chiếu đúng chữ cauPhi() sinh
+  coCauPhi, coCauPhiChuaRoVai, coCauPhiTheoVai, vaiPhi, phanTramPhi, viDuPhi, // SRS-5.1zzzze: lượt đã nói phí chưa — đối chiếu đúng chữ cauPhi() sinh
   tenHang, // SRS-5.1zzs: tên hạng Đồng / Bạc / Vàng cho câu lên kệ
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
@@ -3312,6 +3312,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         };
         const yeuCauX = typeof extra.hoi_ve_tin === "string" ? NHAN_YEU_CAU[extra.hoi_ve_tin] ?? null : null;
         const hieuKhac = extra.duyet === true ? "đồng ý bản nháp, em đăng tin"
+          : extra.gat_tron === true ? `${cachGoi} xác nhận, không có thông tin mới` // SRS-5.1zzzzzv
           : vaiTuNoiLuot ? `tự nói là ${vaiTuNoiLuot === "moi_gioi" ? "môi giới" : "chính chủ"}`
           : hoiNguocX ? `hỏi em "${hoiNguocX}", em trả lời câu đó`
           : null;
@@ -4079,6 +4080,17 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       return kd.split(/\s+/).length <= 8 && !/\b(?:rao|dang|mo|xoa|sua|len|bo|go|gui|hoi|can \d)\b/.test(kd) &&
         /\b(?:tot|hay|on|duoc|ok|giong nguoi|tu nhien|hai long|nhiet tinh|cham|kha|te|do|cam on)\b/.test(kd);
     };
+    /**
+     * SRS-5.1zzzzzv: ghi điểm chấm + đóng câu `danh_gia` + câu cảm ơn — MỘT chủ cho nhánh câu treo danh_gia và cho lúc chờ duyệt (Zalo
+     * thật 13/10 14:53: "mình chấm 6/10 nhé" tới khi câu điểm đã hết hạn vì bản nháp vừa gửi lại → từng vào ghi chú "📝 Thêm").
+     */
+    const ghiDiemDanhGia = async (listingId: string, reqId: string | null, dap: string): Promise<string> => {
+      const { error: dgErr } = await ghiFact(client, { p_listing_id: listingId, p_question: "danh_gia", p_answer: dap, p_source: "seller_chat" });
+      if (dgErr) await ghiLoi(client, "chat-reply ghi_fact_listing(danh gia)", dgErr.message);
+      if (reqId) await client.from("info_requests").update({ status: "answered", answer: dap, answered_at: new Date().toISOString() }).eq("id", reqId);
+      const diemM = /(?:^|[^\d])(10|[0-9])\s*(?:\/\s*10|diem|d\b|\/10)/.exec(boDau(dap));
+      return diemM ? `Dạ em cảm ơn ${cachGoi} đã chấm em ${diemM[1]} điểm ạ.` : `Dạ em cảm ơn ${cachGoi} đã góp ý ạ, em sẽ cố gắng hơn.`;
+    };
     // Câu HỎI ("có khách nào hỏi chưa em") không phải điểm nhưng cũng không đóng câu điểm — `hoiVeTin` đỡ rồi hỏi lại.
     const boDiem = ds.filter((p) => p.question === "danh_gia" && !laDiemCham(text) && !laCauHoiTron(text) && !hoiVeTin(text));
     if (boDiem.length) {
@@ -4114,6 +4126,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     type TinMo = { id: string; code: string | null; status?: string | null; property_type?: string | null; district?: string | null; ward?: string | null; street?: string | null; location_raw?: string | null; price_raw?: string | null; area_m2?: number | string | null };
     const dsMo = ((tinCuaNguoi ?? []) as TinMo[])
       .filter((t) => !!t.code && ["cho_thong_tin", "dang_ban", "dang_quan_tam"].includes(t.status ?? ""));
+    // SRS-5.1zzzzzv: ví dụ con số phí (code tính từ giá tin đã ghi, vai đã rõ) — một chỗ gọi `viDuPhi`; người đang có đúng MỘT tin mở thì
+    // lấy giá tin đó khi không có câu treo chỉ tin.
+    const tinPhiMotCan = dsMo.length === 1 ? ((tinCuaNguoi ?? []) as Array<{ id: string; price_vnd?: number | string | null; deal?: string | null }>).find((t) => t.id === dsMo[0].id) ?? null : null;
+    const viDuPhiNguoi = (deal: string | null | undefined, gia: number | string | null | undefined): string | null =>
+      viDuPhi(vaiPhi(sellerRow), deal ?? dealNguoi, gia != null && gia !== "" ? Number(gia) : null);
     // SRS-5.1zzzg: căn người này ĐANG CÓ — đưa cho lượt AI để nó biết tin nói về căn nào (kể cả khi không có câu đang hỏi).
     const moTaCanDangCo = (t: TinMo) =>
       `${t.code}: ${LOAI_VI[t.property_type ?? ""] ?? "chưa rõ loại"}, ${tenCanDocLen(t)}${t.price_raw ? `, giá ${donViGiaDep(t.price_raw)}` : ""}`;
@@ -4391,12 +4408,39 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // SRS-5.1zf: lượt AI nhỏ "ý của lượt" — chỉ chế độ `ai`, chạy song song, hỏng thì `undefined` (luật đỡ).
     if (anthropicS && cheDoBocAi) {
       const aiY = anthropicS;
-      const botNoi = cauBotThat;
+      // SRS-5.1zzzzzv: đang chờ duyệt → lượt ý ngắn đọc cả BẢN NHÁP 📋 vừa gửi (câu bot thật là bong bóng điểm, không có dòng Quy mô / Thêm),
+      // để "Quy mô chỉ cần để: … là được" chỉ ra được ý cần bỏ (`bo_y`) đúng chữ trong bản nháp.
+      const nhapVuaGui = pendingReq?.question === "duyet_tin"
+        ? [...lichSuRows].reverse().find((m) => !laTinNguoi(m.sender) && (m.body ?? "").includes("📋"))?.body ?? null
+        : null;
+      const botNoi = nhapVuaGui ? [nhapVuaGui, cauBotThat].filter(Boolean).join("\n") : cauBotThat;
+      // SRS-5.1zzzzzv (chủ dự án 13/10/2026: "khách yêu cầu, khách đưa phản hồi mà bot không rõ ý thì có thể đọc thêm chat phía bên trên,
+      // ko hiểu nữa thì lên trên nữa"): lượt ý ngắn đọc lần đầu với câu bot vừa nói; KHÔNG RÕ Ý (không gật / không yêu cầu / không ý nào, và
+      // lượt bóc tách cũng không thấy dữ liệu) → đọc lại kèm 10 tin gần nhất; vẫn không rõ → kèm 30 tin. Chỉ tốn thêm khi thật sự mù.
+      const lichSuChu = (n: number) => lichSuRows.slice(-n)
+        .map((m) => ({ ai: laTinNguoi(m.sender) ? "Chủ nhà" : "Bot", b: (boBaoLai(m.body ?? "") ?? "").replace(/\s+/g, " ").trim() }))
+        .filter((x) => x.b).map((x) => `${x.ai}: ${x.b.slice(0, 400)}`).join("\n");
+      const muY = (k: Awaited<ReturnType<typeof docYLuotBangModel>>["ket"]) =>
+        !k || ((k.dongY === undefined || k.dongY.la === "khong_noi") && (k.yeuCau === undefined || k.yeuCau.loai === "khong") && !k.khongBiet && !k.tieuDe &&
+          !k.ngungHangLoat && !k.muaKem);
       yLuotAi = (async () => {
         if ((await cheDoBocAi!) !== "chinh") return undefined;
         try {
-          const kq = await docYLuotBangModel(aiY as unknown as Parameters<typeof docYLuotBangModel>[0], MODEL, textTreo || text, botNoi);
+          let kq = await docYLuotBangModel(aiY as unknown as Parameters<typeof docYLuotBangModel>[0], MODEL, textTreo || text, botNoi);
           await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
+          if (muY(kq.ket) && bongAi) {
+            const kB = await bongAi;
+            const khongDuLieu = !!kB?.ket && !kB.truong?.length && !kB.kienThuc?.length && !kB.traLoi?.co_tra_loi && !kB.hoiLai?.co_hoi;
+            for (const n of khongDuLieu ? [10, 30] : []) {
+              const ls = lichSuChu(n);
+              if (!ls) break;
+              console.log("chat-reply: y luot mu — doc them", n, "tin");
+              kq = await docYLuotBangModel(aiY as unknown as Parameters<typeof docYLuotBangModel>[0], MODEL, textTreo || text, botNoi, ls);
+              await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
+              if (!muY(kq.ket)) break;
+              if (n === 10 && lichSuRows.length <= 10) break;
+            }
+          }
           return kq.ket ?? undefined;
         } catch (e) {
           await ghiLoi(client, "chat-reply y luot(ai)", e);
@@ -6455,6 +6499,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (noiDuRoi && pendingReq.question !== "duyet_tin" && laTinRong(pendingReq.listings as Parameters<typeof laTinRong>[0]) && !nhanDienFact(dapAn)) {
         return await traLoiSeller([`Dạ ${cachGoi} gửi nội dung tin qua đây giúp em nha, em đọc rồi soạn lại cho mình ạ.`], { sap_gui_noi_dung: true, reask: pendingReq.question });
       }
+      // SRS-5.1zzzzzv (Zalo thật 13/10 14:41: "Đăng bán giúp mình với nội dung sau" khi tin đã có quận → "tin chỉ còn thiếu loại nhà… em đăng luôn
+      // không hỏi lại"): AI đọc ra khách SẮP GỬI nội dung (`gui_noi_dung_sau`, trích dẫn đã kiểm) và lượt bóc tách không thấy ô nào → mời
+      // gửi, giữ câu đang hỏi; không coi là "đủ rồi" / bảo đăng, bất kể tin rỗng hay không.
+      if (ycLuot?.loai === "gui_noi_dung_sau" && pendingReq.question !== "duyet_tin") {
+        const aiGui = await aiLuot();
+        if (aiGui === undefined ? !nhanDienFact(dapAn) : !aiGui.ghi.some((g) => g.question !== "bo_sung")) {
+          return await traLoiSeller([`Dạ ${cachGoi} gửi nội dung tin qua đây giúp em nha, em đọc rồi soạn lại cho mình ạ.`], { sap_gui_noi_dung: true, reask: pendingReq.question });
+        }
+      }
       const baoDangDu = noiDuRoi && await baoDangLuot(() => laBaoDang(dapAn));
       if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" && noiDuRoi && !baoDangDu) {
         // SRS-5.1zzzzzq: "đăng giúp bác thông tin này nhé" + bài rao tới 12 giây sau — quyết định ĐÓNG (đóng câu treo, chu_noi_du_at) dựa
@@ -6662,7 +6715,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
               { reask: "loai_bds", dang_luon: true, thieu_dang: "loại nhà", ...(qGhi ? { quan: qGhi } : {}) });
           }
           const dapNguoc = hoiLoai
-            ? dapHoiNguocTienDinh(hoiLoai.cau, cachGoi, cauPhi(vaiPhi(sellerRow), pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiLoai.chuDe, botDaNoiGan())
+            ? dapHoiNguocTienDinh(hoiLoai.cau, cachGoi, cauPhi(vaiPhi(sellerRow), pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiLoai.chuDe, botDaNoiGan(), viDuPhiNguoi(pendingReq.listings?.deal, pendingReq.listings?.price_vnd))
               ?? await dapChuaCoDuLieu(hoiLoai.cau, hoiLoai.chuDe)
             : null;
           const again = daHoiLoai >= 1
@@ -6703,7 +6756,19 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // SRS-5.1zf: AI đọc tin → AI quyết duyệt: gật mà không kèm dữ liệu (kèm dữ liệu là lời sửa), hoặc ý định "đủ rồi".
         const tgDuyet = await gatTach(dapAn);
         const ydDuyet = tgDuyet !== undefined ? await yDinhAi() : undefined;
-        const gatDuyet = tgDuyet !== undefined ? (tgDuyet.gat && tgDuyet.ca) || ydDuyet?.loai === "du_roi" : (laDongY(dapAn) || laDuRoi(dapAn) || gatVeDau);
+        // SRS-5.1zzzzzv (Zalo thật 13/10 14:52: "sửa lại theo nội dung này giúp mình" → gật → tin lên kệ; "Sửa lại giúp mình nhé!" → ghi chú
+        // "📝 Thêm"): lời VỀ BẢN NHÁP do AI đọc (`xin_sua` / `gui_noi_dung_sau`, trích dẫn đã kiểm) — không bao giờ là gật; không kèm dữ
+        // liệu thì không ghi gì, không gửi lại nháp, câu duyệt vẫn treo. Kèm dữ liệu ("sửa lại, giá 9 tỷ") thì đi đường ghi như lời sửa.
+        const ycDuyet = ycLuot?.loai === "xin_sua" || ycLuot?.loai === "gui_noi_dung_sau" ? ycLuot.loai : null;
+        const aiDuyet = ycDuyet ? await aiLuot() : undefined;
+        const coODuyet = aiDuyet !== undefined ? aiDuyet.ghi.some((g) => g.question !== "bo_sung") : nhanDienFact(dapAn) !== null;
+        if (!chiSua && ycDuyet && !coODuyet) {
+          const Ac = cachGoi.charAt(0).toUpperCase() + cachGoi.slice(1);
+          return ycDuyet === "gui_noi_dung_sau"
+            ? await traLoiSeller([`Dạ ${cachGoi} gửi nội dung qua đây giúp em, em sửa bản nháp theo đó rồi gửi lại ${cachGoi} xem ạ.`], { reask: "duyet_tin", sap_gui_noi_dung: true })
+            : await traLoiSeller([`Dạ ${cachGoi} nói giúp em chỗ cần sửa (sửa thành gì, hay bỏ ý nào) là em sửa liền ạ. ${Ac} chưa ưng chỗ nào thì cứ chỉ em nha.`], { reask: "duyet_tin", loai_cau: "xin_sua" });
+        }
+        const gatDuyet = !ycDuyet && (tgDuyet !== undefined ? (tgDuyet.gat && tgDuyet.ca) || ydDuyet?.loai === "du_roi" : (laDongY(dapAn) || laDuRoi(dapAn) || gatVeDau));
         // SRS-5.1zzzzzl (test Zalo 13/10: "Tiêu đề như vầy hay hơn nè: Chỉ với 7,6 tỷ ô tô tận cửa tại Bình Hưng Hòa Bình Tân" lúc chờ duyệt
         // → bot coi là gật, đăng luôn). Chủ nhà ĐƯA TIÊU ĐỀ là sửa bản nháp: AI đọc ra câu tiêu đề (`tieu_de`), code kiểm câu đó nằm nguyên
         // văn trong tin → ghi `boc_tach.tieu_de_khach`, gửi lại bản nháp với tiêu đề của khách, câu duyệt vẫn treo. Đứng TRƯỚC mọi nhánh gật.
@@ -6759,7 +6824,20 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
               let ds: Array<{ question: string; answer: string }>;
               if (aiN !== undefined) {
                 const oAi = aiN.ghi.filter((g) => g.question !== "bo_sung").map((g) => ({ question: g.question, answer: g.answer }));
-                ds = oAi.length ? oAi : [{ question: "bo_sung", answer: dapAn }];
+                // SRS-5.1zzzzzv: AI đã đọc mà không thấy ô nào → chỉ ghi KIẾN THỨC AI đọc ra (nếu có), KHÔNG ghi nguyên câu làm ghi chú
+                // ("Sửa lại giúp mình nhé!", "Phần quy mô vẫn chưa đúng ý mình", "mình chấm 6/10 nhé" từng vào "📝 Thêm"). Không có gì →
+                // lời về bản nháp / với bot: điểm chấm (câu điểm đã hết hạn vì nháp vừa gửi lại) thì ghi điểm, còn lại nói thật, câu duyệt treo.
+                const kB = await bongAi;
+                const ktAi = kB?.ket ? kiemKienThuc(kB.kienThuc ?? [], dapAn, kiemDeXuat(kB.truong, dapAn).dat) : [];
+                ds = oAi.length ? oAi : ktAi.map((a) => ({ question: "bo_sung", answer: a }));
+                if (!ds.length) {
+                  const { data: dgReq } = await client.from("info_requests").select("id, status").eq("listing_id", pendingReq.listing_id).eq("question", "danh_gia").limit(1).maybeSingle();
+                  if (dgReq && laDiemCham(dapAn)) {
+                    const camOn = await ghiDiemDanhGia(pendingReq.listing_id, dgReq.status === "answered" ? null : (dgReq.id as string), dapAn);
+                    return await traLoiSeller([`${camOn} Bản nháp ở trên ${cachGoi} thấy được thì nhắn "ok" là em đăng liền ạ.`], { reask: "duyet_tin", saved_fact: "danh_gia", danh_gia: dapAn });
+                  }
+                  return await traLoiSeller([`Dạ em nghe rồi ạ. Bản nháp ở trên ${cachGoi} thấy được thì nhắn "ok" là em đăng liền, muốn sửa chỗ nào thì nói em chỗ đó nha.`], { reask: "duyet_tin", loai_cau: "meta" });
+                }
               } else {
                 const nhieu = nhanDienNhieuFact(dapAn).filter((f) => f.question !== "bo_sung");
                 const motY = k.chuyenSang ?? nhanDienFact(dapAn) ?? { question: "bo_sung", answer: dapAn };
@@ -7214,7 +7292,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // 15/09/2026 (bắn thật F2): câu hỏi về ẢNH có đáp án của hệ thống → bong bóng tiền
       // định đứng trước, model chỉ hỏi tiếp (model từng bỏ qua lời dặn trả lời trước).
       const hoiNguocDap = hoiNguoc
-        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, cauPhi(vaiPhi(sellerRow), pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiAi?.chuDe, botDaNoiGan()) ?? await dapChuaCoDuLieu(hoiNguoc, hoiAi?.chuDe)
+        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, cauPhi(vaiPhi(sellerRow), pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiAi?.chuDe, botDaNoiGan(), viDuPhiNguoi(pendingReq.listings?.deal, pendingReq.listings?.price_vnd)) ?? await dapChuaCoDuLieu(hoiNguoc, hoiAi?.chuDe)
         : xinXoaLuot(dapAn) && !nhanDienFact(dapAn)
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
@@ -7251,19 +7329,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // hỏi lại chung ở dưới lo.
       // 22/09/2026: câu HỎI ("có khách nào hỏi chưa em") không phải điểm — `hoiVeTin` đã đỡ ở trên, đây chặn nốt.
       if (pendingReq.question === "danh_gia" && kq.loai === "khop" && !laCauHoiTron(dapAn) && !(ycLuot !== undefined ? !!ycLuot?.loai.startsWith("hoi_") : hoiVeTin(dapAn))) {
-        const { error: dgErr } = await ghiFact(client, {
-          p_listing_id: pendingReq.listing_id, p_question: "danh_gia",
-          p_answer: dapAn, p_source: "seller_chat",
-        });
-        if (dgErr) await ghiLoi(client, "chat-reply ghi_fact_listing(danh gia)", dgErr.message);
-        await client.from("info_requests").update({
-          status: "answered", answer: dapAn, answered_at: new Date().toISOString(),
-        }).eq("id", pendingReq.id);
-        const diemM = /(?:^|[^\d])(10|[0-9])\s*(?:\/\s*10|diem|d\b|\/10)/.exec(boDau(dapAn));
         const themXoa = xinXoaLuot(dapAn) ? `\nViệc xoá tin em không tự làm được, để em nhờ anh Thu xử lý giúp ${cachGoi} ạ.` : "";
-        const camOn = (diemM
-          ? `Dạ em cảm ơn ${cachGoi} đã chấm em ${diemM[1]} điểm ạ.\nCó khách quan tâm là em báo ${cachGoi} liền.`
-          : `Dạ em cảm ơn ${cachGoi} đã góp ý ạ, em sẽ cố gắng hơn.\nCó khách quan tâm là em báo ${cachGoi} liền.`) + themXoa;
+        const camOn = `${await ghiDiemDanhGia(pendingReq.listing_id, pendingReq.id, dapAn)}\nCó khách quan tâm là em báo ${cachGoi} liền.` + themXoa;
         return await traLoiSeller([camOn], { saved_fact: "danh_gia", danh_gia: dapAn });
       }
       // 09/09 tối (chạy kịch bản lần 2): câu "địa chỉ cụ thể" treo MÃI — chủ nhà
@@ -8852,7 +8919,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // SRS-5.1zzzj: AI nói tin có hỏi em không (`hoiLaiAi`, đọc theo nghĩa, kiểm trích dẫn); luật `tachCauHoiNguoc` chỉ đỡ khi AI không chạy.
         const hoiAiRao = await hoiLaiAi(text);
         const hoiRao = hoiAiRao !== undefined ? (hoiAiRao ? (hoiAiRao.caTin ? text : hoiAiRao.cau) : null) : tachCauHoiNguoc(text).hoi;
-        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(vaiPhi(sellerRow), sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe, botDaNoiGan()) : null;
+        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(vaiPhi(sellerRow), sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe, botDaNoiGan(), viDuPhiNguoi(sDeal ?? tinPhiMotCan?.deal, tinPhiMotCan?.price_vnd)) : null;
         if (hoiRao && dapRao) cauDaDap = hoiRao;
         const hoiRaoPrompt = hoiRao
           ? dapRao
@@ -9092,6 +9159,18 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // OPEN-30: chăm sóc chung — model hỏng thì ghi nhận bằng câu mẫu.
     let sReply: string | null = null;
     const bongR3Truoc: string[] = []; // SRS-5.1zzzzzn: bong bóng tiền định (phí) đi trước lời model r3
+    // SRS-5.1zzzzzv (chủ dự án 13/10/2026: "nếu sau khi bot cảm ơn, khách oke rồi thì ko có lặp lại nữa" — Zalo thật 14:57: "ok" → "Dạ vâng, em
+    // cảm ơn chị ạ." ba lượt liền, một lượt còn kể lại điểm 95/100): khách CHỈ GẬT (AI đọc gật, lượt bóc tách không thấy dữ liệu / câu hỏi)
+    // khi không có câu treo → câu bot vừa nói là câu ĐÓNG (không hỏi gì) thì im, không gửi gì; chưa đóng thì "Dạ vâng ạ." một câu, không gọi model.
+    {
+      const gatTron = (await dongYAi())?.la === "dong_y";
+      const kG = gatTron && bongAi ? await bongAi : null;
+      const khongGiMoi = !!kG?.ket && !kG.truong?.length && !kG.kienThuc?.length && !kG.traLoi?.co_tra_loi && !kG.hoiLai?.co_hoi && !kG.capNhat?.length;
+      if (gatTron && khongGiMoi && !(await hoiLaiAi(text))) {
+        const botDong = !!cauBotThat && !/\?/.test(cauBotThat) && /cảm ơn|dạ vâng|báo .{0,12}liền|rao như vậy|nghe rồi/iu.test(cauBotThat);
+        return await traLoiSeller(botDong ? [] : ["Dạ vâng ạ."], { gat_tron: true, ...(botDong ? { im: true } : {}) });
+      }
+    }
     if (anthropicS) {
       try {
         // SRS-5.1zzzj (chat thử 08/10, …w44h: "ừ em có nhận rao bán cho anh ở quận 8 không em" → "Dạ anh chị nhận rao được chứ…"):
@@ -9105,7 +9184,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // câu hỏi vai, và lượt khách tự nói vai sau đó báo số (`dapPhiRoVai`, cùng điều kiện nhánh câu treo).
         const cauHoiR3 = hoiR3 ? (hoiR3.caTin ? text : hoiR3.cau) : null;
         // SRS-5.1zzzzzo: câu phí chưa rõ vai nay nêu cả hai mức — không nối câu hỏi vai.
-        const dapR3 = cauHoiR3 ? dapHoiNguocTienDinh(cauHoiR3, cachGoi, cauPhi(vaiPhi(sellerRow), dealNguoi, { benEm: true }), hoiR3?.chuDe, botDaNoiGan()) : null;
+        const dapR3 = cauHoiR3 ? dapHoiNguocTienDinh(cauHoiR3, cachGoi, cauPhi(vaiPhi(sellerRow), tinPhiMotCan?.deal ?? dealNguoi, { benEm: true }), hoiR3?.chuDe, botDaNoiGan(), viDuPhiNguoi(tinPhiMotCan?.deal, tinPhiMotCan?.price_vnd)) : null;
         if (dapR3 && cauHoiR3) cauDaDap = cauHoiR3;
         if (dapR3 && hoiR3?.caTin) return await traLoiSeller([dapR3], { hoi_nguoc: cauHoiR3 });
         const vaiPhiR3 = vaiPhi(sellerRow);
