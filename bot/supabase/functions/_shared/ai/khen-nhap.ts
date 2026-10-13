@@ -18,6 +18,12 @@ const KhenNhap = z.object({
   // SRS-5.1zzzzzo ("tiện ích phải gom vào đúng tiện ích"): ý thêm nói về xung quanh căn → dòng 🏫 Tiện ích. Cùng lượt model.
   tien_ich: z.array(z.string()).optional().describe("Trong danh sách Ý THÊM: các ý nói về TIỆN ÍCH / XUNG QUANH căn (gần chợ, trường, bệnh viện, công viên, siêu thị, khu dân cư, cách đường lớn bao xa, an ninh khu). Chép NGUYÊN VĂN từng ý như trong danh sách. Ý về bên trong căn, tình trạng, pháp lý → không đưa. Không có → []."),
   quy_mo: z.array(z.string()).optional().describe("Trong danh sách Ý THÊM: các ý nói về QUY MÔ / KHÔNG GIAN của căn (phòng, bếp, phòng khách, sân, sân thượng, ban công, gara, kho, độ rộng không gian bên trong). Chép NGUYÊN VĂN từng ý như trong danh sách. Ý về vị trí, tiện ích quanh nhà, tình trạng, pháp lý → không đưa. Không có → []."),
+  // SRS-5.1zzzzzz (chủ dự án 13/10/2026: "Chọn lọc các tiện ích trong tin dự án để đưa ra ý ngon nghẻ"): bài rao dự án / khu dân cư liệt kê
+  // 7–9 tiện ích → tin rao chỉ khoe 3–4 ý đáng nhất, viết gọn. Cùng lượt model này; code kiểm từng ý (`tienIchNoiBatHopLe`).
+  tien_ich_noi_bat: z.array(z.object({
+    goc: z.string().describe("Ý tiện ích chép NGUYÊN VĂN từ danh sách Ý THÊM (đúng một dòng trong danh sách)."),
+    gon: z.string().describe("Cách viết GỌN của ý đó để in lên tin, ≤ 10 chữ: giữ đúng TÊN RIÊNG và CON SỐ / khoảng cách / thời gian như ý gốc, bỏ chữ thừa (\"Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút\" → \"chợ Rạch Kiến, Phước Vân 3–5 phút\"; \"Khu công nghiệp Cầu Tràm ~ 10 phút\" → \"KCN Cầu Tràm 10 phút\"). KHÔNG thêm nhận định (sầm uất, tiện lợi, đắc địa), không thêm tên / số mới."),
+  })).optional().describe("Khi Ý THÊM có từ 4 ý tiện ích trở lên: chọn TỐI ĐA 4 ý ĐÁNG KHOE NHẤT với người mua (gần nhất / lớn nhất / ai cũng cần: chợ, trường, bệnh viện, siêu thị lớn, trục đường chính / cao tốc, khu công nghiệp lớn), xếp ý mạnh trước; bỏ ý mờ (UBND, trạm y tế, ý trùng). Ít hơn 4 ý tiện ích → []."),
 });
 const FORMAT = dinhDangLong(KhenNhap);
 
@@ -35,6 +41,10 @@ gửi chủ nhà, đặt ngay dưới bản tin.
   sân thượng…) thì chép nguyên văn vào quy_mo; ý về vị trí, tiện ích quanh nhà, tình trạng nhà thì không.
 - tien_ich: xếp riêng — ý nào nói về xung quanh căn (gần chợ / trường / công viên, khu dân cư, cách đường lớn…) thì chép nguyên văn vào tien_ich.
   Một ý chỉ vào MỘT trong hai danh sách.
+- tien_ich_noi_bat: khi Ý THÊM có ≥ 4 ý tiện ích (bài rao dự án / khu dân cư hay liệt kê 7–9 ý), chọn TỐI ĐA 4 ý đáng khoe nhất với người mua
+  (chợ / trường / bệnh viện / siêu thị lớn / trục đường chính, cao tốc / khu công nghiệp lớn; gần nhất đứng trước), mỗi ý: goc = chép nguyên văn
+  một dòng Ý THÊM, gon = viết gọn ≤ 10 chữ giữ đúng tên riêng + con số của ý gốc, không thêm nhận định. Bỏ ý mờ (UBND, trạm y tế, ý trùng).
+  Dưới 4 ý tiện ích → [].
 - tieu_de: viết lại dòng tiêu đề (dòng 2 của bản tin) cho THU HÚT, đọc là muốn hỏi ngay — cùng giá, cùng điểm mạnh, cùng khu vực có
   trong bản tin, tự chọn thứ tự (giá có thể đứng đầu hay cuối), lời mời gọi vừa phải ("sở hữu ngay", "về ở liền", "dọn vào ngay", "nhà
   xinh"); tin thuê mở bằng "Cho thuê" / "Thuê ngay". KHÔNG thêm điểm mạnh / con số / nhận định mới.
@@ -47,7 +57,7 @@ type ClientModel = {
 /** Hỏi model câu khen. Kết quả THÔ — đưa qua `khenHopLe`. Model hỏng thì NÉM. */
 export async function vietKhenNhapBangModel(
   ai: ClientModel, model: string, banTin: string, cachGoi: string, yThem: string[] = [],
-): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; tienIch: string[]; tieuDe: string | null; usage: unknown }> {
+): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; tienIch: string[]; tienIchNoiBat: Array<{ goc: string; gon: string }>; tieuDe: string | null; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
     max_tokens: 300,
@@ -56,5 +66,8 @@ export async function vietKhenNhapBangModel(
     messages: [{ role: "user", content: `Cách gọi chủ nhà: "${cachGoi}"\nBẢN TIN:\n${banTin.slice(0, 2500)}\nÝ THÊM:\n${yThem.length ? yThem.map((y) => `- ${y}`).join("\n") : "(không có)"}` }],
   });
   const k = docLong(KhenNhap, r.parsed_output);
-  return { khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], quyMo: k.success ? k.data.quy_mo ?? [] : [], tienIch: k.success ? k.data.tien_ich ?? [] : [], tieuDe: k.success ? k.data.tieu_de ?? null : null, usage: r.usage };
+  return {
+    khen: k.success ? k.data.khen : null, duaTren: k.success ? k.data.dua_tren : [], quyMo: k.success ? k.data.quy_mo ?? [] : [], tienIch: k.success ? k.data.tien_ich ?? [] : [],
+    tienIchNoiBat: k.success ? k.data.tien_ich_noi_bat ?? [] : [], tieuDe: k.success ? k.data.tieu_de ?? null : null, usage: r.usage,
+  };
 }
