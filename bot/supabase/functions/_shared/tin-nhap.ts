@@ -325,7 +325,8 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
   }
   // SRS-5.1zzzzzl (chủ dự án 13/10: "Ko ghi ngang ghi mặt tiền, Mặt tiền đi chung với tiện ích" — chọn "Gộp chung một dòng"): bề ngang
   // in là "mặt tiền Nm" ở dòng 🏫 Tiện ích; dòng diện tích còn diện tích, dài, nở hậu, thổ cư, hình dạng.
-  const matTien = l.frontage_m ? `mặt tiền ${so(l.frontage_m)}m` : nhan("mặt tiền", fact("mat_tien"));
+  // SRS-5.1zzzzzx: chỉ in từ CỘT `frontage_m` (số đã qua trigger kiểm) — fact "mat_tien" thô mà DB không nhận (vd "80m" đọc nhầm từ diện tích) không in.
+  const matTien = l.frontage_m ? `mặt tiền ${so(l.frontage_m)}m` : "";
   them("📐", "Diện tích", [
     l.area_m2 != null && l.area_m2 !== ""
       ? `${so(l.area_m2)}m²`

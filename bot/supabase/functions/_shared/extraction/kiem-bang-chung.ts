@@ -31,8 +31,16 @@ export const chuanSo = (s: string): string =>
  */
 const KHOA_SO_DO_M = new Set(["ngang", "dai", "no_hau", "do_rong_hem", "do_rong_duong", "cach_mat_tien"]);
 export function soDoMet(v: string): RegExpMatchArray | null {
+  // SRS-5.1zzzzzx (Zalo thật 13/10 16:00, The Sholi: AI đọc "Diện tích đất 80m²" thành ngang 80 → bản nháp "🏫 Tiện ích: mặt tiền 80m"):
+  // số có m² / m2 là DIỆN TÍCH, không bao giờ là số đo mét (ngang / dài / hẻm / đường / mặt tiền) — "80m2" không ra 80, và cũng
+  // không ra "2" đứng sau chữ m.
   return chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2")
-    .match(/(?<![\d.])\d+(?:\.\d+)?(?![\d.])(?=\s*(?:m|met)(?![a-z])|(?!\s*[a-z]))/);
+    .match(/(?<![\d.m])\d+(?:\.\d+)?(?![\d.])(?=\s*(?:m|met)(?![a-z0-9])|(?!\s*[a-z]))/);
+}
+/** SRS-5.1zzzzzx: câu bot là câu hỏi XÁC NHẬN đúng / không ("… 80m² đó có đúng không ạ?", "… phải không?"). */
+export function laCauHoiXacNhan(cau: string | null | undefined): boolean {
+  const kd = boDau(cau ?? "");
+  return /\b(?:dung|phai|chuan)\s+(?:khong|ko|hong|chu)\b|\bdung chu\b/.test(kd) && /\?/.test(cau ?? "");
 }
 const soCuaO = (khoa: string, v: string): RegExpMatchArray | null =>
   KHOA_SO_DO_M.has(khoa) ? soDoMet(v) : chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
@@ -1376,6 +1384,20 @@ export function kiemTraLoiCau(
   // Số phải nằm trong CỤM TRÍCH, không chỉ đâu đó trong tin (bắn thật lx-21 25/09: "hxh, 5x12, trệt 3 lầu" khi hỏi hẻm →
   // AI trả "hẻm xe hơi 5 mét", số 5 là chiều ngang).
   const soTrich = new Set(td.match(/\d+/g) ?? []);
+  // SRS-5.1zzzzzx (Zalo thật 13/10 16:00: bot (model) hỏi "Diện tích đất mỗi căn là 80m² đó có đúng không ạ?", khách "đúng rồi" → AI trả
+  // "đúng, diện tích đất 80m²" trích "đúng rồi" → số 80 không có trong trích → bỏ, câu hết hạn, bot hỏi lại diện tích): khách CHỈ GẬT
+  // một câu hỏi XÁC NHẬN của bot thì bằng chứng là chính câu bot + lời gật — nhận giá trị khi mọi số của nó nằm trong câu bot; ô số đo
+  // thì giá trị là đúng cụm số (kèm đơn vị) trong câu bot, không phải câu model soạn.
+  if (laChiGat(tin) && cauBotVuaHoi && laCauHoiXacNhan(cauBotVuaHoi) && !laCauChonHai(cauBotVuaHoi)) {
+    const kdBot = chuanSo(cauBotVuaHoi);
+    const soV = chuanSo(v).match(/\d+(?:\.\d+)?/g) ?? [];
+    const soBot = new Set(kdBot.match(/\d+(?:\.\d+)?/g) ?? []);
+    if (soV.length && soV.every((n) => soBot.has(n))) {
+      const cumSo = new RegExp(`${(soV[0] ?? "").replace(".", "[.,]")}\\s*(?:m2|m²|m|met vuong|ty|tỷ|trieu|triệu)?`, "iu").exec(cauBotVuaHoi.replace(/²/g, "2"))?.[0]?.trim();
+      const vSach = v.replace(/^(?:đúng|dạ|vâng|ừ|phải|chuẩn|ok)[^\p{L}\d]*(?:rồi|vậy|ạ|em|anh|chị)?[,.:\s]*/iu, "").trim();
+      return { co: true, giaTri: (o && KHOA_SO.includes(o.cauHoi as typeof KHOA_SO[number]) || o?.cauHoi === "dien_tich_dat" || o?.cauHoi === "mat_tien") && cumSo ? cumSo : vSach || v };
+    }
+  }
   if ((chuanSo(v).match(/\d+/g) ?? []).some((n) => !soTrich.has(n))) return { co: true, giaTri: null };
   // 27/09/2026 (chủ dự án test Zalo): hỏi hẻm, khách "Hxm nhé" → AI trả "hẻm xe hơi" (trích "Hxm") và lọt vì lớp kiểm chỉ
   // soát CHỮ SỐ. Loại đường vào khách nói rõ (hxm / xe máy · hxh / xe hơi / ô tô · hxt / xe tải) mà AI nói loại khác → bỏ.
@@ -1735,6 +1757,9 @@ export function oTheoChuDeSoDo(khoa: string, kd: string): string | null {
 /** "cách / ra / tới / xa / gần … mặt tiền" — khoảng cách tới đường lớn, không phải chiều ngang. */
 const NOI_CACH = /\b(?:cach|ra|toi|xa|gan|di bo)\b/;
 function soDoSaiChuDe(khoa: string, kd: string): string | null {
+  // SRS-5.1zzzzzx (Zalo thật 13/10 16:00, The Sholi: "Diện tích đất 80m²" → ngang 80 → bản nháp "mặt tiền 80m"): cụm trích nói DIỆN TÍCH
+  // (chữ "diện tích" hay số kèm m²) thì không ô số đo MÉT nào (ngang / dài / nở hậu / hẻm / đường / cách mặt tiền) được lấy số đó.
+  if (KHOA_SO_DO_M.has(khoa) && (/\bdien tich\b/.test(kd) || /\d\s*m\s*2(?!\d)/.test(kd))) return "so_do_la_dien_tich";
   const c = chuDeSoDo(kd);
   if (khoa === "cach_mat_tien" && c.ngang && !NOI_CACH.test(kd)) return "cach_mat_tien_nhung_trich_noi_ngang";
   if (khoa === "do_rong_hem" && !c.hem && (c.duong || c.ngang)) return "rong_hem_nhung_trich_noi_chuyen_khac";

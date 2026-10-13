@@ -237,6 +237,21 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     "Chợ Bình Chánh ~ 20 phút", "Vinhomes Hưng Long Bình Chánh ~ 20 phút", "cao tốc Bến Lức - Long Thành", "cao tốc TP Hồ Chí Minh - Trung Lương", "Đại lộ Võ Văn Kiệt"];
   const ktCT = kiemKienThuc(Y_CT, TIN_CT, []);
   ok("ZZZZZW-K1 (ca gốc KDC Cầu Tràm) 9 tiện ích nguyên văn → giữ ĐỦ 9, không cắt", ktCT.length === 9 && ktCT.includes("Khu công nghiệp Cầu Tràm ~ 10 phút"), JSON.stringify(ktCT));
+ // SRS-5.1zzzzzx: số có m² không bao giờ là số đo mét; gật câu bot xác nhận có số.
+  {
+    const r1 = kiemDeXuat([dx("ngang", "80", "Diện tích đất 80m²")], "Thiết kế 1 trệt 1 lửng 3 lầu. Diện tích đất 80m²*. Nhà phố 2 mặt tiền");
+    ok("ZZZZZX-K1 (ca gốc The Sholi) ngang 80 trích 'Diện tích đất 80m²' → BỊ BỎ (m² là diện tích, không phải ngang)", r1.dat.length === 0 && r1.bo.length === 1, JSON.stringify(r1));
+    const r2 = kiemDeXuat([dx("do_rong_hem", "80", "80m2")], "nhà 80m2 hẻm xe hơi");
+    ok("ZZZZZX-K1b hẻm 80 trích '80m2' → bỏ, và không đọc ra '2' sau chữ m", r2.dat.length === 0, JSON.stringify(r2));
+    const r3 = kiemDeXuat([dx("do_rong_duong", "12", "đường trước nhà 12m"), dx("ngang", "4.1", "ngang 4,1m")], "đường trước nhà 12m, ngang 4,1m và dài 28,4m");
+    ok("ZZZZZX-K1c đối chứng: '12m', 'ngang 4,1m' vẫn là số đo mét", r3.dat.length === 2, JSON.stringify(r3));
+    const tl = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "đúng, diện tích đất 80m²", trich_dan: "đúng rồi" }, "đúng rồi", "Vâng ạ. Diện tích đất mỗi căn là 80m² đó có đúng không ạ?", { cauHoi: "dien_tich_dat", loai: "nha_pho" });
+    ok("ZZZZZX-K2 (ca gốc) bot hỏi xác nhận '80m² đó có đúng không', khách 'đúng rồi' → nhận giá trị đúng cụm số trong câu bot '80m2'", tl?.co === true && /^80\s*m2$/i.test(tl?.giaTri ?? ""), JSON.stringify(tl));
+    const tl2 = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "đúng, diện tích đất 80m²", trich_dan: "đúng rồi" }, "đúng rồi", "Nhà mình diện tích bao nhiêu m² vậy anh chị?", { cauHoi: "dien_tich_dat", loai: "nha_pho" });
+    ok("ZZZZZX-K2b đối chứng: câu bot KHÔNG phải câu xác nhận → gật trơn không mang giá trị (như cũ)", tl2?.co === true && tl2?.giaTri === null, JSON.stringify(tl2));
+    const tl3 = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "đúng, 90m²", trich_dan: "đúng rồi" }, "đúng rồi", "Diện tích đất 80m² đó có đúng không ạ?", { cauHoi: "dien_tich_dat", loai: "nha_pho" });
+    ok("ZZZZZX-K2c đối chứng: số AI trả không có trong câu bot → bỏ", tl3?.co === true && tl3?.giaTri === null, JSON.stringify(tl3));
+  }
   ok("ZZZZZW-K1b ý dài 81–160 ký tự nguyên văn → giữ", kiemKienThuc(["Thuận tiện kết nối các trục giao thông huyết mạch như: DT835, DT826, Quốc lộ 1A, cao tốc Bến Lức - Long Thành"], TIN_CT, []).length === 1);
 }
 

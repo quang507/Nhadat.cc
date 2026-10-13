@@ -58,7 +58,7 @@ import { docTaiLieuDuAn, type NguonTaiLieu, type TaiLieuDoc } from "../_shared/a
 import { bangThanhTin, cauRaoTuDong } from "../_shared/nhap-ro-hang.ts";
 import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { docKhongBiet, docNgungHangLoat, khongBietCua, giaTriKhongDoi, vaiTuCau } from "../_shared/extraction/kiem-bang-chung.ts";
+import { docKhongBiet, docNgungHangLoat, khongBietCua, giaTriKhongDoi, vaiTuCau, laChiGat, laCauHoiXacNhan } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
 import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
@@ -7147,7 +7147,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         if (aiKhongBiet) console.log("chat-reply: AI dua gia tri nhung AI doc khong biet", pendingReq.question);
         const traLoiAi = aiKhongBiet ? { co: false, giaTri: null } : traLoiAi1;
         const oAi = aiKhongBiet ? null : oAi0;
-        const dapAnAi0 = CAU_SO_CHAT.has(pendingReq.question) ? oAi : (traLoiAi?.giaTri ?? oAi);
+        // SRS-5.1zzzzzx: câu SỐ CHẶT lấy ô chuẩn hoá của AI; khách chỉ GẬT câu bot XÁC NHẬN ("… 80m² đó có đúng không ạ?") thì không có ô nào
+        // (số không nằm trong lời khách) — giá trị đã qua `kiemTraLoiCau` (đối chiếu số với câu bot) là bằng chứng duy nhất, lấy nó.
+        const gatCauXacNhanBot = laChiGat(text) && laCauHoiXacNhan(cauBotThat);
+        const dapAnAi0 = CAU_SO_CHAT.has(pendingReq.question) ? (oAi ?? (gatCauXacNhanBot ? traLoiAi?.giaTri ?? null : null)) : (traLoiAi?.giaTri ?? oAi);
         // 22/09/2026: câu treo VỊ TRÍ — bản luật chứa bản AI mà dài hơn (có số nhà / hẻm) thì lấy luật.
         // 30/09/2026 (bắn thật lx-ban-f): AI trả "o q10" cho câu địa chỉ — chỉ có quận, không phải địa chỉ; luật để câu treo.
         // Khách vừa gật phường bot gợi ý (`nhanGoiYPhuong`) → phường là phường gợi ý, AI không đè ("tân phú em" ≠ Phường Tân Phú).
