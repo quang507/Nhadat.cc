@@ -47,7 +47,7 @@ import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { soatNhanXetBangModel } from "../_shared/ai/kiem-khen.ts";
 import { docYLuotBangModel, type YLuotLLM } from "../_shared/ai/doc-y-luot.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
-import { bocGhiAi, chayCoGhiAi, type DongGhiAi } from "../_shared/ai/ghi-luot-ai.ts"; // SRS-5.1zzzzzd: ghi đầu ra model của ID thử
+import { bocGhiAi, chayCoDoGio, chayCoGhiAi, gioAiHienTai, type DongGhiAi } from "../_shared/ai/ghi-luot-ai.ts"; // SRS-5.1zzzzzd: ghi đầu ra model của ID thử
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 // 05/10/2026 (demo AOND, SRS-5.1zzj…zzm): file / link người bán gửi, tài liệu dự án, nhập rổ hàng, nhịp gửi.
 import { base64, docCsv, docLinkDrive, docXlsx, loaiTep, m2TuChu, taiTep, tangTuChu, timLinkTrongChu, type TepTai } from "../_shared/kho_tep.ts";
@@ -1391,11 +1391,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   // reclaim sau 150s). Ghi sổ hụt không được chặn đường trả lời: chỉ ghiLoi.
   const hoanTatGoc = async (payload: Record<string, unknown>, code = 200) => {
     moc.tong = Date.now() - t0Luot;
-    payload = { ...payload, _ms: { ...moc }, _luu_luong: tomTatLuuLuong(demLuuLuong) };
+    const gioAi = gioAiHienTai();
+    payload = { ...payload, _ms: { ...moc, ...(gioAi.length ? { ai: gioAi } : {}) }, _luu_luong: tomTatLuuLuong(demLuuLuong) };
     if (Array.isArray(payload.replies) && (payload.replies as unknown[]).length > 1) {
       payload = { ...payload, nhip_go: nhipGui(payload.replies as string[], nhipGoBat) };
     }
-    console.log("chat-reply _ms", JSON.stringify(moc));
+    console.log("chat-reply _ms", JSON.stringify(moc), gioAi.join(" | "));
     if (coSo) {
       const { error: soErr2 } = await client.from("inbound_ledger").update({
         status: "completed", reply: payload, updated_at: new Date().toISOString(),
@@ -10814,7 +10815,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
 // đi `ghi_ai_thu` — hàm DB tự bỏ qua ID không phải ID thử (`la_id_thu`, chỗ duy nhất giữ tiền tố). Lượt thường: không thêm truy vấn
 // nào. Thân request đọc MỘT lần ở đây rồi chuyền nguyên chữ cho lượt (cửa SEC-06 vẫn ở trong). Lượt bị chặn ở cổng không gọi model
 // nào → không ghi gì.
-Deno.serve(async (req) => {
+Deno.serve((req) => chayCoDoGio(() => phucVu(req)));
+async function phucVu(req: Request): Promise<Response> {
   if (req.method !== "POST") return await xuLyLuot(req);
   const tho = await req.text();
   const reqLai = { method: req.method, headers: req.headers, text: async () => tho } as unknown as Request;
@@ -10831,4 +10833,4 @@ Deno.serve(async (req) => {
     if (error) await ghiLoi(client, "chat-reply ghi_ai_thu", error.message);
   }
   return res;
-});
+}

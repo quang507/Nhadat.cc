@@ -22,6 +22,23 @@ export function chayCoGhiAi<T>(so: DongGhiAi[], f: () => Promise<T>): Promise<T>
   return kho.run(so, f);
 }
 
+// 13/10/2026 (chủ dự án: "phản hồi đúng rồi nhưng tốc độ hơi chậm, xem quy trình lại xem"): đồng hồ TỪNG LƯỢT GỌI MODEL — mốc bắt đầu
+// (ms từ đầu lượt khách) + thời gian chạy, theo loại (`loaiLuotAi`). Đi vào `_ms.ai` của payload (sổ inbound, `ban-thu` in ra) để biết
+// lượt chậm vì lượt AI nào, chạy nối tiếp hay song song. Mọi lượt (không chỉ ID thử), chỉ ghi số, không ghi nội dung.
+type GioAi = { t0: number; luot: string[] };
+const khoGio = new AsyncLocalStorage<GioAi>();
+export function chayCoDoGio<T>(f: () => Promise<T>): Promise<T> {
+  return khoGio.run({ t0: Date.now(), luot: [] }, f);
+}
+/** Các lượt model của lượt khách đang chạy: "loại bắt_đầu+thời_gian" (ms). Ngoài `chayCoDoGio` → []. */
+export function gioAiHienTai(): string[] {
+  return [...(khoGio.getStore()?.luot ?? [])];
+}
+function ghiGio(loai: string, bat: number, loi = false) {
+  const g = khoGio.getStore();
+  if (g && g.luot.length < TRAN_DONG) g.luot.push(`${loai} ${bat - g.t0}+${Date.now() - bat}${loi ? " lỗi" : ""}`);
+}
+
 type ThamSo = { system?: unknown; tools?: unknown };
 // Dấu hiệu đầu system prompt của từng lượt AI. Bản ghi và bộ phát lại dùng CÙNG hàm này, nên đổi chữ đầu một prompt chỉ làm lượt cũ
 // rơi về khoá dự phòng (chữ đầu system) — bộ phát lại báo "thiếu đầu ra", không âm thầm trả nhầm đầu ra của lượt khác.
@@ -69,11 +86,14 @@ export function bocGhiAi<C>(c: C): C {
   if (!c) return c;
   const m = (c as unknown as { messages: { create: (p: unknown, o?: unknown) => Promise<unknown>; parse: (p: unknown, o?: unknown) => Promise<unknown> } }).messages;
   const boc = (kind: "create" | "parse") => async (p: ThamSo, o?: unknown) => {
+    const bat = Date.now();
     try {
       const r = await m[kind](p, o);
+      ghiGio(loaiLuotAi(kind, p), bat);
       ghi({ kind, loai: loaiLuotAi(kind, p), ra: raCua(kind, p, r) });
       return r;
     } catch (e) {
+      ghiGio(loaiLuotAi(kind, p), bat, true);
       ghi({ kind, loai: loaiLuotAi(kind, p), ra: { loi: true } });
       throw e;
     }

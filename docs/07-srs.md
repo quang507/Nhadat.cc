@@ -3835,6 +3835,17 @@ pháp lý / kết cấu (đổi thứ tự là sửa `required_facts`, chưa có
 `kiem-bang-chung.mjs` ZZZZZI-K1 (9 ca một chữ: "ừ", "ờ em", "k biết nữa", "5 lầu" qua; "chưa", "uống nước", "bán", rỗng không qua), K2 / K2b (`docDongY`). e2e **1269/1269**,
 `kiem-bang-chung.mjs` 562/562, `test:bot` xanh, `do-boc:nen` không tụt.
 
+### SRS-5.1zzzzzj · Đồng hồ từng lượt gọi AI (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026 sau bắn thử: "thấy nó phản hồi đúng rồi đó nhưng tốc độ hơi chậm á. Xem quy trình lại xem"]`
+
+Số đo có sẵn: `inbound_ledger.reply->'_ms'.tong` lượt người bán 9,7–16,7 s (test Zalo chủ dự án 13/10 01:25–01:30 UTC, bắn thử 12/10);
+`boc_tach_bong.ms` (lượt AI bóc tách) 5,3–6,3 s kể cả tin 10 chữ. Phần còn lại (lượt viết lời, lượt soát, DB) không có mốc nên không biết
+chậm ở đâu — sửa tốc độ khi chưa đo là đoán. Thêm: `bocGhiAi` (ghi-luot-ai.ts, cửa mọi lượt model đi qua) ghi mốc bắt đầu + thời gian
+của MỌI lượt gọi model theo loại (`loaiLuotAi`: boc_rao, doc_y_luot, viet, soat_ban…) vào ngữ cảnh lượt (`chayCoDoGio`, AsyncLocalStorage
+— không lẫn giữa các lượt chạy cùng isolate); payload `_ms.ai` = `["boc_rao 410+5300", "viet 5800+2900", …]`, `ban-thu.yml` in cả `_ms`.
+Chỉ số, không nội dung; không đổi hành vi. Kiểm: e2e ZZZZZI-MS.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
