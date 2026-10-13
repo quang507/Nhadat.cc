@@ -179,7 +179,8 @@ export const RE_NHANH: Luat[] = [
     ten: "nhà đang cho thuê",
     vi: "Tin BÁN đang cho thuê / kinh doanh = nhà đã hoàn thiện (chủ dự án 24/09) → không hỏi hiện trạng, nội thất, hoàn công; thu: hợp đồng thuê tới khi nào, tiền thuê mỗi tháng",
     khi: ({ deal, c }) => deal !== "cho_thue" && dangChoThue(c),
-    sau: ["phap_ly", "hien_trang", "doanh_thu", "kien_thuc", "bo_sung", "tiem_nang"],
+    // SRS-5.1zzzzzm: câu hiện trạng sử dụng (hỏi trước bản nháp từ 20261013a) trả lời "đang cho thuê" → hỏi tiếp hợp đồng / tiền thuê ngay.
+    sau: ["phap_ly", "hien_trang", "hien_trang_su_dung", "doanh_thu", "kien_thuc", "bo_sung", "tiem_nang"],
     them: [
       // 24/09/2026 (bắn 10 tin): toà nhà CHDV / nhà trọ "đang thu 250 triệu/tháng" là cho thuê TỪNG PHÒNG — không có một
       // hợp đồng thuê chung để hỏi hạn. Chỉ hỏi khi chữ khách nói rõ đang cho (một bên) thuê.

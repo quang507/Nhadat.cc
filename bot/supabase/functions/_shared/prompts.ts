@@ -128,7 +128,7 @@ export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói [lượt
 - "3 phòng ngủ" [vừa ghi: số phòng ngủ · số toilet] → "Vâng ạ. Nhà mình mấy toilet vậy chị?"
 - Khách đưa nhiều thông tin một lần: "bán nhà hẻm 5m Phạm Văn Chí P7 Q6, 4.2x12 nở hậu 4.5, trệt lửng 2 lầu 3PN 3WC, SHR, 6.9 tỷ TL" [ảnh] → "Dạ vâng anh. Anh chụp giúp em vài tấm mặt tiền và sổ nha?"
 - "Phí bên em sao?" [không ghi gì mới · pháp lý] (chưa biết anh là chủ nhà hay môi giới) → "Dạ phí chỉ thu khi bán xong thôi anh, mức tuỳ chủ nhà hay môi giới. Còn sổ nhà mình riêng hay chung vậy anh?"
-- "anh là chính chủ" [không ghi gì mới · pháp lý] (bong bóng trước đã báo phí theo vai) → "Dạ vâng. Sổ nhà mình là sổ riêng hay sổ chung vậy anh?"
+- "anh là chính chủ" [không ghi gì mới · pháp lý] (bong bóng trước đã báo phí theo vai) → "Dạ vâng. Pháp lý giấy tờ thế nào anh?"
 - "để em coi lại sổ rồi báo" → "Dạ vâng, anh coi rồi nhắn em nha, em chờ ạ."
 - "có khách nào hỏi căn của anh chưa em" (chưa có khách) → "Dạ chưa có khách hỏi anh ơi, tin mới lên em đang rao. Có khách quan tâm là em báo anh liền."
 Ví dụ giọng SAI (tránh):
@@ -268,7 +268,8 @@ export const FACT_LABELS: Record<string, string> = {
   "hinh_anh@dat_kinh_doanh": "vài tấm ảnh (sổ, lô đất, đường vào)",
   "hinh_anh@chung_cu": "vài tấm ảnh (sổ, phòng khách, view)",
   loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
-  phap_ly: "pháp lý (sổ riêng hay sổ chung)",
+  // 13/10/2026 (chủ dự án: "cái hỏi có sổ hồng riêng ko sửa thành pháp lý"): hỏi chung về pháp lý, khách tự nói loại giấy tờ.
+  phap_ly: "pháp lý (giấy tờ)",
   dien_tich_dat: "diện tích đất",
   dien_tich: "diện tích",
   // SRS-5.1zzzzt (bắn production 10/10, thu-thuong16: căn hộ Sunrise City bị hỏi "Căn mình ngang dài bao nhiêu"): ví dụ mẫu chỉ có nhà
@@ -393,7 +394,7 @@ export const CAU_HOI_MAU: Record<string, string> = {
   // chấp / khớp sổ / đứng tên / thế chấp hỏi bù SAU khi lên tin (`sau_dang`, ask-seller).
   // 01/10/2026 (chủ dự án test Zalo: "đoạn pháp lý ko cần hỏi gộp lại nhiều quá đâu, từng ý thôi"): câu sổ chỉ hỏi MỘT ý
   // (riêng hay chung / đã ra sổ chưa); đứng tên, thế chấp vẫn là câu riêng hỏi sau.
-  "phap_ly@ban": "Sổ hồng nhà mình là sổ riêng hay sổ chung {ac} ạ?",
+  "phap_ly@ban": "Pháp lý giấy tờ thế nào {ac} ạ?",
   "phap_ly@ban@chung_cu": "Căn hộ đã ra sổ hồng chưa hay còn hợp đồng mua bán {ac} ạ?",
   "phap_ly@ban@dat": "Đất mình đã có sổ riêng chưa hay đất dự án chờ sổ {ac} ạ?",
   "phap_ly@ban@biet_thu": "Biệt thự mình đã có sổ hồng riêng chưa {ac} ạ?",
@@ -430,7 +431,7 @@ export const CAU_HOI_MAU: Record<string, string> = {
   so_phong_ngu: "Tổng cộng bao nhiêu phòng ngủ {ac} ạ?",
   tang: "Căn hộ mình ở tầng mấy {ac} ạ?",
   // 24/09/2026 (chủ dự án: "hoàn công xong chưa" là câu ngớ ngẩn khi nhà đang cho ngân hàng thuê): hỏi MỘT ý, chỉ sổ.
-  phap_ly: "Sổ hồng nhà mình là sổ riêng hay sổ chung {ac} ạ?",
+  phap_ly: "Pháp lý giấy tờ thế nào {ac} ạ?",
   hinh_anh: "{Ac} chụp giúp em ảnh sổ, mặt tiền và hẻm qua Zalo nha?",
   // SRS-5.1zzzzy (khách mô phỏng 11/10): không có khoá này thì `cauHoiMau("duyet_tin")` rơi về khuôn "cho em xin thêm {nhãn}" →
   // "Anh chị cho em xin thêm chủ nhà duyệt bản nháp tin nha?". Câu chờ duyệt là câu nhắc "ok", như mọi chỗ nhắc khác.

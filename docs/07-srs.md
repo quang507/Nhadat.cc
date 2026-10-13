@@ -3912,6 +3912,20 @@ câu hỏi kèm) → bong bóng cuối xin chấm điểm, MỘT lần cho mỗi
 `tin-nhap-rao.mjs` TIEUDE-1…3, TIENICH-1, UUTIEN-1, KHEN-1/2, RENT-1/2 (RENT-1 đỏ khi bỏ cổng `choThueThat`); `khen-nhap.mjs` KHEN-K1…K7; `kiem-bang-chung.mjs`
 ZZZZZL-K1/K1b, ZZZP-02/03 (đổi: đổi ô thay vì bỏ); `re-nhanh.mjs` ZZZZZL-RN1…RN4. e2e **1286/1286**, `do-boc:nen` không tụt, phát lại 5/5.
 
+### SRS-5.1zzzzzm · Hỏi hiện trạng sử dụng trước bản nháp; câu sổ thành câu pháp lý (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026 sau test Zalo: "mấy căn nhà thì thêm câu hỏi về hiện trạng đi, cái hỏi có sổ hồng riêng ko sửa thành pháp lý"]`
+
+**Lớp lỗi.** Câu "đang ở, cho thuê hay để trống" (`hien_trang_su_dung`) nằm ở nhóm `sau_dang` từ 20260909i — chỉ hỏi bù sau khi lên kệ — nên trước bản
+nháp bot không có câu trả lời thật về hiện trạng, và nhánh "đang cho thuê" phải đoán bằng chữ bài rao (SRS-5.1zzzzzl). **Sửa:** migration `20261013a` đưa câu
+đó lên `co_ban` ưu tiên 17 (ngay sau câu sổ 16, giữ dải pháp lý 16–21) cho nhà phố, nhà cấp 4, căn hộ, biệt thự (mock e2e chép cùng commit); luật nhánh
+`dang_cho_thue` kích ngay khi vừa trả lời câu này ("đang cho thuê" → hỏi hạn hợp đồng / tiền thuê). Câu sổ "Sổ hồng nhà mình là sổ riêng hay sổ chung" →
+"Pháp lý giấy tờ thế nào {ac} ạ?" (`CAU_HOI_MAU.phap_ly`, `phap_ly@ban`), nhãn ý `FACT_LABELS.phap_ly` "pháp lý (giấy tờ)", ví dụ giọng `SELLER_FEWSHOT`; bản
+DB (`bot_prompts.cau_hoi_mau`, `seller_fewshot`) cập nhật đúng các câu đó (không đẩy cả bộ — `cau_tien_dinh` trên DB có bản chủ dự án sửa 12/10).
+**Chỗ khác cùng lớp:** câu hỏi trước bản nháp nay tối đa 8 (gồm phường) với nhà / căn hộ — vượt mốc "≤ 6 câu" của 20261007a; ghi lại để chủ dự án cân.
+**Kiểm.** e2e HTSD-01…05 (01, 02 đỏ khi bỏ dòng migration / mock và bỏ kích nhánh), THUTU-tt-np / mt / cc (thêm câu hiện trạng vào trình tự, ≤ 8); 30 ca cũ
+đo việc khác (bản nháp, câu phường, câu sổ) dựng tin có sẵn câu trả lời hiện trạng (`daHtsd`, `DAP_PHAP_LY`). e2e **1291/1291**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -1,7 +1,7 @@
 import { FakeDB, napPhuongCuThat, napPhuongThat } from "./mock-supabase.mjs";
 import { laNgungHangLoat as laNgungHangLoatLuat } from "../../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { OUT } from "./mock-anthropic.mjs";
-import { FACT_LABELS, LOI_CHAO, tenTroLy } from "../../supabase/functions/_shared/prompts.ts";
+import { CAU_HOI_MAU as CAU_HOI_MAU_CODE, FACT_LABELS, LOI_CHAO, tenTroLy } from "../../supabase/functions/_shared/prompts.ts";
 import { nhanNgan } from "../../supabase/functions/_shared/bao_lai.ts";
 import { duongHienThi } from "../../supabase/functions/_shared/extraction/hien-thi-dia-chi.ts";
 import { thayLienHe } from "../../supabase/functions/_shared/extraction/luat-lien-he.ts";
@@ -242,7 +242,8 @@ const db = () => globalThis.__db;
 // FR-229 (20260925i): tin BÁN hỏi các câu pháp lý (đứng tên, thế chấp, quy hoạch, tranh chấp, khớp sổ) sau câu sổ, TRƯỚC
 // bản nháp. Ca đo bản nháp qua chuỗi hỏi đáp thì trả lời hết các câu đó (`quaPhapLy`, trả phản hồi lượt cuối); ca dựng tin
 // bằng tay thì ghi sẵn các fact đó (`coSanPhapLy`) để lượt đang đo vẫn là lượt ra bản nháp.
-const DAP_PHAP_LY = { nguoi_dung_ten: "tên anh", the_chap: "cầm tay", quy_hoach: "không dính", tranh_chap: "không", dien_tich_khop_so: "khớp" };
+// SRS-5.1zzzzzm: câu hiện trạng sử dụng (20261013a) đứng ngay sau câu sổ — chung bộ câu "sau câu sổ" của các ca đo bản nháp.
+const DAP_PHAP_LY = { nguoi_dung_ten: "tên anh", the_chap: "cầm tay", quy_hoach: "không dính", tranh_chap: "không", dien_tich_khop_so: "khớp", hien_trang_su_dung: "đang ở" };
 async function quaPhapLy(uid, r) {
   for (let i = 0; i < 6; i++) {
     const treo = db().t.info_requests.find((q) => q.status === "pending" && DAP_PHAP_LY[q.question]);
@@ -254,6 +255,9 @@ async function quaPhapLy(uid, r) {
 const coSanPhapLy = (listingId) => { for (const [question, answer] of Object.entries(DAP_PHAP_LY)) db().insert("listing_facts", { listing_id: listingId, question, answer }); };
 // `__treTruyVan` phải được xoá ở đây: quên là độ trễ của ca "đua" rỉ sang mọi
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
+// SRS-5.1zzzzzm (20261013a): nhà phố / cấp 4 / căn hộ / biệt thự hỏi "đang ở, cho thuê hay để trống" TRƯỚC bản nháp. Ca đo việc KHÁC (bản
+// nháp, câu phường, câu sổ…) dựng tin như khách đã trả lời câu đó — `daHtsd(tin)` ghi fact hiện trạng sử dụng.
+const daHtsd = (l, answer = "đang ở") => l && db().insert("listing_facts", { listing_id: l.id, question: "hien_trang_su_dung", answer, source: "seller_chat" });
 function fresh(seed) { soatDbBatBien("(trước fresh)"); globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__nominatim = undefined; globalThis.__fetches = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
 // Lượt gọi model chỉ tính NHÁNH MUA (parse hồ sơ), không tính lượt phân loại ảnh (FR-185).
 // SRS-5.1zzzza: lượt AI soát nhận xét (người mua, không căn trong tay) cũng không phải lượt trả lời.
@@ -1261,6 +1265,7 @@ fresh(seedKho);
   // SRS-5.1zzzzj: "p4" + "q5" → Phường Chợ Quán (không quận thì phường trống, bot hỏi phường trước — chuỗi này đo bản nháp).
   r = await send({ external_user_id: "h-1", text: "bán nhà hẻm trần bình trọng p4 q5 giá 5 tỷ 8 60m2, không gấp" });
   const H = db().t.listings[0];
+  daHtsd(H);
   // 20260924c (FR-219): thứ tự "chủ nhà dễ trả lời trước" — đã có vị trí, diện tích, giá → câu đầu là KẾT CẤU.
   check("H1 rao đủ vị trí + diện tích + giá → tin can_chu_duyet, chưa lên kệ, câu đầu là KẾT CẤU (FR-219)",
     H?.can_chu_duyet === true && H?.status === "cho_thong_tin" && pend("ket_cau"), JSON.stringify({ H, ir: db().t.info_requests }));
@@ -1523,13 +1528,13 @@ fresh(seedKho);
   // ngủ nhà / ảnh / hướng KHÔNG hỏi trước bản nháp. Bảng cũ: nhà phố 9–10 câu, căn hộ hỏi hướng, đất hỏi hướng + hạ tầng.
   for (const [uid, rao, traLoi, cam, thuTu] of [
     // Địa chỉ có chữ "hẻm" → câu nối hỏi hẻm ngay rồi kết cấu (LIEN_QUAN), vẫn trong dải vật lý; giá rồi mới tới sổ.
-    ["tt-np", "bán nhà quận 5", { vi_tri: "hẻm 12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_hem: "hẻm 5m xe hơi vào", gia: "5 tỷ 2", phap_ly: "sổ hồng riêng", phuong: "phường 2" },
-      ["gap", "so_phong_ngu", "hinh_anh", "huong", "do_rong_duong"], ["do_rong_hem", "ket_cau", "dien_tich_dat", "gia", "phap_ly"]],
+    ["tt-np", "bán nhà quận 5", { vi_tri: "hẻm 12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_hem: "hẻm 5m xe hơi vào", gia: "5 tỷ 2", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "đang ở", phuong: "phường 2" },
+      ["gap", "so_phong_ngu", "hinh_anh", "huong", "do_rong_duong"], ["do_rong_hem", "ket_cau", "dien_tich_dat", "gia", "phap_ly", "hien_trang_su_dung"]],
     // Nhà MẶT TIỀN (số nhà trơn + tên đường): hỏi đường trước nhà THAY câu hẻm — trả lời xong không hỏi hẻm nữa (bản cũ hỏi cả hai).
-    ["tt-mt", "bán nhà quận 5", { vi_tri: "12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_duong: "đường 8m", gia: "15 tỷ", phap_ly: "sổ hồng riêng", phuong: "phường 2" },
-      ["gap", "so_phong_ngu", "hinh_anh", "huong", "do_rong_hem"], ["dien_tich_dat", "ket_cau", "do_rong_duong", "gia", "phap_ly"]],
-    ["tt-cc", "bán căn hộ quận 7", { vi_tri: "Sunrise City", dien_tich_tim_tuong: "70m2", so_phong_ngu: "2 phòng ngủ", tang: "tầng 12", gia: "3 tỷ", phap_ly: "sổ hồng riêng", phuong: "phường Tân Hưng" },
-      ["gap", "hinh_anh", "huong", "noi_that", "phi_quan_ly"], ["dien_tich_tim_tuong", "so_phong_ngu", "tang", "gia", "phap_ly"]],
+    ["tt-mt", "bán nhà quận 5", { vi_tri: "12 Trần Hưng Đạo", dien_tich_dat: "4x16", ket_cau: "1 trệt 2 lầu", do_rong_duong: "đường 8m", gia: "15 tỷ", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "để trống", phuong: "phường 2" },
+      ["gap", "so_phong_ngu", "hinh_anh", "huong", "do_rong_hem"], ["dien_tich_dat", "ket_cau", "do_rong_duong", "gia", "phap_ly", "hien_trang_su_dung"]],
+    ["tt-cc", "bán căn hộ quận 7", { vi_tri: "Sunrise City", dien_tich_tim_tuong: "70m2", so_phong_ngu: "2 phòng ngủ", tang: "tầng 12", gia: "3 tỷ", phap_ly: "sổ hồng riêng", hien_trang_su_dung: "để trống", phuong: "phường Tân Hưng" },
+      ["gap", "hinh_anh", "huong", "noi_that", "phi_quan_ly"], ["dien_tich_tim_tuong", "so_phong_ngu", "tang", "gia", "phap_ly", "hien_trang_su_dung"]],
     ["tt-dat", "bán đất quận 12", { vi_tri: "đường Thạnh Lộc 41", dien_tich: "105m2", gia: "6 tỷ", do_rong_duong: "đường 6m", tho_cu: "full thổ cư", phap_ly: "sổ hồng riêng", phuong: "phường An Phú Đông" },
       ["gap", "hinh_anh", "huong", "ha_tang", "xay_dung"], ["dien_tich", "gia", "do_rong_duong", "tho_cu", "phap_ly"]],
   ]) {
@@ -1543,8 +1548,9 @@ fresh(seedKho);
       await send({ external_user_id: uid, text: traLoi[treo] ?? "không rõ em" });
     }
     const thuTuThat = daHoi.filter((k) => thuTu.includes(k));
-    check(`THUTU-${uid} '${rao}' → ≤ 7 câu trước bản nháp, theo trình tự môi giới (${thuTu.join(" → ")}), không hỏi ${cam.join(" / ")}`,
-      daHoi.length <= 7 && !daHoi.some((k) => cam.includes(k)) && thuTuThat.join() === thuTu.join() &&
+    // SRS-5.1zzzzzm (20261013a): nhà / căn hộ thêm câu hiện trạng sử dụng sau câu sổ → ≤ 8 câu (gồm phường).
+    check(`THUTU-${uid} '${rao}' → ≤ 8 câu trước bản nháp, theo trình tự môi giới (${thuTu.join(" → ")}), không hỏi ${cam.join(" / ")}`,
+      daHoi.length <= 8 && !daHoi.some((k) => cam.includes(k)) && thuTuThat.join() === thuTu.join() &&
         db().t.info_requests.some((q) => q.listing_id === lTt?.id && q.question === "duyet_tin" && q.status === "pending"),
       JSON.stringify({ daHoi, ir: db().t.info_requests.filter((q) => q.listing_id === lTt?.id).map((q) => [q.question, q.status]) }));
   }
@@ -1566,6 +1572,7 @@ fresh(seedKho);
     const l = d.insert("listings", { code: "BDS-Q5-0102", seller_id: s.id, deal: "cho_thue", status: "cho_thong_tin", property_type: "nha_pho", gap: false, location_raw: "12 Trần Hưng Đạo", ward: "Phường 4", price_raw: "15tr/tháng", price_vnd: 15e6, area_m2: 50, floors: 2, bedrooms: 2, alley_width_m: 4, can_chu_duyet: true }).data;
     d.insert("listing_facts", { listing_id: l.id, question: "tiem_nang", answer: "ở", source: "seller_chat" });
     d.insert("listing_facts", { listing_id: l.id, question: "noi_that", answer: "full", source: "seller_chat" });
+    d.insert("listing_facts", { listing_id: l.id, question: "hien_trang_su_dung", answer: "đang trống", source: "seller_chat" });
     d.insert("info_requests", { listing_id: l.id, question: "phap_ly", status: "pending" });
   });
   r = await send({ external_user_id: "z-thue", text: "sổ hồng riêng" });
@@ -1590,10 +1597,11 @@ fresh(seedKho);
     const s = d.insert("sellers", { zalo_user_id: "z-sd", seller_type: "ccrb", name: null, active_listing_id: null }).data;
     const l = d.insert("listings", { code: "BDS-Q5-0105", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "7 An Dương Vương", ward: "Phường 8", price_raw: "7 tỷ", price_vnd: 7e9, area_m2: 60, floors: 3, bedrooms: 3, alley_width_m: 5, legal_status: "so_hong_rieng", can_chu_duyet: true }).data;
     d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
+    d.insert("listing_facts", { listing_id: l.id, question: "hien_trang_su_dung", answer: "đang ở", source: "seller_chat" });
     d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
   });
   r = await send({ external_user_id: "z-sd", text: "hợp để ở" });
-  check("N14 đủ co_ban + chuyen_mon → view vẫn còn so_wc/hem_thong (sau_dang) nhưng bot KHÔNG hỏi, đi thẳng bản nháp", db().missingFacts().some((m) => m.nhom === "sau_dang") && !db().t.info_requests.some((q) => q.status === "pending" && ["so_wc", "cach_mat_tien", "hem_thong", "ngap_nuoc", "the_chap", "ly_do_ban", "thuong_luong", "hien_trang_su_dung", "tien_ich_gan"].includes(q.question)), JSON.stringify({ ir: db().t.info_requests.map((q) => [q.question, q.status]), thieu: db().missingFacts().map((m) => m.fact_key) }));
+  check("N14 đủ co_ban + chuyen_mon → view vẫn còn so_wc/hem_thong (sau_dang) nhưng bot KHÔNG hỏi, đi thẳng bản nháp", db().missingFacts().some((m) => m.nhom === "sau_dang") && !db().t.info_requests.some((q) => q.status === "pending" && ["so_wc", "cach_mat_tien", "hem_thong", "ngap_nuoc", "the_chap", "ly_do_ban", "thuong_luong", "tien_ich_gan"].includes(q.question)), JSON.stringify({ ir: db().t.info_requests.map((q) => [q.question, q.status]), thieu: db().missingFacts().map((m) => m.fact_key) }));
 
   // 09/09 tối lần 2: câu "địa chỉ" treo mãi → né 2 lần thì bỏ qua, đi câu kế; "đăng đi" giữa vòng → bản nháp.
   fresh((d) => {
@@ -2861,7 +2869,7 @@ fresh(seedKho);
     check("ALB-01 ảnh trơn → KHÔNG có '🤖 Không trích xuất được gì'; 🤖 'Đã trích xuất từ ảnh: mặt tiền'; một câu khen; hỏi lại câu đang chờ (pháp lý)",
       !rA1.body.replies.some((x) => /Không trích xuất được gì/.test(x)) && rA1.body.replies.some((x) => /^🤖 Đã trích xuất từ ảnh: mặt tiền/.test(x)) &&
         rA1.body.replies.filter((x) => /^Ảnh .*đẹp/.test(x)).length === 1 &&
-        rA1.body.replies.some((x) => /sổ/i.test(x) && /\?/.test(x)),
+        rA1.body.replies.some((x) => /sổ|pháp lý/i.test(x) && /\?/.test(x)),
       JSON.stringify(rA1.body.replies));
     const conv = db().t.messages.find((m) => m.sender === "seller")?.conversation_id;
     db().insert("messages", { conversation_id: conv, sender: "seller", body: " [ảnh: https://f9-zpg.zdn.vn/p2.jpg]" });
@@ -4290,6 +4298,7 @@ fresh(seedKho);
       db().insert("listing_facts", { listing_id: LC.id, question: q, answer: a, source: "seller_chat" });
     }
     db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    daHtsd(LC);
     db().insert("info_requests", { listing_id: LC.id, question: "phap_ly", status: "pending" });
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
     globalThis.__khongNhoCauHinh = true; // đổi công tắc giữa ca: cấu hình nhớ tạm 60 s ở tầng module
@@ -4519,7 +4528,7 @@ fresh(seedKho);
       // DB giả từng không → bản nháp in "Đường vào: hẻm quay đầu được" và đòi "xe hơi vào được không".
       let tinHua = null, nhapHua = "";
       await phatLai("hua2", "web-pl-hua2", async (i, t, r) => {
-        if (t.text === "hxh quay đầu") tinHua = db().t.listings.filter((l) => /an dương vương|quận 5/i.test(`${l.location_raw ?? ""} ${l.description ?? ""}`)).at(-1) ?? db().t.listings.at(-1);
+        if (t.text === "hxh quay đầu") { tinHua = db().t.listings.filter((l) => /an dương vương|quận 5/i.test(`${l.location_raw ?? ""} ${l.description ?? ""}`)).at(-1) ?? db().t.listings.at(-1); daHtsd(tinHua); }
         if (t.text === "shr") nhapHua = (r.body.replies ?? []).join("\n");
       });
       check("SRS-5.1zzzv-a phát lại …hua2: 'hxh quay đầu' → cột access_type = hem_xe_hoi (như trigger thật)", tinHua?.access_type === "hem_xe_hoi", JSON.stringify({ at: tinHua?.access_type }));
@@ -4582,7 +4591,11 @@ fresh(seedKho);
       for (const [ten, uid, nhan, hua] of [["y09-hua-dang", "web-pl-y09a", "phát lại (lời model NGUYÊN VĂN production)", /lên tin đăng cho nhà mình liền/],
         ["y09-hua-dang-moi", "web-pl-y09b", "(cách nói MỚI) 'chị có căn nhà muốn bán' + câu rao mặt tiền, model 'em đăng tin ngay cho chị nhé'", /đăng tin ngay/]]) {
         let kq = null, rep = [];
-        await phatLai(ten, uid, async (i, t, r) => { if (i === 2) { kq = xemTinPL(uid); rep = r.body.replies ?? []; } });
+        // SRS-5.1zzzzzm: ca này đo "câu rao đủ mọi ý hỏi trước bản nháp" — câu hiện trạng sử dụng (mới hỏi trước nháp) coi như đã có.
+        await phatLai(ten, uid, async (i, t, r) => {
+          if (i < 2) for (const l of xemTinPL(uid)?.ds ?? []) if (!db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "hien_trang_su_dung")) daHtsd(l);
+          if (i === 2) { kq = xemTinPL(uid); rep = r.body.replies ?? []; }
+        });
         const coNhap = rep.some((x) => x.includes("📋")) && kq?.treo.includes("duyet_tin");
         const coHoi = (kq?.treo.length ?? 0) > 0 && rep.some((x) => !x.startsWith("🤖") && /\?/.test(x));
         check(`SRS-5.1zzzy ${nhan} → không hứa đăng; có bản nháp (hoặc câu hỏi kèm ô chờ)`,
@@ -4764,6 +4777,7 @@ fresh(seedKho);
       db().insert("listing_facts", { listing_id: LP.id, question: q, answer: a, source: "seller_chat" });
     }
     db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    daHtsd(LP);
     db().insert("info_requests", { listing_id: LP.id, question: "phap_ly", status: "pending" });
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
     globalThis.__khongNhoCauHinh = true;
@@ -6192,7 +6206,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   check("KHEN-01 3 tin bot gần nhất đã khen → prompt dặn 'KHÔNG khen'; câu khen model lọt bị lọc, câu hỏi giữ",
     globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("không khen (mấy tin gần đây em khen rồi)")) &&
       // FR-241 l: sau kết cấu code chọn câu PHÁP LÝ → câu hỏi model (phòng ngủ) thay bằng câu mẫu sổ; câu hỏi vẫn còn.
-      !/chốt nhanh/.test(cauBot) && /(bao nhiêu phòng ngủ|[Ss]ổ hồng)/.test(cauBot),
+      !/chốt nhanh/.test(cauBot) && /(bao nhiêu phòng ngủ|[Ss]ổ hồng|[Pp]háp lý)/.test(cauBot),
     JSON.stringify({ rep: r.body.replies }));
   // 25/09/2026 (bắn thật lx-09): code chọn câu kế mà model hỏi chuyện KHÁC (hẻm) → câu hỏi thay bằng câu mẫu của khoá.
   {
@@ -6246,7 +6260,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     r = await send({ external_user_id: "khen-3", text: "trệt 2 lầu" });
     const cauBot3 = r.body.replies.find((x) => !x.startsWith("🤖")) ?? "";
     check("KHEN-03 khen cách 2 lời đáp (xen 🤖) → vẫn là 'vừa khen': prompt dặn KHÔNG khen, câu khen lọt bị lọc, câu hỏi giữ",
-      globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("không khen (mấy tin gần đây em khen rồi)")) && !/rộng rãi/.test(cauBot3) && /(phòng ngủ|[Ss]ổ hồng)/.test(cauBot3),
+      globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("không khen (mấy tin gần đây em khen rồi)")) && !/rộng rãi/.test(cauBot3) && /(phòng ngủ|[Ss]ổ hồng|[Pp]háp lý)/.test(cauBot3),
       JSON.stringify({ rep: r.body.replies }));
     globalThis.__model.create = macDinhCreate;
   }
@@ -6763,7 +6777,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // hỏi lại tới 3 lần, quá số đó thì bản nháp ra và nói còn thiếu gì.
   rnSeed("z-zr1", "BDS-Q5-0961", { price_raw: null, price_vnd: null, legal_status: "so_hong_rieng" });
   {
-    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0961");
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0961"); daHtsd(l);
     db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
     db().insert("info_requests", { listing_id: l.id, question: "gia", status: "pending" });
     const soLanGia = () => db().t.info_requests.filter((q) => q.listing_id === l.id && q.question === "gia").length;
@@ -6963,7 +6977,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // (b) Trước bản nháp, AI đọc lại GHI CHÚ chưa đọc (bo_sung nguồn chat) → ghi vào ô còn trống, đánh dấu đã đọc.
   rnSeed("z-234e", "BDS-Q5-0964", {}, [["gap", "không gấp"], ["bo_sung", "cửa chính nhìn hướng đông nam đón gió"]]);
   {
-    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0964");
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0964"); daHtsd(l);
     const cuCH = globalThis.__cauHinh;
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
     let docGhiChu = 0;
@@ -9604,6 +9618,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const L = db().t.listings.at(-1);
     L.alley_width_m = 5; L.access_type = "hem_xe_hoi";
     db().insert("listing_facts", { listing_id: L.id, question: "do_rong_hem", answer: "5m", source: "seller_chat" });
+    daHtsd(L);
     db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
     db().t.info_requests = db().t.info_requests.filter((x) => x.listing_id !== L.id);
     db().insert("info_requests", { listing_id: L.id, question: "phap_ly", status: "pending" });
@@ -9618,7 +9633,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const b = await luotO(U, "ủa mà bên em lấy phí nhiêu vậy", aiO({ hoi_lai: { co_hoi: true, cau_hoi: "ủa mà bên em lấy phí nhiêu vậy", chu_de: "dich_vu" } }),
     (p) => /còn thiếu \(theo/.test(p.messages[0].content) ? "Dạ vâng, nhà anh chị mấy phòng ngủ vậy ạ?" : "Dạ vâng, nhà anh chị mấy phòng ngủ vậy ạ?");
   check("ZZZZO-01 (ca production) hỏi phí lúc treo câu sổ → câu SỔ vẫn treo (không thôi, không mở câu khác), lời bot quay lại câu sổ, không hỏi phòng ngủ",
-    treo(L.id).join() === "phap_ly" && /sổ/i.test(loiThuong(b.rep)) && !/phòng ngủ/.test(loiThuong(b.rep)),
+    treo(L.id).join() === "phap_ly" && /sổ|pháp lý/i.test(loiThuong(b.rep)) && !/phòng ngủ/.test(loiThuong(b.rep)),
     JSON.stringify({ treo: treo(L.id), rep: b.rep, ir: db().t.info_requests.filter((q) => q.listing_id === L.id).map((q) => [q.question, q.status]) }));
   check("ZZZZO-02 lượt hỏi phí (vai chưa rõ) → câu phí KHÔNG số, đứng trước; câu lệnh model nói khách hỏi bên lề, chưa trả lời câu đang hỏi",
     /mức tuỳ chính chủ hay môi giới/.test(b.rep.join("\n")) && !/\d\s*%/.test(b.rep.join("\n")) &&
@@ -9633,7 +9648,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     sC?.seller_type_source === "tu_nhan" && c.rep.filter((x) => /1% giá chốt/.test(x)).length === 1 && /^Dạ vậy phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ\.$/m.test(c.rep.join("\n")),
     JSON.stringify({ src: sC?.seller_type_source, rep: c.rep }));
   check("ZZZZO-05 tự nói vai → câu SỔ vẫn treo, lời hỏi là câu SỔ — không 'Sổ và hẻm được không' (câu hỏi lệch ô bị thay)",
-    treo(L.id).join() === "phap_ly" && !/Sổ và hẻm/.test(c.rep.join("\n")) && /sổ riêng hay sổ chung/i.test(loiThuong(c.rep)),
+    treo(L.id).join() === "phap_ly" && !/Sổ và hẻm/.test(c.rep.join("\n")) && /pháp lý giấy tờ/i.test(loiThuong(c.rep)) /* SRS-5.1zzzzzm: câu sổ → câu pháp lý */,
     JSON.stringify({ treo: treo(L.id), rep: c.rep }));
   // (D) khách chỉ "ừ" (gật, không trả lời) → câu sổ thôi như cũ → hết câu trước bản nháp mà tin chưa đủ điểm → ô mở cho mục thiếu đầu,
   // model nhận MỘT ý (không "còn thiếu: A; B"). Đây là đường production ra "Sổ và hẻm được không ạ?" (mục ảnh "nhà, sổ, hẻm" + phòng ngủ).
@@ -9667,7 +9682,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const g1 = await luotO(U2, "bên em có dẫn khách tới coi nhà không vậy", aiO({ hoi_lai: { co_hoi: true, cau_hoi: "bên em có dẫn khách tới coi nhà không vậy", chu_de: "dich_vu" } }),
     "Dạ có ạ, bên em có cộng tác viên dẫn khách xem nhà. Nhà mình mấy phòng ngủ vậy anh?");
   check("ZZZZO-11 (cách nói MỚI) 'bên em có dẫn khách tới coi nhà không vậy' lúc treo câu sổ → câu sổ vẫn treo, lời hỏi quay lại sổ",
-    treo(L2.id).join() === "phap_ly" && /sổ/i.test(loiThuong(g1.rep)) && !/phòng ngủ/.test(loiThuong(g1.rep)), JSON.stringify({ treo: treo(L2.id), rep: g1.rep }));
+    treo(L2.id).join() === "phap_ly" && /sổ|pháp lý/i.test(loiThuong(g1.rep)) && !/phòng ngủ/.test(loiThuong(g1.rep)), JSON.stringify({ treo: treo(L2.id), rep: g1.rep }));
   const g2 = await luotO(U2, "nhà của anh mà", aiO({ vai: { la: "chinh_chu", trich_dan: "nhà của anh" } }), "Dạ vâng. Sổ nhà mình riêng hay chung anh?");
   check("ZZZZO-12 (cách nói MỚI) 'nhà của anh mà' — chưa từng nói phí → KHÔNG tự báo phí; câu sổ vẫn treo",
     treo(L2.id).join() === "phap_ly" && !/phí/.test(g2.rep.join("\n")), JSON.stringify({ treo: treo(L2.id), rep: g2.rep }));
@@ -10256,7 +10271,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const uid = `thu-zc-${++n}`;
     const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: xung, seller_type: loaiNguoi }).data;
     const L = db().insert("listings", { code: `BDS-ZC-${n}`, seller_id: s.id, ...tin }).data;
-    s.active_listing_id = L.id;
+    s.active_listing_id = L.id; daHtsd(L);
     if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
     if (botNoi.length || khachNoi.length) {
       const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-11T01:00:00Z" }).data;
@@ -10624,7 +10639,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const uid = `thu-zg-${++n}`;
     const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb", seller_type_source: "admin" }).data;
     const L = db().insert("listings", { code: `BDS-ZG-${n}`, seller_id: s.id, ...tin }).data;
-    s.active_listing_id = L.id;
+    s.active_listing_id = L.id; daHtsd(L);
     if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
     const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-12T03:00:00Z" }).data;
     for (const b of khachNoi) db().insert("messages", { conversation_id: c.id, sender: "seller", body: b, created_at: new Date().toISOString() });
@@ -10828,7 +10843,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb", seller_type_source: "admin" }).data;
     const L = db().insert("listings", { code: `BDS-ZI-${nI}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", can_chu_duyet: true, boc_tach: { _thong_so_ai: true }, property_type: "nha_pho",
       district: "Quận 5", location_raw: `hẻm 120 ${duong}`, access_type: "hem_xe_hoi", alley_width_m: 4, area_m2: 60, price_vnd: 8e9, price_raw: "8 tỷ" }).data;
-    s.active_listing_id = L.id;
+    s.active_listing_id = L.id; daHtsd(L);
     db().insert("info_requests", { listing_id: L.id, question: "phap_ly", status: "pending" });
     const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-12T03:00:00Z" }).data;
     db().insert("messages", { conversation_id: c.id, sender: "bot", body: "Sổ hồng riêng hay sổ chung anh?", created_at: new Date().toISOString() });
@@ -11042,6 +11057,51 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
       !treoR(L).includes("han_hop_dong_thue") && !treoR(L).includes("doanh_thu") && !/doanh thu|hợp đồng thuê/i.test((b.replies ?? []).join(" ")),
       JSON.stringify({ treo: treoR(L), rep: b.replies }));
   }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
+// ── SRS-5.1zzzzzm (20261013a, chủ dự án 13/10: "mấy căn nhà thì thêm câu hỏi về hiện trạng đi"; "cái hỏi có sổ hồng riêng ko sửa thành pháp
+// lý"): nhà hỏi hiện trạng sử dụng ngay sau câu pháp lý; trả lời "đang cho thuê" → câu kế là hợp đồng / tiền thuê; đất không hỏi.
+{
+  const cuCH = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
+  let nH = 0;
+  const dungH = (loai, tin = {}) => {
+    fresh(seedKho);
+    const uid = `thu-ht-${++nH}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb", seller_type_source: "admin" }).data;
+    const L = db().insert("listings", { code: `BDS-HT-${nH}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", can_chu_duyet: true, property_type: loai,
+      location_raw: "hẻm 12 Trần Hưng Đạo", ward: "Phường Chợ Quán", district: "Quận 5", area_m2: 60, frontage_m: 4, length_m: 15, floors: 3, floors_text: "trệt + 2 lầu",
+      access_type: "hem_xe_hoi", alley_width_m: 5, price_vnd: 8e9, price_raw: "8 tỷ", ...tin }).data;
+    s.active_listing_id = L.id;
+    coSanPhapLy(L.id); db().t.listing_facts = db().t.listing_facts.filter((f) => !(f.listing_id === L.id && f.question === "hien_trang_su_dung"));
+    db().insert("info_requests", { listing_id: L.id, question: "phap_ly", status: "pending" });
+    return { uid, L };
+  };
+  const treoH = (L) => db().t.info_requests.filter((q) => q.listing_id === L.id && q.status === "pending").map((q) => q.question);
+  {
+    const { uid, L } = dungH("nha_pho");
+    const r1 = await send({ external_user_id: uid, text: "sổ hồng riêng" });
+    check("HTSD-01 nhà phố trả lời pháp lý → câu kế là hiện trạng sử dụng (đang ở / cho thuê / để trống), chưa ra bản nháp",
+      treoH(L).join() === "hien_trang_su_dung" && !r1.body.replies.some((x) => x.startsWith("📋")), JSON.stringify({ treo: treoH(L), rep: r1.body.replies }));
+    const r2 = await send({ external_user_id: uid, text: "đang cho thuê 20 triệu một tháng" });
+    check("HTSD-02 «đang cho thuê 20 triệu một tháng» → câu kế là hạn hợp đồng thuê (nhánh cho thuê mở theo câu trả lời thật)",
+      treoH(L).includes("han_hop_dong_thue") || treoH(L).includes("doanh_thu"), JSON.stringify({ treo: treoH(L), rep: r2.body.replies }));
+  }
+  {
+    const { uid, L } = dungH("nha_pho");
+    await send({ external_user_id: uid, text: "sổ hồng riêng" });
+    const r2 = await send({ external_user_id: uid, text: "nhà đang để trống" });
+    check("HTSD-03 (cách nói khác) «nhà đang để trống» → không hỏi hợp đồng / doanh thu, đi tiếp (bản nháp hoặc câu kế)",
+      !treoH(L).some((q) => q === "han_hop_dong_thue" || q === "doanh_thu") && !treoH(L).includes("hien_trang_su_dung"), JSON.stringify({ treo: treoH(L), rep: r2.body.replies }));
+  }
+  {
+    const { uid, L } = dungH("dat", { floors: null, floors_text: null });
+    await send({ external_user_id: uid, text: "sổ hồng riêng" });
+    check("HTSD-04 đối chứng: tin đất → không hỏi hiện trạng sử dụng", !treoH(L).includes("hien_trang_su_dung"), JSON.stringify({ treo: treoH(L) }));
+  }
+  check("HTSD-05 câu mẫu pháp lý hỏi chung 'Pháp lý giấy tờ thế nào', không còn 'sổ riêng hay sổ chung'",
+    /Pháp lý giấy tờ thế nào/.test(CAU_HOI_MAU_CODE.phap_ly ?? "") && !/sổ riêng hay sổ chung/.test(CAU_HOI_MAU_CODE["phap_ly@ban"] ?? ""), JSON.stringify({ a: CAU_HOI_MAU_CODE.phap_ly, b: CAU_HOI_MAU_CODE["phap_ly@ban"] }));
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
