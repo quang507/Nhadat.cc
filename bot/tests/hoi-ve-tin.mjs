@@ -60,3 +60,13 @@ ok("FR243 không kích: 'đang ở đâu vậy em?' không phải nơi đăng", 
 
 console.log(hong ? `\nHỎI VỀ TIN: ${hong}/${tong} CA HỎNG` : `\nHỎI VỀ TIN: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
+
+// SRS-5.1zzzzzq (Zalo thật 13/10/2026): xin NỘI DUNG tin → "noi_dung" (lưới đỡ khi AI không chạy); hỏi đăng chưa / ở đâu không đổi.
+for (const [t, mong] of [
+  ["Cho Bác xin nội dung tin đăng của Bác", "noi_dung"],
+  ["gửi lại bài rao cho anh coi với", "noi_dung"],
+  ["tin đăng của chị ghi sao em", "noi_dung"],
+  ["tin lên chưa em", "trang_thai"],
+  ["đăng ở đâu vậy em", "noi_dang"],
+]) ok(`NOIDUNG ${JSON.stringify(t)} → ${mong}`, hoiVeTin(t) === mong, String(hoiVeTin(t)));
+

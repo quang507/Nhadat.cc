@@ -13,7 +13,7 @@ import { donViGiaDep } from "./luat-tien.ts";
 const boDau = (s: string): string =>
   (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
-export type LoaiHoiTin = "khach" | "gia" | "dien_tich" | "dia_chi" | "tang" | "huong" | "phap_ly" | "trang_thai" | "ban_chua" | "noi_dang" | "bao_lau_ban";
+export type LoaiHoiTin = "khach" | "gia" | "dien_tich" | "dia_chi" | "tang" | "huong" | "phap_ly" | "trang_thai" | "ban_chua" | "noi_dang" | "bao_lau_ban" | "noi_dung";
 
 export type TinTom = {
   code?: string | null; status?: string | null; price_raw?: string | null; area_m2?: number | string | null;
@@ -32,6 +32,10 @@ export function hoiVeTin(text: string): LoaiHoiTin | null {
   // 29/09/2026 (kịch bản K9): bỏ dấu thì "đang" = "đăng" — câu CÓ dấu, "đang" (không phải "đăng") không được đọc là đăng tin.
   const kd = boDau(goc.replace(/(?<![\p{L}])[đĐ]ang(?![\p{L}])/gu, "dxng")).replace(/\s+/g, " ").trim();
   if (CO_SO_DON_VI.test(kd)) return null;
+  // SRS-5.1zzzzzq (Zalo thật 13/10/2026: "Cho Bác xin nội dung tin đăng của Bác" → model TỰ VIẾT một tin 6x22m, 2 lầu, sổ riêng không có
+  // trong DB): XIN xem lại NỘI DUNG tin / bản tin / bài rao là lời xin, không cần dáng hỏi → code gửi đúng bản tin dựng từ DB. Lưới đỡ
+  // khi AI (`hoi_noi_dung`) không chạy.
+  if (/\b(?:noi dung|ban tin|bai rao|bai dxng|tin dxng|tin rao|bai viet)\b/.test(kd) && /\b(?:xin|cho .{0,12}xem|gui lai|gui cho|xem lai|coi lai|doc lai|ghi sao|nhu nao|the nao|ra sao)\b/.test(kd) && !/\bgia\b/.test(kd) && !nhanDienFact(goc)) return "noi_dung";
   if (!DANG_HOI.test(kd)) return null;
   // Câu mang DỮ LIỆU ("Được giá, căn tôi sở hữu nhưng… có thông tin thêm không") là câu trả lời kèm hỏi
   // ngược → đi đường cũ (ghi fact + hỏi ngược), không phải hỏi về tin.
@@ -39,6 +43,8 @@ export function hoiVeTin(text: string): LoaiHoiTin | null {
   if (kd.split(" ").length < 3) return null;
   // 22/09/2026 (kịch bản C): "bán rồi hả em?" — model từng đáp "Chủ nhà bán rồi em chưa biết, để em hỏi
   // chủ nhà" với chính chủ nhà. Hỏi ĐÃ BÁN CHƯA là hỏi về tin: trả lời từ trạng thái, không nhờ model.
+  // SRS-5.1zzzzzq (Zalo thật 13/10/2026: "Cho Bác xin nội dung tin đăng của Bác" → model TỰ VIẾT một tin 6x22m, 2 lầu, sổ riêng không có
+  // trong DB): xin xem lại NỘI DUNG tin / bản tin / bài rao → code gửi đúng bản tin dựng từ DB. Lưới đỡ khi AI không chạy.
   if (/\b(?:ban roi|ban duoc chua|ban chua|da ban chua|ban dc chua|chot roi|chot chua|chot duoc chua|co ai mua|ai mua chua|mua chua)\b/.test(kd) && !/\bgia\b/.test(kd)) return "ban_chua";
   if (/\bkhach\b/.test(kd) && /\b(?:hoi|quan tam|xem|coi|nao|chua|co ai|nhieu)\b/.test(kd)) return "khach";
   if (/\b(?:ai|nguoi nao)\s+(?:hoi|quan tam|xem)\b/.test(kd)) return "khach";
@@ -106,6 +112,8 @@ export function dapHoiVeTin(loai: LoaiHoiTin, tin: TinTom, khach: KhachTom, ac: 
     // phụ trách, KHÔNG hứa số ngày — chưa có số liệu thời gian bán theo khu vực.
     case "bao_lau_ban": return dapBaoLauBan(ac, chuaKe);
     case "noi_dang": return `Dạ tin lên kệ web AI Ơi Nhà Đất, và em giới thiệu thẳng cho khách đang tìm mua nhắn em qua Zalo ạ. Hiện ${chuaKe ?? `tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"}`}.`;
+    // SRS-5.1zzzzzq: xin xem nội dung tin — chat-reply dựng bản tin từ DB trước khi tới đây; dòng này chỉ là lưới khi không dựng được.
+    case "noi_dung": return chuaKe ? `Dạ ${chuaKe} ạ.` : `Dạ tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"}, em gửi lại nội dung ngay ạ.`;
     case "ban_chua": {
       if (tin.status === "da_chot") return `Dạ tin mình đã chốt, em gỡ khỏi kệ rồi ạ.`;
       const n = Math.max(khach.quan_tam, 0);

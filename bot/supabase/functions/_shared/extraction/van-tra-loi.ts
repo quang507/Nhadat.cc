@@ -82,12 +82,24 @@ export function laHuaCoHang(cau: string, hoiHang = true): boolean {
 // cười cũng là hết câu; không tách thì cả cụm mang "?" của câu sau và lời khen sai lọt lưới `laKhenSai`.
 const tachCau = (s: string): string[] => s.split(/(?<=[.!?…]|[=:;]\)+|:D|\^\^)\s+/).filter((c) => c.trim());
 
+/** SRS-5.1zzzzzq: câu `c` (đã tách) có phải một câu được giữ (AI chép nguyên văn, có thể là cả câu hoặc một vế) — so bỏ dấu, bỏ dấu câu cuối. */
+const laCauGiu = (giuCau: string[]) => {
+  const g = giuCau.map((x) => boDau(x.trim().replace(/[.,!…;:\s]+$/u, ""))).filter((x) => x.length >= 8);
+  return (c: string): boolean => {
+    const kd = boDau(c.trim().replace(/[.,!…;:\s]+$/u, ""));
+    return kd.length >= 8 && g.some((x) => kd.includes(x) || x.includes(kd));
+  };
+};
+
 /**
  * Bỏ các câu hứa có hàng; chèn `loiThat` đúng chỗ câu đầu tiên bị bỏ (để "Dạ được
  * chị." đứng trước vẫn tự nhiên). Không có câu nào vi phạm → trả nguyên mảng.
  */
-export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true, aiHua: string[] = []): { replies: string[]; daChan: boolean } {
+export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true, aiHua: string[] = [], giuCau: string[] = []): { replies: string[]; daChan: boolean } {
   let daChan = false;
+  // SRS-5.1zzzzzq: câu KIẾN THỨC DỰ ÁN đã qua kiểm căn cứ (`cauDuAnCoNguon`) không phải lời hứa có hàng, cũng không bị cuốn theo
+  // "sau câu sai chỉ giữ câu hỏi" — nó có nguồn riêng, không dựng trên tiền đề kho.
+  const laGiu = laCauGiu(giuCau);
   // SRS-5.1zzzzb: câu AI (lượt soát, đọc theo nghĩa) chỉ ra là "nói có hàng" — chép nguyên văn từ lời bot; code chỉ nhận khi câu đó
   // nằm trong lời bot (so bỏ dấu). Mẫu từ khoá `laHuaCoHang` vẫn chạy làm lưới đỡ.
   const aiKd = aiHua.map((a) => boDau(a.trim().replace(/[.,!…;:\s]+$/u, ""))).filter((a) => a.length >= 4);
@@ -107,6 +119,7 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
       // SRS-5.1zzzzu (bắn production 10/10, thu-cmp46-4): "Dạ em lọc trong kho rồi ạ. Hiện bên em chưa có căn nào khớp…" — câu đầu khớp
       // mẫu, câu nói thật ĐỨNG SAU nó bị luật "bỏ mọi câu kể" cuốn đi, mà vì đã có câu nói thật nên lời thật không chèn → khách không
       // nhận được chữ nào. Câu nói thật (chưa có căn) chính là lời thay thế: luôn giữ.
+      if (laGiu(c)) { giu.push(c); continue; }
       if (daChan && !/\?/.test(c) && !laNoiThat(c)) continue;
       if (!laHua(c)) { giu.push(c); continue; }
       daChan = true;
@@ -1131,8 +1144,11 @@ export function boCauVongLai(replies: string[], text: string): string[] {
  * hẻm/phường, và KHÔNG phải câu nhắc tiêu chí khách ("tầm/khoảng/dưới/lọc/tìm"). Bỏ CẢ BONG BÓNG chứa câu đó
  * (câu hỏi "Chú có quan tâm không ạ?" đi kèm cũng thành vô nghĩa).
  */
-export function boCanBia(replies: string[]): string[] {
+export function boCanBia(replies: string[], giuCau: string[] = []): string[] {
+  const laGiu = laCauGiu(giuCau);
   const laCanBia = (c: string): boolean => {
+    // SRS-5.1zzzzzq: diện tích / giá của một loại căn trong DỰ ÁN có căn cứ ở khối dự án — không phải căn bịa.
+    if (laGiu(c)) return false;
     // Câu nêu MÃ TIN thật ("#BDS-Q5-0006") là căn lấy từ lượt trước (căn tương tự, căn đã gợi) — không phải bịa.
     if (/#?\b[A-Z]{2,5}(?:-[A-Z0-9]{1,15}){1,4}\b/.test(c)) return false;
     const kd = boDau(c);
