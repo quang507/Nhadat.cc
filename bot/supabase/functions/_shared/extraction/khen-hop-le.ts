@@ -30,3 +30,36 @@ export function loiNhanGiayToHopLe(loi: string | null | undefined, soM2: number 
   if (so.some((s) => !choPhep.has(s))) return null;
   return k;
 }
+
+/**
+ * SRS-5.1zzzzzq (Zalo thật 13/10/2026, khách mua hỏi "Diện tích căn 3 phòng ngủ của Hà Đô Centrosa là bao nhiêu?"): model trả lời
+ * ĐÚNG "căn 3PN từ 128-138m2" lấy từ khối DỰ ÁN, nhưng ba lưới "kho trống" (`boCanBia`, lượt soát nhận xét người mua, `chanHuaCoHang`)
+ * coi mọi câu có diện tích / giá / khen là căn bịa → gọt sạch, khách chỉ nhận câu hỏi lạc đề. Kiến thức dự án là NGUỒN, như kho căn.
+ * AI soát (`soatNhanXetBangModel` đối tượng người mua) liệt kê câu nói về dự án kèm `can_cu` chép từ khối dự án; câu này giữ khi:
+ * không nói có hàng, không đánh giá thị trường, kiểu nhắc lại (không suy ra / chấm điểm), MỌI căn cứ có thật trong khối dự án, và mọi
+ * con số trong câu nằm trong căn cứ của nó (chặn "tầm 10-12 tỷ" tự nhân giá/m² × diện tích). Trả các câu giữ (nguyên văn AI chép).
+ */
+export function cauDuAnCoNguon(
+  nhanXet: Array<{ cau?: string | null; can_cu?: string | null; kieu?: string | null; noi_co_hang?: boolean | null; danh_gia_thi_truong?: boolean | null }>,
+  nguon: string,
+): string[] {
+  if (!nguon.trim()) return [];
+  const so = (x: string) => (x.replace(/(\d)\s*m2(?![\p{L}\d])/giu, "$1m²").match(/\d+(?:[.,]\d+)?/g) ?? []).map((s) => String(Number(s.replace(",", "."))));
+  const theoCau = new Map<string, { canCu: string[]; hong: boolean }>();
+  for (const n of nhanXet) {
+    const cau = (n.cau ?? "").trim();
+    if (!cau || /\?/.test(cau)) continue;
+    const o = theoCau.get(cau) ?? { canCu: [], hong: false };
+    const cc = (n.can_cu ?? "").trim();
+    if (n.noi_co_hang === true || n.danh_gia_thi_truong === true || (n.kieu && n.kieu !== "nhac_lai") || !cc || !trichCoTrongTin(cc, nguon)) o.hong = true;
+    else o.canCu.push(cc);
+    theoCau.set(cau, o);
+  }
+  const ra: string[] = [];
+  for (const [cau, o] of theoCau) {
+    if (o.hong || !o.canCu.length) continue;
+    const coSo = new Set(so(o.canCu.join(" ")));
+    if (so(cau).every((s) => coSo.has(s))) ra.push(cau);
+  }
+  return ra;
+}

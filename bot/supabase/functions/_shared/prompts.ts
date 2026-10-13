@@ -28,12 +28,21 @@ export const FEE_RULES = `Luật phí (chỉ nói khi được hỏi, hoặc đ�
 // FEE_RULES (cho model) và hàm này (cho câu code ghép) phải nói cùng một thứ.
 const PHI_THAN = {
   thue: "chỉ thu khi ký được hợp đồng thuê, bằng 3/4 tháng tiền thuê",
-  nmg: "chỉ thu khi giao dịch thành công, 0,5% giá chốt",
-  ccrb: "chỉ thu khi giao dịch thành công, 1% giá chốt",
+  // 13/10/2026 (chủ dự án: "Cháu xin phép báo phí bên cháu nhé, chỉ thu khi giao dịch thành công là 1% giá chốt ạ"): nối bằng "là".
+  nmg: "chỉ thu khi giao dịch thành công là 0,5% giá chốt",
+  ccrb: "chỉ thu khi giao dịch thành công là 1% giá chốt",
   // SRS-5.1zzzzzo (chủ dự án 13/10/2026: "với chính chủ đăng bán thì bên cháu sẽ lấy mức phí … khi giao dịch thành công, môi giới thì …"):
   // chưa rõ vai thì nói CẢ HAI mức (thay quyết định 09/10 "chưa rõ vai thì không số").
   chung: "chỉ thu khi giao dịch thành công: chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt",
 } as const;
+/**
+ * SRS-5.1zzzzzq (chủ dự án 13/10/2026): câu BÁO PHÍ lúc tin lên kệ, một nguồn — "Em xin phép báo phí bên em nhé, chỉ thu khi giao dịch
+ * thành công là 1% giá chốt ạ." (xưng hô "em" do van `doiTuXung` đổi theo khách). Thân câu lấy từ `cauPhi` nên hai mức / thuê / vai đều
+ * cùng một chỗ.
+ */
+export function cauBaoPhi(sellerType: string | null | undefined, deal: string | null | undefined): string {
+  return `Em xin phép báo phí bên em nhé, ${cauPhi(sellerType, deal).replace(/^phí /, "")} ạ.`;
+}
 export function cauPhi(sellerType: string | null | undefined, deal: string | null | undefined, opts: { benEm?: boolean } = {}): string {
   const phi = opts.benEm ? "phí bên em" : "phí";
   if (deal === "cho_thue") return `${phi} ${PHI_THAN.thue}`;

@@ -84,7 +84,13 @@ const LUAT_MUA = `SOÁT LỜI BOT GỬI NGƯỜI MUA / THUÊ — bot CHƯA đưa
   căn ngay ("dạ em tìm cho anh chị", "để em tìm giúp chú", "em kiếm liền cho mình") cũng noi_co_hang = true: khách đang hỏi có căn không
   mà bot không có căn nào, câu đó né câu trả lời thật.
 - KHÔNG liệt kê: câu hỏi, lời chào, ghi nhận chung ("dạ em ghi nhận rồi anh"), câu nói thật là chưa có căn.
-- can_cu: luôn null (người mua chưa có căn nào để làm căn cứ).
+- KIẾN THỨC DỰ ÁN (SRS-5.1zzzzzq): câu nói về một DỰ ÁN (vị trí, chủ đầu tư, loại căn, diện tích từng loại căn, số căn, giá từ, tiện ích,
+  bàn giao) cũng LIỆT KÊ, noi_co_hang = false; can_cu chép NGUYÊN VĂN cụm trong DỮ LIỆU TRA CỨU (khối dự án) nói ĐÚNG điều đó, kieu =
+  nhac_lai. Câu tự TÍNH ra (giá căn = giá/m² × diện tích), NỐI dự án với khu / đường khách đang tìm ("gần Phạm Thế Hiển lắm") hay gắn
+  thêm điều khối không nói ("tiện ích đầy đủ", "khớp ngân sách của anh") → can_cu = null, hoặc kieu suy_ra / danh_gia. Một câu nói NHIỀU
+  điều thì mỗi điều MỘT dòng, cùng chép nguyên câu đó vào cau.
+- Câu nói BÊN EM CÓ dự án / căn của dự án ("dạ bên em có Hà Đô Centrosa") là noi_co_hang = true: khối dự án là kiến thức, không phải hàng.
+- can_cu: ngoài khối dự án ở DỮ LIỆU TRA CỨU thì luôn null (người mua chưa có căn nào để làm căn cứ).
 - danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ.`;
 
 type ClientModel = {
@@ -109,12 +115,12 @@ export async function soatNhanXetBangModel(
 ): Promise<{ nhanXet: NhanXetLLM[]; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
-    max_tokens: 500,
+    max_tokens: doiTuong === "nguoi_mua" && duLieuTra ? 900 : 500,
     output_config: { effort: "low", format: FORMAT },
     system: [{ type: "text", text: doiTuong === "nguoi_mua" ? LUAT_MUA : LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
       role: "user",
-      content: `${doiTuong === "nguoi_mua" ? "LỜI KHÁCH MUA" : "LỜI CHỦ NHÀ"}:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}${duLieuTra ? `DỮ LIỆU TRA CỨU:\n${duLieuTra.slice(0, 800)}\n` : ""}${chinhSach ? `CHÍNH SÁCH CỦA BÊN EM:\n${chinhSach.slice(0, 1800)}\n` : ""}EM VỪA GHI LƯỢT NÀY:\n${vuaGhi.trim() ? vuaGhi.slice(0, 600) : "(không ghi gì)"}\nLỜI BOT:\n${loiBot.slice(0, 800)}`,
+      content: `${doiTuong === "nguoi_mua" ? "LỜI KHÁCH MUA" : "LỜI CHỦ NHÀ"}:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}${duLieuTra ? `DỮ LIỆU TRA CỨU:\n${duLieuTra.slice(0, doiTuong === "nguoi_mua" ? 3500 : 800)}\n` : ""}${chinhSach ? `CHÍNH SÁCH CỦA BÊN EM:\n${chinhSach.slice(0, 1800)}\n` : ""}EM VỪA GHI LƯỢT NÀY:\n${vuaGhi.trim() ? vuaGhi.slice(0, 600) : "(không ghi gì)"}\nLỜI BOT:\n${loiBot.slice(0, 800)}`,
     }],
   });
   const k = docLong(KetSoat, r.parsed_output);

@@ -82,6 +82,8 @@ export type ThamSoNhap = {
   lai: boolean;
   /** 24/09/2026: chủ nói "đăng đi" và tin đã lên kệ — tiêu đề "đã lên kệ", KHÔNG hỏi duyệt lại. */
   daDang?: boolean;
+  /** SRS-5.1zzzzzq: khách xin xem lại nội dung tin — dòng đầu thay tiêu đề mặc định ("📋 Bên em sẽ đăng như vậy nhé bác:"). */
+  tieuDeDau?: string | null;
   /** SRS-5.1zzzzzl: tiêu đề chủ nhà gửi lúc duyệt (`boc_tach.tieu_de_khach`, đã qua kiểm trích dẫn) — in thay tiêu đề bot viết. */
   tieuDeKhach?: string | null;
   /** SRS-5.1zzzzzl: câu khen AI viết (đã qua `khenHopLe` + lượt soát) — mở đầu bong bóng thứ hai. */
@@ -269,7 +271,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
  * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
  */
 export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
-  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen, quyMo, tienIch: tienIchAi } = t;
+  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang, tieuDeKhach, khen, quyMo, tienIch: tienIchAi, tieuDeDau } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
   // "thuê tối thiểu thuê tối thiểu 3 năm". So theo TỪNG CHỮ của nhãn.
@@ -295,7 +297,7 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string 
     if (p.length) dong.push(`${icon} ${ten}: ${p.join(" · ")}`);
   };
 
-  dong.push(cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de", { loai: loaiDoc(l.property_type) }));
+  dong.push(tieuDeDau?.trim() ? tieuDeDau.trim() : cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de", { loai: loaiDoc(l.property_type) }));
   dong.push(tieuDeTin(l, fact, facts, tieuDeKhach));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.

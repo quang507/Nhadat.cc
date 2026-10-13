@@ -14,7 +14,7 @@ export const DONG_Y = ["dong_y", "dong_y_dang", "khong_dong_y", "khong_noi"] as 
 // dữ liệu / xin bỏ một ô ghi nhầm. Trước đây do `hoiVeTin`, `laXinSoKhach`, `laXinXoaDuLieu`, `laXinBoTruong` (từ khoá) quyết.
 export const YEU_CAU = [
   "hoi_khach", "hoi_gia", "hoi_dien_tich", "hoi_dia_chi", "hoi_tang", "hoi_huong", "hoi_phap_ly", "hoi_trang_thai", "hoi_ban_chua",
-  "hoi_noi_dang", "hoi_bao_lau_ban", "xin_so_khach", "xin_xoa_du_lieu", "xin_bo_o", "khong",
+  "hoi_noi_dang", "hoi_bao_lau_ban", "hoi_noi_dung", "xin_so_khach", "xin_xoa_du_lieu", "xin_bo_o", "khong",
 ] as const;
 export const O_BO = ["do_rong_hem", "gia", "phuong", "dien_tich", "so_phong_ngu", "ket_cau", "phap_ly", "huong", "vi_tri", "bo_sung"] as const;
 /** SRS-5.1zzl (05/10/2026, demo AOND thao tác phá dữ liệu chờ xác nhận): ngưng rao NHIỀU căn / chỉ giữ vài căn. */
@@ -74,6 +74,8 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
 - hoi_ban_chua: hỏi căn đã bán / chốt được chưa.
 - hoi_noi_dang: hỏi tin đăng Ở ĐÂU (web nào, kênh nào).
 - hoi_bao_lau_ban: hỏi bao lâu thì bán được / mất mấy tháng / có bán nhanh không.
+- hoi_noi_dung: xin XEM LẠI / cho xin NỘI DUNG tin đăng, bản tin, bài rao của mình ("cho bác xin nội dung tin đăng của bác", "gửi lại
+  tin cho anh coi với", "tin đăng ghi sao em", "bài rao của chị như nào"). Hỏi tin đăng Ở ĐÂU → hoi_noi_dang; hỏi đăng CHƯA → hoi_trang_thai.
 - xin_so_khach: xin số điện thoại / Zalo / liên hệ của NGƯỜI MUA để tự gọi.
 - xin_xoa_du_lieu: xin xoá tin / căn / hồ sơ / dữ liệu / tài khoản khỏi hệ thống (không phải ngưng rao vì bán rồi).
 - xin_bo_o: xin bỏ / xoá MỘT chi tiết đã ghi nhầm mà KHÔNG đưa giá trị mới ("xoá cái hẻm 4m ghi nhầm đi"). Có giá trị mới

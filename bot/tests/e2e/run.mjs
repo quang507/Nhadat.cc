@@ -627,10 +627,10 @@ check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần c�
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
 // 23/09/2026: +1 — câu đầu đủ khu vực + giá nay LỌC KHO ngay (trước chỉ hứa "em lọc kho liền" rồi im).
-check("TOIUU-02 người mua lượt đầu ≤ 25 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ; +1 SRS-5.1y đọc công tắc tro_ly — không nhớ tạm để bật/tắt có hiệu lực lượt kế; +1 06/10 SRS-5.1zzn đọc công tắc luat_loi_bot ở nhánh mua; +1 ghi sổ van_kich, CHỈ khi có van đổi lời — mock chạy `du` nên có; +1 SRS-5.1zzzza ghi token lượt AI soát nhận xét, CHỈ khi không căn nào trong tay)", v.n <= 27, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 25 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ; +1 SRS-5.1y đọc công tắc tro_ly — không nhớ tạm để bật/tắt có hiệu lực lượt kế; +1 06/10 SRS-5.1zzn đọc công tắc luat_loi_bot ở nhánh mua; +1 ghi sổ van_kich, CHỈ khi có van đổi lời — mock chạy `du` nên có; +1 SRS-5.1zzzza ghi token lượt AI soát nhận xét, CHỈ khi không căn nào trong tay; +1 13/10 SRS-5.1zzzzzq: kiểm tin khách mới hơn NGAY TRƯỚC khi ghi lời bot — nhường lượt khi hai tin tới liền)", v.n <= 28, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
-check("TOIUU-03 người mua có hồ sơ ≤ 20 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖; +1 SRS-5.1y đọc công tắc tro_ly; +1 06/10 SRS-5.1zzn công tắc luat_loi_bot; +1 ghi sổ van_kich khi có van đổi lời; +1 SRS-5.1zzzza ghi token lượt AI soát nhận xét khi không căn nào trong tay)", v.n <= 22, `${v.n}`);
+check("TOIUU-03 người mua có hồ sơ ≤ 20 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖; +1 SRS-5.1y đọc công tắc tro_ly; +1 06/10 SRS-5.1zzn công tắc luat_loi_bot; +1 ghi sổ van_kich khi có van đổi lời; +1 SRS-5.1zzzza ghi token lượt AI soát nhận xét khi không căn nào trong tay; +1 13/10 SRS-5.1zzzzzq: kiểm tin mới hơn trước khi ghi lời bot)", v.n <= 23, `${v.n}`);
 check("TOIUU-04 follow-up FR-32 đi qua RPC tao_followup, không đếm/tra/chèn tay", db().log.some((l) => l.rpc === "tao_followup") && db().t.reminders.some((x) => x.kind === "followup"));
 check("TOIUU-05 bot_prompts chỉ đọc MỘT lần cho cả ba lượt (nhớ tạm 60 s)", db().log.filter((l) => l.table === "bot_prompts").length <= 1, String(db().log.filter((l) => l.table === "bot_prompts").length));
 check("TOIUU-06 loạt bong bóng bot vào sổ bằng MỘT câu INSERT mảng", db().log.some((l) => l.table === "messages" && l.op === "insert" && Array.isArray(l.payload)));
@@ -638,9 +638,9 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 25 truy vấn (+1 09/10 SRS-5.1zzzzo: đọc fact của tin MỘT lần trước lượt ghi đầu — ảnh chụp «trước lượt» để 🤖 / EM VỪA GHI chỉ in giá trị đổi; v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu; +1 24/09 FR-223: đọc tin + fact (một truy vấn nhúng) để rẽ nhánh câu kế, chỉ khi có luật đụng tới; +1 30/09: đọc công tắc app_config.luat_loi_bot, một lần mỗi lượt)", v.n <= 25 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 25 truy vấn (+1 09/10 SRS-5.1zzzzo: đọc fact của tin MỘT lần trước lượt ghi đầu — ảnh chụp «trước lượt» để 🤖 / EM VỪA GHI chỉ in giá trị đổi; v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu; +1 24/09 FR-223: đọc tin + fact (một truy vấn nhúng) để rẽ nhánh câu kế, chỉ khi có luật đụng tới; +1 30/09: đọc công tắc app_config.luat_loi_bot, một lần mỗi lượt; +1 13/10 SRS-5.1zzzzzq: kiểm tin chủ nhà mới hơn NGAY TRƯỚC khi ghi lời bot — nhường lượt khi hai tin tới liền)", v.n <= 26 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
-check("TOIUU-07b lượt sau của cùng người bán ≤ 27 (+1 09/10 SRS-5.1zzzzo: ảnh chụp fact trước lượt; không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn; +1 24/09 FR-223: đọc tin + fact để rẽ nhánh; +1 30/09: công tắc app_config.luat_loi_bot)", v.n <= 27, `${v.n}`);
+check("TOIUU-07b lượt sau của cùng người bán ≤ 27 (+1 09/10 SRS-5.1zzzzo: ảnh chụp fact trước lượt; không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn; +1 24/09 FR-223: đọc tin + fact để rẽ nhánh; +1 30/09: công tắc app_config.luat_loi_bot; +1 13/10 SRS-5.1zzzzzq: kiểm tin mới hơn trước khi ghi lời bot)", v.n <= 28, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -1370,7 +1370,7 @@ fresh(seedKho);
   check("H8 chủ GẬT → chu_duyet_at, tin lên kệ (dang_ban), câu duyệt đóng, bong bóng báo đã ghi nhận",
     r.body.duyet === true && !!H.chu_duyet_at && H.status === "dang_ban" && !pend("duyet_tin") && /lên kệ|lên web/.test(r.body.replies[0]),
     JSON.stringify({ body: r.body, H }));
-  check("AOND-06 đã nói phí ở lượt 'phí sao em?' → tin lên kệ KHÔNG dẫn phí lần hai", r.body.dan_phi !== true && !/xin phép báo luôn, phí bên em/.test(r.body.replies.join("\n")), JSON.stringify(r.body.replies));
+  check("AOND-06 đã nói phí ở lượt 'phí sao em?' → tin lên kệ KHÔNG dẫn phí lần hai", r.body.dan_phi !== true && !/xin phép báo phí bên em nhé/.test(r.body.replies.join("\n")), JSON.stringify(r.body.replies));
   // FR-177 f (09/09): chúc mừng kèm ĐIỂM + cách thêm điểm; điểm là tiền định (diem_tin).
   // 22/09/2026 (bộ đo giọng B09, chủ dự án chốt): câu chúc rút còn HAI câu ≤ 30 từ, cách thêm điểm tách bong
   // bóng riêng, bỏ câu hẹn "có thể em sẽ hỏi thêm" — "Chúc mừng" không còn là chữ bắt buộc.
@@ -5752,7 +5752,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)) && !rp.body.replies.some((r) => /Em sẽ rao như vầy|Em sửa lại rồi/.test(r)),
     JSON.stringify({ l: { chu_duyet_at: tin().chu_duyet_at }, facts: db().t.listing_facts.map((f) => [f.question, f.answer]), rep: rp.body.replies }));
   check("AOND-05 tin lên kệ mà chưa từng nói phí → DẪN PHÍ một câu hỏi (demo AOND), body.dan_phi",
-    rp.body.dan_phi === true && rp.body.replies.some((r) => /xin phép báo luôn, phí bên em/.test(r)), JSON.stringify({ rep: rp.body.replies, dan_phi: rp.body.dan_phi }));
+    rp.body.dan_phi === true && rp.body.replies.some((r) => /xin phép báo phí bên em nhé/.test(r)), JSON.stringify({ rep: rp.body.replies, dan_phi: rp.body.dan_phi }));
   // Vế sau có LỜI SỬA ("mà giá 9 tỷ 8") → FR-164 ghi giá mới trước, phần còn lại "ok đăng đi" là gật (FR-177 g:
   // "đủ rồi, đăng đi" lúc duyệt là GẬT) → tin duyệt với giá MỚI. Không được mất giá mới, không được vào bo_sung.
   fresh();
@@ -6545,6 +6545,66 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse").map((c) => c.params).slice(-1));
     check("GVA-10b câu không nhắc dự án, kho có tin → KHÔNG có khối DỰ ÁN TRONG QUẬN", !/DỰ ÁN TRONG QUẬN 5/.test(prompt), prompt.slice(0, 300));
   }
+  // ─── SRS-5.1zzzzzq (Zalo thật 13/10/2026, khách mua hỏi Hà Đô Centrosa) ───
+  // Kiến thức dự án là NGUỒN: câu model trả lời đúng từ khối DỰ ÁN không bị ba lưới "kho trống" gọt; dự án khách đang hỏi được nhớ
+  // sang lượt sau; đang hỏi dự án thì không chen câu tư vấn; hai dòng kho trùng → một; thả 👍 bên mua im; tin mới hơn tới trước khi
+  // gửi → nhường lượt.
+  {
+    const laSoatMua = (p) => (p?.system ?? []).some((x) => /SOÁT LỜI BOT GỬI NGƯỜI MUA/.test(x.text ?? ""));
+    const rpcCu = globalThis.__rpc;
+    fresh((d) => {
+      buyerBiet(d, "dam-1");
+      d.insert("projects", { name: "Hà Đô Centrosa Garden", district: "Quận 10", developer: "Tập đoàn Hà Đô", location_raw: "Đường 3 Tháng 2, Phường 12, Quận 10, TPHCM", amenities: ["- Chủ đầu tư dự án này có uy tín hay không?", "Có nên mua căn hộ Hà Đô Centrosa không?"], specs: { gia_dong: "Giá từ 3 tỷ 55 triệu (65 - 68 triệu/m2)" } });
+      d.insert("projects", { name: "HaDo Centrosa Garden", district: "Quận 10", developer: "Công ty Cổ phần Tập đoàn Hà Đô", location_raw: "200 Đường 3 Tháng 2, Phường 12, Quận 10, TPHCM", amenities: ["Căn hộ 3 phòng ngủ và một phòng đa năng (3PN+) có diện tích từ 128 đến 138m², gồm 157 căn.", "Trung tâm thương mại cao cấp."], specs: { gia_dong: "Giá từ 3 tỷ 792 triệu (80 - 112 triệu/m2)" } });
+    });
+    globalThis.__rpc = { ...(rpcCu ?? {}), match_projects: (d, a) => ({ data: /centrosa/i.test(String(a.p_text ?? "")) ? d.t.projects.filter((p) => /centrosa/i.test(p.name)) : [], error: null }) };
+    // Lượt 1: khách gọi tên dự án; model nói "bên em có" + nối khu khách tìm (bịa) + diện tích 3PN (đúng từ khối).
+    const loi1 = ["Dạ bên em có Hà Đô Centrosa Garden ở Quận 10, gần Phạm Thế Hiển lắm anh chị. Căn 3PN+ có diện tích 128-138m2 ạ.", "Anh chị cần mấy phòng ngủ ạ?"];
+    globalThis.__model.parse = (p) => laSoatMua(p)
+      ? { nhan_xet: [
+          { cau: "Dạ bên em có Hà Đô Centrosa Garden ở Quận 10, gần Phạm Thế Hiển lắm anh chị.", khang_dinh: "bên em có dự án", can_cu: null, kieu: "suy_ra", noi_co_hang: true, danh_gia_thi_truong: false },
+          { cau: "Căn 3PN+ có diện tích 128-138m2 ạ.", khang_dinh: "diện tích 3PN", can_cu: "3PN+) có diện tích từ 128 đến 138m²", kieu: "nhac_lai", noi_co_hang: false, danh_gia_thi_truong: false },
+        ] }
+      : OUT({ replies: loi1 });
+    r = await send({ external_user_id: "dam-1", text: "Bên bạn có căn hộ Hà Đô centrosa không ?" });
+    {
+      // Chỉ lượt model CHÍNH (lượt soát cũng mang khối dự án trong DỮ LIỆU TRA CỨU).
+      const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse" && !laSoatMua(c.params)).map((c) => c.params));
+      check("DAM-E1 khối DỰ ÁN KHÁCH VỪA NHẮC chỉ MỘT dòng (hai dòng trùng gộp, giữ 'HaDo' nhiều thông tin), không in tiện ích rác '- Chủ đầu tư…'; đang hỏi dự án → không có CÂU TƯ VẤN KẾ",
+        (prompt.match(/Centrosa Garden - CĐT/g) ?? []).length === 1 && /HaDo Centrosa Garden - CĐT/.test(prompt) && !/Chủ đầu tư dự án này có uy tín/.test(prompt) && !/CÂU TƯ VẤN KẾ/.test(prompt),
+        prompt.split("DỰ ÁN KHÁCH VỪA NHẮC")[1]?.slice(0, 600));
+      check("DAM-E2 (ca gốc) câu 'bên em có … gần Phạm Thế Hiển' bị thay bằng lời thật; câu diện tích 3PN CÓ NGUỒN trong khối được GIỮ; câu hỏi giữ",
+        !/Phạm Thế Hiển/.test(rep()) && /128-138m2/.test(rep()) && /chưa có căn nào/.test(rep()) && /mấy phòng ngủ/.test(rep()),
+        JSON.stringify(r.body.replies));
+      check("DAM-E3 dự án khách hỏi được nhớ vào hồ sơ (du_an_nhac)", db().t.buyers.find((b) => b.zalo_user_id === "dam-1")?.preferences?.du_an_nhac === "HaDo Centrosa Garden",
+        JSON.stringify(db().t.buyers.find((b) => b.zalo_user_id === "dam-1")?.preferences));
+    }
+    // Lượt 2: câu KHÔNG có tên dự án → vẫn nạp khối từ hồ sơ; model trả lời giá niêm yết từ khối.
+    globalThis.__model.parse = (p) => laSoatMua(p)
+      ? { nhan_xet: [{ cau: "Giá niêm yết từ 3 tỷ 792 triệu, 80-112 triệu/m2 ạ.", khang_dinh: "giá", can_cu: "Giá từ 3 tỷ 792 triệu (80 - 112 triệu/m2)", kieu: "nhac_lai", noi_co_hang: false, danh_gia_thi_truong: false }] }
+      : OUT({ replies: ["Giá niêm yết từ 3 tỷ 792 triệu, 80-112 triệu/m2 ạ. Hiện bên em chưa có căn nào của dự án đang rao ạ."] });
+    r = await send({ external_user_id: "dam-1", text: "Căn 3 phòng ngủ giá tầm bao nhiêu ?" });
+    {
+      const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse").map((c) => c.params));
+      check("DAM-E4 (cách nói mới, không tên dự án) lượt sau vẫn có khối DỰ ÁN KHÁCH VỪA NHẮC (nhớ từ hồ sơ); câu giá có nguồn giữ nguyên",
+        /DỰ ÁN KHÁCH VỪA NHẮC/.test(prompt) && /HaDo Centrosa Garden/.test(prompt) && /3 tỷ 792 triệu/.test(rep()),
+        JSON.stringify({ coKhoi: /DỰ ÁN KHÁCH VỪA NHẮC/.test(prompt), rep: r.body.replies }));
+    }
+    // Thả 👍 bên mua → im, không lượt model.
+    const nParse = globalThis.__calls.filter((c) => c.kind === "parse").length;
+    r = await send({ external_user_id: "dam-1", text: "[khách thả cảm xúc /-strong]" });
+    check("DAM-E5 khách mua thả cảm xúc → im (không bong bóng, không lượt model)", r.body.tha_cam_xuc === true && r.body.replies.length === 0 && globalThis.__calls.filter((c) => c.kind === "parse").length === nParse, JSON.stringify(r.body));
+    // Tin mới hơn tới TRONG lúc model chạy (sau check đầu lượt) → nhường lượt trước khi gửi.
+    globalThis.__model.parse = (p) => {
+      if (!laSoatMua(p)) { const cv = db().t.conversations.find((c) => c.buyer_id === db().t.buyers.find((b) => b.zalo_user_id === "dam-1")?.id); db().insert("messages", { conversation_id: cv.id, sender: "buyer", body: "ngân sách tầm 15 tỷ", zalo_msg_id: "dam-sau" }); }
+      return laSoatMua(p) ? { nhan_xet: [] } : OUT({ replies: ["Dạ, anh chị có khoảng giá nào cho căn hộ không ạ?"] });
+    };
+    r = await send({ external_user_id: "dam-1", text: "mình cần mua" });
+    check("DAM-E6 (ca gốc 11:12:49/56) tin 'ngân sách tầm 15 tỷ' vào trong lúc model chạy → lượt này nhường TRƯỚC KHI GỬI, không hỏi lại giá",
+      r.body.superseded === true && r.body.superseded_luc === "truoc_gui" && r.body.replies.length === 0 && !db().t.messages.some((m) => m.sender === "bot" && /khoảng giá nào/.test(m.body)),
+      JSON.stringify(r.body));
+    globalThis.__rpc = rpcCu;
+  }
   // (2) chủ nhà HỎI VỀ CHÍNH TIN CỦA MÌNH → trả lời tiền định từ DB, hỏi lại câu treo; học xưng hô "anh nói".
   fresh(seedKho);
   {
@@ -6567,6 +6627,55 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     db().insert("interests", { buyer_id: db().insert("buyers", { zalo_user_id: "gva-12b", preferences: {} }).data.id, listing_id: tin.id });
     r = await send({ external_user_id: "z-ccrb", text: "có ai hỏi căn anh chưa" });
     check("GVA-12b có 1 khách quan tâm → 'đang có 1 khách quan tâm'", /1 khách quan tâm/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
+  }
+  // ─── SRS-5.1zzzzzq (Zalo thật 13/10/2026 11:42, bác Nhà Bè) ───
+  // (a) "Cho Bác xin nội dung tin đăng của Bác" → model từng TỰ VIẾT tin 6x22m, 2 lầu, sổ riêng (không có trong DB). Nay: ý `hoi_noi_dung`
+  //     (lưới đỡ `hoiVeTin` → noi_dung) → bản tin dựng từ DB, đầu đề "Bên em đang đăng như vậy nhé", 0 lượt model viết; 🤖 ghi yêu cầu.
+  // (b) "Cháu đăng giúp Bác thông tin này nhé!" rồi bài rao tới 12 giây sau: lượt tin 1 đọc "đủ rồi" → trước khi ĐÓNG kiểm tin mới hơn → nhường.
+  // (c) Lời bot soạn xong mà tin chủ nhà mới hơn đã vào → không ghi, không gửi.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    sC.active_listing_id = tin.id;
+    const nParse0 = createCalls().length;
+    r = await send({ external_user_id: "z-ccrb", text: "Cho anh xin nội dung tin đăng của anh" });
+    check("DAM-S1 (ca gốc) xin nội dung tin đăng → bản tin dựng từ DB ('📋 Bên em đang đăng như vậy nhé …:' + 12 Trần Hưng Đạo + 5,8 tỷ), KHÔNG gọi model viết, không 'Không trích xuất được gì'",
+      r.body.hoi_ve_tin === "noi_dung" && r.body.xem_tin === true && /📋 Bên em đang đăng như vậy nhé/.test(r.body.replies.join("\n")) && /Trần Hưng Đạo/.test(r.body.replies.join("\n")) && /5,8 tỷ/.test(r.body.replies.join("\n")) &&
+        createCalls().length === nParse0 && !/Không trích xuất được gì/.test(r.body.replies.join("\n")) && r.body.replies.length === 1,
+      JSON.stringify(r.body.replies));
+    // Người chưa có tin nào xin nội dung → nói thật.
+    r = await send({ external_user_id: "dam-s1b", text: "em có căn nhà cần bán" });
+    r = await send({ external_user_id: "dam-s1b", text: "gửi lại bài rao cho anh coi với" });
+    check("DAM-S1b (cách nói mới) tin rỗng vừa mở, xin bài rao → không bịa tin, nói còn thiếu gì",
+      r.body.hoi_ve_tin === "noi_dung" && /còn thiếu/.test(r.body.replies.join("\n")) && !/📋/.test(r.body.replies.join("\n")), JSON.stringify(r.body.replies));
+  }
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    tin.status = "cho_thong_tin"; tin.chu_duyet_at = null; tin.price_raw = null; tin.price_vnd = null; tin.area_m2 = null;
+    sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "vi_tri", status: "pending" });
+    // Tin 2 vào ngay sau tin 1 (nhánh bán không có check đầu lượt; nhánh "đủ rồi" tiền định không gọi model → chèn qua hook sau insert).
+    globalThis.__afterInsertMsgSeller = (d, m) => d.insert("messages", { conversation_id: m.conversation_id, sender: "seller", body: "Chính chủ cần bán nhà cấp 4 đường Huỳnh Tấn Phát, DT 3x14, giá 4,6 tỷ", zalo_msg_id: `dam-s2-${Date.now()}` });
+    r = await send({ external_user_id: "z-ccrb", text: "đủ rồi em, đừng hỏi nữa" });
+    check("DAM-S2 (ca gốc: 'đăng giúp anh thông tin này nhé' AI đọc là đủ rồi) 'đủ rồi' + bài rao tới ngay sau → lượt này NHƯỜNG trước khi đóng: câu treo vi_tri còn pending, chu_noi_du_at trống, không bong bóng",
+      r.body.superseded === true && r.body.superseded_luc === "du_roi" && r.body.replies.length === 0 && pend("vi_tri", tin.id) && !tin.chu_noi_du_at && !db().t.messages.some((m) => m.sender === "bot" && /thôi hỏi/.test(m.body)),
+      JSON.stringify({ body: r.body, pend: db().t.info_requests.filter((q) => q.listing_id === tin.id), cnd: tin.chu_noi_du_at }));
+  }
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "huong", status: "pending" });
+    const nBot = db().t.messages.filter((m) => m.sender === "bot").length;
+    globalThis.__afterInsertMsgSeller = (d, m) => d.insert("messages", { conversation_id: m.conversation_id, sender: "seller", body: "à mà nhà anh hướng Tây nha", zalo_msg_id: `dam-s3-${Date.now()}` });
+    r = await send({ external_user_id: "z-ccrb", text: "anh đang coi lại" });
+    check("DAM-S3 lời bot soạn xong mà tin chủ nhà mới hơn đã vào → nhường trước khi gửi, không ghi lời bot vào messages",
+      r.body.superseded === true && r.body.superseded_luc === "truoc_gui" && r.body.replies.length === 0 && db().t.messages.filter((m) => m.sender === "bot").length === nBot,
+      JSON.stringify(r.body));
   }
   // FR-220 (24/09/2026): câu hỏi bù "có tầng lửng, sân thượng hay tầng hầm không" → phần CÓ chen vào kết cấu chữ.
   fresh(seedKho);
@@ -9222,7 +9331,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   });
   rP = await send({ external_user_id: "phi-d5", text: "đăng đi em" });
   check("PHI-04 'đăng đi' lên kệ ngay → có câu dẫn phí 'biết phí bên em chưa' (body.dan_phi), đúng một lần",
-    rP.body.dang_luon === true && rP.body.dan_phi === true && rP.body.replies.filter((x) => /xin phép báo luôn, phí bên em/.test(x)).length === 1, JSON.stringify(rP.body.replies));
+    rP.body.dang_luon === true && rP.body.dan_phi === true && rP.body.replies.filter((x) => /xin phép báo phí bên em nhé/.test(x)).length === 1, JSON.stringify(rP.body.replies));
   // PHI-04b đã nói phí trước đó → "đăng đi" không dẫn phí lần hai.
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "phi-d6", seller_type: "ccrb", name: null, active_listing_id: null }).data;
@@ -9230,10 +9339,10 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
     d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
     const c = d.insert("conversations", { seller_id: s.id, channel: "zalo_personal_test" }).data;
-    d.insert("messages", { conversation_id: c.id, sender: "bot", body: "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ." });
+    d.insert("messages", { conversation_id: c.id, sender: "bot", body: "Dạ phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt ạ." });
   });
   rP = await send({ external_user_id: "phi-d6", text: "đăng đi em" });
-  check("PHI-04b đã nói phí rồi → 'đăng đi' KHÔNG dẫn phí lần hai", rP.body.dang_luon === true && rP.body.dan_phi !== true && !/xin phép báo luôn, phí bên em/.test(rP.body.replies.join("\n")), JSON.stringify(rP.body.replies));
+  check("PHI-04b đã nói phí rồi → 'đăng đi' KHÔNG dẫn phí lần hai", rP.body.dang_luon === true && rP.body.dan_phi !== true && !/xin phép báo phí bên em nhé/.test(rP.body.replies.join("\n")), JSON.stringify(rP.body.replies));
 }
 // ── 06/10/2026 (SRS-5.1zzr): ô quan trọng ghi NGUYÊN VĂN cụm khách gõ — ca gốc test Zalo 14:06 "hẻm 137 Nguyễn Trãi" → bot ghi "137 hẻm Nguyễn Trãi" ──
 {
@@ -9657,7 +9766,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const c = await luotO(U, "anh là chính chủ", aiO({ vai: { la: "chinh_chu", trich_dan: "anh là chính chủ" } }), "Vâng ạ. Sổ và hẻm được không ạ?");
   const sC = db().t.sellers.find((x) => x.zalo_user_id === U);
   check("ZZZZO-04 'anh là chính chủ' sau câu phí không số → vai thành tu_nhan, bong bóng phí CÓ SỐ đúng vai (cauPhi: 1% giá chốt), một lần",
-    sC?.seller_type_source === "tu_nhan" && c.rep.filter((x) => /1% giá chốt/.test(x)).length === 1 && /^Dạ vậy phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ\.$/m.test(c.rep.join("\n")),
+    sC?.seller_type_source === "tu_nhan" && c.rep.filter((x) => /1% giá chốt/.test(x)).length === 1 && /^Dạ vậy phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt ạ\.$/m.test(c.rep.join("\n")),
     JSON.stringify({ src: sC?.seller_type_source, rep: c.rep }));
   check("ZZZZO-05 tự nói vai → câu SỔ vẫn treo, lời hỏi là câu SỔ — không 'Sổ và hẻm được không' (câu hỏi lệch ô bị thay)",
     treo(L.id).join() === "phap_ly" && !/Sổ và hẻm/.test(c.rep.join("\n")) && /pháp lý giấy tờ/i.test(loiThuong(c.rep)) /* SRS-5.1zzzzzm: câu sổ → câu pháp lý */,
@@ -10158,7 +10267,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const cau = "Được rồi em ơi, rao đi. Mà em nói rõ xíu, nếu có khách mua thì chị phải trả bao nhiêu tiền hoa hồng hay gì vậy em?";
     const g = await goi(uid, cau, { dong_y: "dong_y_dang", dong_y_trich: "Được rồi em ơi, rao đi", hoi_lai: { co_hoi: true, cau_hoi: "nếu có khách mua thì chị phải trả bao nhiêu tiền hoa hồng hay gì vậy em?", chu_de: "phi" } });
     check("ZZZZZ-12 (ca gốc) gật duyệt kèm hỏi hoa hồng → tin lên kệ, có câu trả lời phí + hỏi vai, không 'biết phí bên em chưa'",
-      lr(L).status === "dang_ban" && /chỉ thu khi giao dịch thành công/.test(g.rep) && /chính chủ hay môi giới để em báo/.test(g.rep) && !/xin phép báo luôn, phí bên em/.test(g.rep),
+      lr(L).status === "dang_ban" && /chỉ thu khi giao dịch thành công/.test(g.rep) && /chính chủ hay môi giới để em báo/.test(g.rep) && !/xin phép báo phí bên em nhé/.test(g.rep),
       JSON.stringify({ st: lr(L).status, rep: g.rep }));
   }
   // (6) Ghi fact ngoài câu treo → lời ghi nhận đọc tên ô ngắn, không đọc câu hỏi trong FACT_LABELS.
@@ -10402,7 +10511,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   }
   // (10) Hỏi thuế / chi phí ngoài phí bên em → chủ đề riêng, không lặp câu phí.
   {
-    const phi1 = "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ.";
+    const phi1 = "Dạ phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt ạ.";
     const { uid, L } = dung({ tin: { ...TIN_GV, ward: "Phường Gò Vấp" }, cauTreo: "huong", xung: "chị", botNoi: [phi1, "Nhà mình hướng gì vậy chị?"] });
     db().t.sellers.at(-1).seller_type_source = "admin"; // vai đã xác nhận (bất biến PHÍ đọc nguồn vai)
     const cau = "ngoài phí 1% đó thì chị có mất thuế hay phí gì khác không em?";
@@ -10465,7 +10574,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const lr = (L) => db().t.listings.find((x) => x.id === L.id);
   const treo = (L) => db().t.info_requests.filter((q) => q.listing_id === L.id && q.status === "pending").map((q) => q.question);
   const muaCua = (uid) => db().t.buyers.filter((b) => b.zalo_user_id === uid).length;
-  const PHI1 = "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ.";
+  const PHI1 = "Dạ phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt ạ.";
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
 
   // (1) Chính sách phí là NGUỒN: model trả lời "ai trả phí" đúng chính sách, lượt soát dẫn căn cứ từ luật phí → câu được giữ.
@@ -11051,7 +11160,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     // SRS-5.1zzzzzo (chủ dự án 13/10): lúc khách "ok" → BÁO THẲNG phí, nêu cả hai mức (vai chưa xác nhận), một lần, không hỏi "biết phí chưa".
     const rOk = (bOk.replies ?? []).join("\n");
     check(`PHIKE-${ma} «ok» → lời lên kệ có "xin phép báo luôn" + cả hai mức phí (chính chủ 1%, môi giới 0,5%), không câu hỏi "biết phí … chưa"`,
-      (rOk.match(/xin phép báo luôn/g) ?? []).length === 1 && rOk.includes("chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt") && !/biết phí/.test(rOk), JSON.stringify(bOk.replies));
+      (rOk.match(/xin phép báo phí bên em nhé/g) ?? []).length === 1 && rOk.includes("chính chủ đăng bán là 1% giá chốt, môi giới là 0,5% giá chốt") && !/biết phí/.test(rOk), JSON.stringify(bOk.replies));
     const b1 = await goiH(uid, hoiPhi, { hoi_lai: { co_hoi: true, cau_hoi: hoiPhi, chu_de: "phi" } });
     const r1 = (b1.replies ?? []).join("\n");
     check(`PHIKE-${ma} «${hoiPhi}» (tin đã lên kệ, không câu treo, vai chưa xác nhận) → câu phí nêu CẢ HAI mức (chính chủ 1%, môi giới 0,5%), không chỉ một mức`,

@@ -69,7 +69,7 @@ for (const cau of [
 ok("câu trả lời thật không bị chặn: 'Dạ hiện bên em chưa có căn nào khớp…'", !laHuaCoHang("Dạ hiện bên em chưa có căn nào khớp đúng nhu cầu này ạ.", false));
 ok("câu hỏi nhu cầu không bị chặn", !laHuaCoHang("Anh muốn ở khu nào để em lọc cho gần?", false));
 // 20/09/2026 (bắn thật mau-y-A): hỏi phí KHÔNG DẤU vẫn có đáp án tiền định.
-ok("dapHoiNguocTienDinh phí không dấu", /1%/.test(dapHoiNguocTienDinh("phi ben minh sao, co bat ky doc quyen ko", "anh", "phí chỉ thu khi giao dịch thành công, 1% giá chốt") ?? ""));
+ok("dapHoiNguocTienDinh phí không dấu", /1%/.test(dapHoiNguocTienDinh("phi ben minh sao, co bat ky doc quyen ko", "anh", "phí chỉ thu khi giao dịch thành công là 1% giá chốt") ?? ""));
 for (const [cau, mong] of [
   ["có căn nào quận 10 tầm 5 tỷ không em", true],
   ["còn nhà nào tầm 7 tỷ hông em", true],
@@ -337,7 +337,7 @@ ok("dapHoiNguocTienDinh gọi đúng cách xưng hô", dapHoiNguocTienDinh("có 
 
 // 15/09/2026 (bắn thật P1/P2): đáp án hệ thống cho "bot hả" / "phí sao"; lời model trả lời CÂU LỆNH bị bỏ.
 ok("dapHoiNguocTienDinh 'bên em là bot hả' → nói thật là AI", /trợ lý AI/.test(dapHoiNguocTienDinh("mà bên em là bot hả?", "anh") ?? ""), String(dapHoiNguocTienDinh("mà bên em là bot hả?", "anh")));
-ok("dapHoiNguocTienDinh 'phí sao' + phí → câu phí", dapHoiNguocTienDinh("phí sao, với bên em có gọi điện phiền tôi không", "anh", "phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt") === "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ.", String(dapHoiNguocTienDinh("phí sao", "anh", "x")));
+ok("dapHoiNguocTienDinh 'phí sao' + phí → câu phí", dapHoiNguocTienDinh("phí sao, với bên em có gọi điện phiền tôi không", "anh", "phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt") === "Dạ phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt ạ.", String(dapHoiNguocTienDinh("phí sao", "anh", "x")));
 ok("dapHoiNguocTienDinh 'phí quản lý bao nhiêu' → không phải phí môi giới", dapHoiNguocTienDinh("phí quản lý bao nhiêu 1 tháng", "anh", "x") === null);
 ok("dapHoiNguocTienDinh 'máy lạnh còn không' → không phải hỏi bot", dapHoiNguocTienDinh("máy lạnh còn không em", "anh") === null);
 for (const [vao, mong] of [
@@ -1303,7 +1303,7 @@ ok("GOI-06 'Dạ được anh, để em lọc' → 'anh chị,'; 'anh, chị c�
 
 // SRS-5.1zi (bắn thử câu đơn giản 02/10): lời bot nói về "hệ thống"; câu khen mở đầu trỏ ngược không có gì để trỏ.
 {
-  const a = boCauNoiHeThong(["Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ.", "Phí thì hệ thống đã gửi cho mình rồi nha.\nMình cần ra hàng sớm hay được giá thì bán vậy anh chị?"]);
+  const a = boCauNoiHeThong(["Dạ phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt ạ.", "Phí thì hệ thống đã gửi cho mình rồi nha.\nMình cần ra hàng sớm hay được giá thì bán vậy anh chị?"]);
   ok("HT-01 'Phí thì hệ thống đã gửi cho mình rồi nha' → bỏ, câu hỏi kế giữ", a.length === 2 && a[1] === "Mình cần ra hàng sớm hay được giá thì bán vậy anh chị?", JSON.stringify(a));
   const b = ["Xưởng có hệ thống xử lý nước thải chưa anh?"];
   ok("HT-02 câu HỎI có 'hệ thống xử lý nước thải' → giữ nguyên", boCauNoiHeThong(b) === b);
@@ -1484,7 +1484,7 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
 // SRS-5.1zzzzzc: câu phí soạn sẵn không nói lại nguyên câu; hỏi thuế / chi phí ngoài là chủ đề riêng; soát bỏ lời gắn lợi ích và lời hứa bot không làm được.
 {
   const { nhanXetKhongCanCu } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
-  const phi1 = "phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt";
+  const phi1 = "phí bên em chỉ thu khi giao dịch thành công là 1% giá chốt";
   const a = dapHoiNguocTienDinh("ngoài 1% đó còn mất thuế hay phí gì không", "chị", phi1, "thue_phi");
   ok("ZZZZZC-V1 (ca gốc) hỏi thuế / chi phí ngoài phí bên em → nói phí bên em là khoản duy nhất + thuế theo quy định nhà nước, không nói ai chịu",
     /không thu thêm/.test(a ?? "") && /quy định nhà nước/.test(a ?? "") && !/người (?:mua|bán) chịu|chịu thuế/.test(a ?? ""), String(a));

@@ -4025,6 +4025,46 @@ dò phường `timPhuongTrongCau` đã bỏ cụm trùng tên quận cũ. (d) C�
 (`motMuc`); `kiem-bang-chung.mjs` PHUONG-HUYEN (Hóc Môn, Bình Chánh, Gò Vấp; đối chứng "xã Hóc Môn", "phường Gò Vấp", "Đông Thạnh, Hóc Môn"); `tin-nhap-rao.mjs`
 TIENICH-AI-1/2, giá cuối. Cách nói mới: "để chú gửi bài rao cho cháu đăng nha", "cách trường cấp 2 khoảng 300m". e2e **1306/1306**.
 
+### SRS-5.1zzzzzq · Kiến thức dự án là nguồn cho người mua; hai tin tới liền thì nhường lượt (cả hai nhánh); xin nội dung tin là gửi bản tin từ DB; câu phí "xin phép báo phí bên em nhé" (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 11:09–11:28 (khách mua hỏi Hà Đô Centrosa) và 11:42–11:48 (bác Nhà Bè); chủ dự án: "trong db có diện tích 3
+phòng ngủ chưa", "người ta nhắn 2 tin 1 lúc, tin sau lúc mà m đang chuẩn bị gửi", "sao nó ko hỏi hay ko có đưa tin nháp gì cả", "hiểu yêu cầu
+thì … ghi yêu cầu của khách ở chỗ bong bóng trích xuất", "không phải nháp mà là bên em sẽ đăng như vậy nhé", "Cháu xin phép báo phí bên cháu nhé,
+chỉ thu khi giao dịch thành công là 1% giá chốt ạ"]`
+
+**Ca gốc.** (a) Khách mua: "Diện tích căn 3 phòng ngủ của Hà Đô Centrosa là bao nhiêu?" — model trả lời ĐÚNG "128-138m2" từ khối DỰ ÁN (kho
+có), ba lưới "kho trống" (`boCanBia`, lượt soát nhận xét người mua, `chanHuaCoHang`) gọt sạch; khách nhận "Anh chị muốn mình sống ở một khu như
+thế nào ạ?". Lượt trước đó model bịa "gần Phạm Thế Hiển lắm", "1-3 phòng ngủ", "5-6 tỷ"; câu "Căn 3 phòng ngủ giá tầm bao nhiêu?" không có
+tên dự án nên khối DỰ ÁN trống. Kho có HAI dòng mogi trùng (HaDo / Hà Đô), một dòng tiện ích là tiêu đề bài viết. Khách thả 👍 hai lần → hai
+lượt model + câu tư vấn lạc đề. (b) "mình cần mua" 11:12:49, "ngân sách tầm 15 tỷ" 11:12:56, bot trả lời tin 1 lúc 11:12:59 "có khoảng giá
+nào không ạ?". (c) Bên bán: "Cháu đăng giúp Bác thông tin này nhé!" 11:42:52, bài rao 11:43:04; lượt tin 1 (đang chạy model) đọc là đủ rồi →
+"thôi hỏi", đóng câu treo, đóng dấu `chu_noi_du_at`; lượt tin 2 chạy song song ghi 11 fact nhưng không câu hỏi, không nháp. (d) "Cho Bác xin
+nội dung tin đăng của Bác" → model TỰ VIẾT một tin 6x22m, trệt + lửng + 2 lầu, 2 toilet, sổ riêng — không dòng nào có trong DB.
+
+**Lớp lỗi.** (a) Lưới "không căn nào trong tay thì mọi câu tả nhà là bịa" coi khối dự án không phải nguồn; ngữ cảnh dự án chỉ sống một lượt
+(tra theo câu đang nhắn). (b)(c) Check nhường lượt FR-131 chỉ ở ĐẦU lượt mua và KHÔNG CÓ ở nhánh bán; quyết định đóng ("đủ rồi") và lời gửi
+đi không nhìn lại hàng đợi. (d) Yêu cầu "xem lại tin" không có ý định nào, rơi vào lượt chăm sóc r3 — model viết dữ liệu.
+
+**Sửa.** (a) `kiem-khen.ts` đối tượng người mua nhận khối dự án làm DỮ LIỆU TRA CỨU, liệt kê câu về dự án kèm `can_cu`; `cauDuAnCoNguon`
+(`khen-hop-le.ts`) giữ câu khi mọi căn cứ có thật trong khối, kiểu nhắc lại, không nói có hàng, mọi con số nằm trong căn cứ (chặn "10-12 tỷ"
+tự nhân); `boCanBia` / `chanHuaCoHang` nhận danh sách giữ. Dự án khách hỏi nhớ vào `preferences.du_an_nhac`, lượt sau không gọi tên vẫn nạp.
+`du-an-kho.ts`: gộp dòng trùng theo tên bỏ dấu (`gopDuAnTrung`), lọc tiện ích là câu hỏi / tiêu đề bài viết (`tienIchDuAnSach`). Đang hỏi dự án
+→ không chen câu tư vấn. Thả cảm xúc bên mua → im. Khối DỰ ÁN dặn không nối khu khách tìm, dự án tỉnh khác thì hỏi xác nhận. (b)(c)
+`kiemTinMoiHon` (một hàm, hai nhánh đặt sau khi biết `seq` tin của mình): nhánh mua gọi NGAY TRƯỚC KHI ghi lời bot (`viecGhiTraLoi`); nhánh
+bán gọi trước khi "đủ rồi" đóng câu treo và trước khi ghi lời bot (`traLoiSeller`). Có tin khách mới hơn → completed-rỗng `superseded_luc`,
+lượt của tin cuối trả lời gộp; việc ghi (hồ sơ, fact) không mất. (d) Ý `hoi_noi_dung` (`doc-y-luot.ts`), lưới đỡ `hoiVeTin → noi_dung`;
+`guiBanNhap(…, { chi_xem })` dựng bản tin từ cột + fact (không chốt AI, không mở câu duyệt), đầu đề "📋 Bên em đang / sẽ đăng như vậy nhé
+{ac}:" (`tieuDeDau`); 🤖 ghi "Hiểu: yêu cầu của {ac}: …" (`NHAN_YEU_CAU`) thay "Không trích xuất được gì". Câu phí lúc lên kệ: `cauBaoPhi`
+(prompts.ts) "Em xin phép báo phí bên em nhé, chỉ thu khi giao dịch thành công là 1% giá chốt ạ." — `PHI_THAN` nối bằng "là", hai mức giữ.
+
+**Chỗ khác cùng lớp.** (a) Nhánh bán đã coi khối DỰ ÁN là nguồn (SRS-5.1zzzzzc); nhánh mua nay cùng luật. Lưới `cauKhoangCachKhongNguon` /
+`boDoanPhuongDiaDanh` đã đọc khối dự án trong ngữ cảnh. (b)(c) Check đầu lượt mua giữ nguyên; nhánh bán không thêm check đầu lượt (ảnh gửi theo
+album đã có cơ chế gộp theo `lucTinChu`). (d) Mọi câu hỏi về tin của mình đi `hoiVeTin` / `yeu_cau` (SRS-5.1zg) — `noi_dung` là loại thứ 12.
+
+**Kiểm.** `du-an-mua.mjs` DAM-01…16 (đỏ khi bỏ `cauDuAnCoNguon` / `gopDuAnTrung`); e2e DAM-E1…E6 (mua), DAM-S1…S3 (bán), TOIUU-02/03/07/07b
++1; `hoi-ve-tin.mjs` NOIDUNG (5 cách nói, 2 đối chứng). Cách nói mới: "gửi lại bài rao cho anh coi với", "Giá niêm yết từ 3 tỷ 792 triệu".
+e2e **1316/1316**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
