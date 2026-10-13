@@ -1718,6 +1718,7 @@ export function nhanXetKhongCanCu(
     // câu suy ra / chấm điểm → bỏ dù căn cứ có thật.
     // SRS-5.1zzzzzc (khách mô phỏng lần năm: "Dạ sổ riêng, giấy tờ gọn lắm anh chị" — giám khảo: bot không biết giấy tờ "gọn"): lợi ích bot
     // GẮN THÊM cho đặc điểm thật cũng là điều chủ nhà không nói — bỏ như suy ra / chấm điểm. Chỉ câu NHẮC LẠI đúng lời chủ nhà có căn cứ.
+    // SRS-5.1zzzzzr: `khen_nhac_lai` (khen ngắn nhắc đúng chữ chủ nhà) đi tiếp xuống kiểm căn cứ như `nhac_lai`.
     if (x?.kieu === "suy_ra" || x?.kieu === "danh_gia" || x?.kieu === "loi_ich") { bo.push(cau); continue; }
     const cc = gonKhen(x?.can_cu ?? "");
     if (cc.length >= 2 && bc.includes(` ${cc} `)) continue;

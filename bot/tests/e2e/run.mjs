@@ -1487,8 +1487,8 @@ fresh(seedKho);
     tinN.status === "da_chot" && !pend("hinh_anh", tinN.id) && db().t.reminders.every((x) => x.listing_id !== tinN.id || x.status === "cancelled") && tinN.boc_tach?.ket_thuc === "ban_roi" &&
       r.body.ngung_rao === "ban_roi" && /chúc mừng/i.test(r.body.replies[0]) && /gỡ tin/.test(r.body.replies[0]) && createCalls().length === 0,
     JSON.stringify({ st: tinN.status, body: r.body, rem: db().t.reminders }));
-  check("N3b bán được là SỰ KIỆN THẬT → bong bóng thứ hai xin chấm điểm (người thật? mấy điểm?), mở danh_gia (22/09, dời từ 'đủ rồi')",
-    r.body.xin_danh_gia === true && r.body.replies.length === 2 && /người thật/.test(r.body.replies[1]) && /mấy điểm/.test(r.body.replies[1]) && pend("danh_gia", tinN.id),
+  check("N3b bán được là SỰ KIỆN THẬT → bong bóng thứ hai xin chấm điểm trải nghiệm rao đăng (đánh giá nhân viên, mấy điểm trên 10 — chữ 13/10), mở danh_gia (22/09, dời từ 'đủ rồi')",
+    r.body.xin_danh_gia === true && r.body.replies.length === 2 && /trải nghiệm rao đăng/.test(r.body.replies[1]) && /đánh giá nhân viên/.test(r.body.replies[1]) && /mấy điểm trên 10/.test(r.body.replies[1]) && pend("danh_gia", tinN.id),
     JSON.stringify(r.body.replies));
   // FR-184: nhiều căn → hỏi căn nào; trả lời số thứ tự → đóng đúng căn; "ngưng bán" → an.
   fresh(seedKho);
@@ -3575,8 +3575,8 @@ fresh(seedKho);
     globalThis.__model.parse = () => OUT();
     const rL = await send({ external_user_id: "lung-1", text: "bán nhà hẻm 5m Trần Bình Trọng quận 5, 4x15, 4 tấm, giá 7 tỷ" });
     const LL = db().t.listings.at(-1);
-    check("LUNG-01 rao '4 tấm' (không nói lầu / lửng) → câu hỏi 'kết cấu 4 tấm đó có tính cả gác lửng không', gợi ý cất ở boc_tach",
-      rL.body.replies.some((x) => /kết cấu 4 tấm đó có tính cả gác lửng không/.test(x)) && LL.boc_tach?.lung_goi_y?.n === 4,
+    check("LUNG-01 rao '4 tấm' (không nói lầu / lửng) → câu hỏi '4 tấm đó có tính cả gác lửng không' (không chữ 'kết cấu' — 13/10 đổi 'quy mô'), gợi ý cất ở boc_tach",
+      rL.body.replies.some((x) => /4 tấm đó có tính cả gác lửng không/.test(x) && !/kết cấu/.test(x)) && LL.boc_tach?.lung_goi_y?.n === 4,
       JSON.stringify({ rep: rL.body.replies, bt: LL.boc_tach }));
     const rL2 = await send({ external_user_id: "lung-1", text: "có em" });
     const LL2 = db().t.listings.at(-1);
@@ -3626,8 +3626,8 @@ fresh(seedKho);
     await moL("lung-5");
     globalThis.__model.parse = rongL([{ khoa: "so_tang", gia_tri: "5", trich_dan: "5 tầng", can: null }]);
     const rL8 = await send({ external_user_id: "lung-5", text: "nhà anh 5 tầng em" });
-    check("LUNG-08 (chế độ ai) AI đọc so_tang 5 → hỏi 'kết cấu 5 tầng đó có tính cả gác lửng không'",
-      rL8.body.replies.some((x) => /kết cấu 5 tầng đó có tính cả gác lửng không/.test(x)), JSON.stringify(rL8.body.replies));
+    check("LUNG-08 (chế độ ai) AI đọc so_tang 5 → hỏi '5 tầng đó có tính cả gác lửng không' (không chữ 'kết cấu')",
+      rL8.body.replies.some((x) => /5 tầng đó có tính cả gác lửng không/.test(x) && !/kết cấu/.test(x)), JSON.stringify(rL8.body.replies));
     const L6 = await moL("lung-6");
     L6.boc_tach = { ...(L6.boc_tach ?? {}), lung_goi_y: { n: 6, dv: "tầng" } };
     globalThis.__model.parse = rongL();
@@ -5489,6 +5489,28 @@ fresh(seedKho);
       db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "ket_cau" && x.status === "answered"),
     JSON.stringify({ kc: f8("ket_cau"), wc: f8("so_wc"), h: f8("huong"), ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]) }));
 
+  // SRS-5.1zzzzzr (Zalo thật 13/10/2026 11:59, bác Nhà Bè): câu treo quy mô, chủ nhà "Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu." → 🤖 "Không trích
+  // xuất được gì" dù fact đã ghi; "Dtsd" vào ô dien_tich (phải là dien_tich_san). Mock: AI trả đúng ba ô → 🤖 in cả ba, ô sàn đúng chỗ.
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "ket_cau", status: "pending" });
+  db().t.listing_facts = db().t.listing_facts.filter((f) => !(f.listing_id === L8.id && ["ket_cau", "so_phong_ngu", "dien_tich_san"].includes(f.question)));
+  L8.floors = null; L8.floors_text = null; L8.bedrooms = null;
+  // Ca gốc là NHÀ PHỐ (trệt + lầu) — căn hộ thì sàn = diện tích căn (SRS-5.1zr), nên đổi loại cho đúng ca; trả lại sau.
+  const loaiL8 = L8.property_type; L8.property_type = "nha_pho";
+  // Production 13/10 04:59: AI trả `dien_tich` (trích dẫn "Dtsd: 42,8m") → kiểm bằng chứng phải đổi khoá sang `dien_tich_san`.
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: [], truong: [
+        { khoa: "ket_cau", gia_tri: "1 trệt, 1 lầu", trich_dan: "1 trệt, 1 lầu", can: null },
+        { khoa: "dien_tich", gia_tri: "42,8", trich_dan: "Dtsd: 42,8m", can: null },
+        { khoa: "so_phong_ngu", gia_tri: "2", trich_dan: "2pn", can: null },
+      ] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu." });
+  L8.property_type = loaiL8;
+  check("AIBOC-11b (ca gốc 13/10 11:59) câu treo quy mô, 'Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu.' → ghi quy mô + sàn (dien_tich_san, KHÔNG dien_tich) + 2 phòng ngủ; 🤖 in cả ba, không 'Không trích xuất được gì'",
+    f8("ket_cau").length === 1 && f8("dien_tich_san").length === 1 && f8("dien_tich").length === 0 && f8("so_phong_ngu").length === 1 &&
+      !/Không trích xuất được gì/.test(r.body.replies.join("\n")) && /quy mô/.test(r.body.replies.join("\n")) && /diện tích sàn/.test(r.body.replies.join("\n")) && /phòng ngủ/.test(r.body.replies.join("\n")),
+    JSON.stringify({ rep: r.body.replies, kc: f8("ket_cau"), san: f8("dien_tich_san"), dt: f8("dien_tich"), pn: f8("so_phong_ngu") }));
+
   // Câu treo PHƯỒNG (đường riêng — AI không quyết câu treo) nhưng fact KÈM vẫn do AI: bắn thật 21/09 mau-v-03.
   db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: L8.id, question: "phuong", status: "pending" });
@@ -6641,7 +6663,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     const nParse0 = createCalls().length;
     r = await send({ external_user_id: "z-ccrb", text: "Cho anh xin nội dung tin đăng của anh" });
     check("DAM-S1 (ca gốc) xin nội dung tin đăng → bản tin dựng từ DB ('📋 Bên em đang đăng như vậy nhé …:' + 12 Trần Hưng Đạo + 5,8 tỷ), KHÔNG gọi model viết, không 'Không trích xuất được gì'",
-      r.body.hoi_ve_tin === "noi_dung" && r.body.xem_tin === true && /📋 Bên em đang đăng như vậy nhé/.test(r.body.replies.join("\n")) && /Trần Hưng Đạo/.test(r.body.replies.join("\n")) && /5,8 tỷ/.test(r.body.replies.join("\n")) &&
+      r.body.hoi_ve_tin === "noi_dung" && r.body.xem_tin === true && /📋 Bên em đang đăng như vậy nhé/.test(r.body.replies.join("\n")) && /Trần Hưng Đạo/.test(r.body.replies.join("\n")) && /5,8 tỷ/i.test(r.body.replies.join("\n")) &&
         createCalls().length === nParse0 && !/Không trích xuất được gì/.test(r.body.replies.join("\n")) && r.body.replies.length === 1,
       JSON.stringify(r.body.replies));
     // Người chưa có tin nào xin nội dung → nói thật.
@@ -11314,8 +11336,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     await send({ external_user_id: uid, text: "sổ hồng riêng" });
     check("HTSD-04 đối chứng: tin đất → không hỏi hiện trạng sử dụng", !treoH(L).includes("hien_trang_su_dung"), JSON.stringify({ treo: treoH(L) }));
   }
-  check("HTSD-05 câu mẫu pháp lý hỏi chung 'Pháp lý giấy tờ thế nào', không còn 'sổ riêng hay sổ chung'",
-    /Pháp lý giấy tờ thế nào/.test(CAU_HOI_MAU_CODE.phap_ly ?? "") && !/sổ riêng hay sổ chung/.test(CAU_HOI_MAU_CODE["phap_ly@ban"] ?? ""), JSON.stringify({ a: CAU_HOI_MAU_CODE.phap_ly, b: CAU_HOI_MAU_CODE["phap_ly@ban"] }));
+  check("HTSD-05 câu mẫu pháp lý hỏi chung 'Pháp lý nhà mình như thế nào', không còn 'sổ riêng hay sổ chung'",
+    /Pháp lý nhà mình như thế nào/.test(CAU_HOI_MAU_CODE.phap_ly ?? "") && !/sổ riêng hay sổ chung/.test(CAU_HOI_MAU_CODE["phap_ly@ban"] ?? ""), JSON.stringify({ a: CAU_HOI_MAU_CODE.phap_ly, b: CAU_HOI_MAU_CODE["phap_ly@ban"] }));
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }

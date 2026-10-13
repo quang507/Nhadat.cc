@@ -4065,6 +4065,49 @@ album đã có cơ chế gộp theo `lucTinChu`). (d) Mọi câu hỏi về tin 
 +1; `hoi-ve-tin.mjs` NOIDUNG (5 cách nói, 2 đối chứng). Cách nói mới: "gửi lại bài rao cho anh coi với", "Giá niêm yết từ 3 tỷ 792 triệu".
 e2e **1316/1316**.
 
+### SRS-5.1zzzzzr · "Dtsd" là sàn không phải đất; 🤖 đọc fact theo giờ tin lượt này; chữ "quy mô" / "pháp lý như thế nào" / "đang ở hay để trống" / chấm điểm trải nghiệm; tiêu đề AI viết có kiểm; GIÁ in hoa dòng cuối; khen ngắn nhắc lại lời khách; kê khai thuế vào pháp lý (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 04:57–05:00Z (bác Nhà Bè, Huỳnh Tấn Phát); chủ dự án 13/10: "Có chấm điểm cho ai Trải nghiệm rao đăng vừa rồi
+để bên em đánh giá nhân viên, mấy cái kết cấu đổi thành quy mô đi. Tiêu đề nên hoa văn tí. Giá để dưới cùng in đậm lên dc ko … sao code ko b
+vs Ai bóc ko được trả lời luôn vậy. Nhà anh chị đang ở hay đang cho thuê chứ người ta có nói đang cho thuê đâu? Cái câu sổ hồng riêng đổi
+thành pháp lý như thế nào ạ đi. Khen vào"; "có kê khai thuế hằng năm các kiểu đưa vào chỗ pháp lý đi"]`
+
+**Ca gốc.** Bot hỏi "mấy tầng, có gác lửng không", chủ nhà "Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu." (04:59:04) rồi "DT 3x14" (04:59:13). Lượt 1 ghi
+`ket_cau` + `dien_tich = 42.8m2` (nguồn `ai_kiem` — AI trả khoá `dien_tich` với trích dẫn "Dtsd") + `so_phong_ngu`, nhưng 🤖 nói "Không trích
+xuất được gì từ tin này"; lượt 2 ghi `dien_tich = 3x14` đè lên. Sau đó "công chứng vi bằng" vào pháp lý đúng, "có kê khai thuế hằng năm" rơi
+`bo_sung`. Cùng ngày chủ dự án đổi chữ: "kết cấu" → "quy mô", câu sổ → "Pháp lý nhà mình như thế nào", câu hiện trạng không được bịa "đang cho
+thuê", câu chấm điểm nói rõ "đánh giá nhân viên", tiêu đề bản tin "hoa văn tí", giá xuống dòng cuối cho nổi, cho khen lại.
+
+**Lớp lỗi.** (1) Viết tắt ngành ("Dtsd", "dtxd") không có trong bộ đọc: AI xếp theo nghĩa gần nhất là `dien_tich`, kiểm bằng chứng chỉ bỏ khi
+trích dẫn có chữ "sàn / sử dụng" NGUYÊN chữ, luật `DIEN_TICH_SAN_RE` đòi đơn vị "m2". (2) Bong bóng 🤖 lấy mốc là TIN CHỦ NHÀ MỚI NHẤT trong
+hội thoại, không phải tin của lượt — hai tin tới liền thì fact lượt 1 nằm trước mốc, 🤖 trống. Cùng lớp với FR-131 (SRS-5.1zzzzzq): mọi chỗ
+"tin mới nhất" phải hỏi "mới nhất hay của lượt này?". (3) Chữ cho khách đọc rải ở câu mẫu, nhãn, câu soạn sẵn, luật prompt — đổi một chữ phải
+soát đủ bốn chỗ. (4) Pháp lý: prompt liệt kê ví dụ giấy tờ, giấy tờ KÈM tình trạng (thuế, phép xây, hoàn công) không có tên → rơi kiến thức thêm.
+
+**Sửa.** (1) `kiemDeXuat` (kiem-bang-chung.ts) đổi khoá `dien_tich` → `dien_tich_san` khi cụm trích có dtsd / dtxd / dt sd / dt xd, trừ khi đề
+xuất nói căn hộ (sàn = diện tích căn, SRS-5.1zr; `docAiChinh` đổi lại theo loại tin); `chonDeGhi` thêm hai chữ đó vào lưới cuối; prompt
+`boc-rao.ts` nói thẳng "Dtsd / DTSD / dt sử dụng / tổng sàn là `dien_tich_san`, KHÔNG phải `dien_tich`"; luật `DIEN_TICH_SAN_RE` nhận đơn vị
+"m" trần sau chữ sàn; `factKem` không ghi thêm ô sàn khi AI đã đổi sàn → diện tích ở căn hộ. (2) `baoLaiDaLuu` lấy mốc `lucTinChu` (giờ DB
+ghi chính tin lượt này), chỉ khi không có mới lấy tin mới nhất. (3) Chữ "kết cấu" → "quy mô" ở `FACT_LABELS`, `SELLER_SCRIPT_RULES`, hai câu
+soạn sẵn hỏi lửng ("Dạ 4 tấm đó có tính cả gác lửng không", "Dạ vậy quy mô nhà mình là"); `CAU_HOI_MAU.phap_ly` "Pháp lý nhà mình như thế nào
+{ac} ạ?" + ý `khop-cau-tra-loi` dặn model hỏi chung một câu; `hien_trang_su_dung` "Nhà hiện mình đang ở hay để trống {ac} ạ?" (bỏ "đang cho
+thuê" — khách chưa nói); `danh_gia` "{Ac} chấm giúp em điểm trải nghiệm rao đăng vừa rồi nha, bên em dùng để đánh giá nhân viên ạ. {Ac} cho em
+mấy điểm trên 10 ạ?". Tiêu đề: lượt khen (`khen-nhap.ts`) trả thêm `tieu_de` theo luật "Chỉ {giá} + điểm mạnh + khu"; `tieuDeHopLe`
+(khen-hop-le.ts) chỉ nhận khi 20–100 ký tự, một dòng, mở bằng "Chỉ", MỌI con số có trong bản tin (kể cả "cấp 4" phải có trong tin), không chữ
+thị trường / sinh lời / tiếng Anh quảng cáo — không qua thì giữ tiêu đề máy. Giá: `tin-nhap.ts` dòng cuối "💰 GIÁ 3,9 TỶ (còn thương lượng)"
+in hoa (Zalo không có chữ đậm). Khen: `TONE_RULES` cho khen NGẮN nhắc đúng điểm mạnh khách nói bằng chữ, lâu lâu một câu; `kiem-khen.ts` thêm
+kiểu `khen_nhac_lai` (giữ khi có `can_cu` thật). (4) Prompt `phap_ly`: "có kê khai thuế hằng năm", "đóng thuế đất đầy đủ", "có giấy phép xây
+dựng", "có hoàn công", "sổ đang cầm ngân hàng" là pháp lý, nhiều vế gộp một `gia_tri` cách nhau ", ".
+
+**Chỗ khác cùng lớp.** (1) `oTheoChuDeSoDo` đã đổi ô cho mặt tiền / ngõ (SRS-5.1zzzzzl) — "dtsd" đi cùng cửa đó, đứng ngay sau. (2) Mốc
+"tin mới nhất" còn ở `kiemTinMoiHon` (đúng chủ đích: so với tin của mình) và gộp album ảnh (`lucTinChu`, đã đúng). (3) Chữ "kết cấu" còn trong
+chú thích code / tên hàm (`ketCauChac`, khoá `ket_cau`) — không phải chữ khách đọc, giữ. (4) `KHOA_GOP` đã gộp nhiều vế pháp lý một ô.
+
+**Kiểm.** `kiem-bang-chung.mjs` ZZZZZR-K1…K1d (đỏ khi bỏ đổi khoá; cách nói mới "dtxd 120 m2", "DT SD: 80m"); e2e AIBOC-11b (nhà phố,
+AI trả `dien_tich` trích "Dtsd" → chỉ `dien_tich_san`, 🤖 in cả ba ô); `khen-nhap.mjs` TD-1…5 + TD-1b/1c; `tin-nhap-rao.mjs` dòng GIÁ in
+hoa; e2e N3b / LUNG-01 / LUNG-08 / HTSD-05 theo chữ mới. Prompt đẩy DB bằng `dong-bo-prompt --chi cau_hoi_mau,tone_rules,seller_script_rules`
+(không đụng `cau_tien_dinh` chủ dự án đã sửa tay 12/10). e2e **1370/1370**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -185,7 +185,7 @@ KHOÁ:
   trần (số nhỏ, không đơn vị, không "rộng") là mập mờ → không đưa do_rong_hem.
 - du_an: tên dự án / khu dân cư / chung cư. Tên phường, tên khu vực (Thảo Điền, An Phú) KHÔNG phải dự án.
 - huong: chỉ phương (Đông, Tây Nam…); "view sông" là view.
-- phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán", "giấy tờ thường", "giấy tay", "không có shr" cũng là câu trả lời pháp lý — ghi đúng chữ khách; nói cả hai vế "không có shr, giấy tờ thường" thì ghi vế khẳng định "giấy tờ thường"). "Thổ cư" không phải pháp lý.
+- phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán", "giấy tờ thường", "giấy tay", "không có shr" cũng là câu trả lời pháp lý — ghi đúng chữ khách; nói cả hai vế "không có shr, giấy tờ thường" thì ghi vế khẳng định "giấy tờ thường"). Giấy tờ KÈM về tình trạng pháp lý của nhà cũng là ô này, KHÔNG phải kien_thuc: "có kê khai thuế hằng năm", "đóng thuế đất đầy đủ", "có công chứng vi bằng", "có giấy phép xây dựng", "có hoàn công", "đã ra sổ", "sổ đang cầm ngân hàng" (ghi thêm the_chap) — khách nói nhiều vế thì gộp vào MỘT gia_tri cách nhau bằng ", " ("công chứng vi bằng, có kê khai thuế hằng năm"). "Thổ cư" không phải pháp lý.
 - noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue (CHỈ tin cho thuê; tin BÁN đang có người thuê thì hạn hợp đồng vào ô han_hop_dong_thue, KHÔNG vào kien_thuc), phi_quan_ly, view, hien_trang (tình trạng CĂN NHÀ: mới xây, cũ, cần sửa, bàn giao thô — còn "đang ở / đang cho thuê / để trống" là hien_trang_su_dung): chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn. "cách đường X 200m" là khoảng cách tới mặt tiền (cach_mat_tien), KHÔNG phải vi_tri — vi_tri chỉ là chỗ căn nằm (số nhà, hẻm, đường nhà ở trên). "nhà trống" / "để trống" là hien_trang_su_dung (không người ở), KHÔNG phải noi_that — noi_that chỉ ghi khi khách nói về đồ đạc (full nội thất, bàn giao thô, không nội thất).
 - gap, thuong_luong: gia_tri CHỈ là "co" hoặc "khong" (không chép cụm khách nói vào gia_tri). Hoa hồng môi giới KHÔNG phải thương lượng.
   gap đọc theo NGHĨA cả câu, có phủ định, kể cả khi bot đang hỏi câu khác:
@@ -206,7 +206,7 @@ KHOÁ:
   "co" | "khong" — đọc phủ định theo nghĩa ("chưa hoàn công", "không có thang máy" → khong). nam_xay: năm 4 chữ số.
 - Ô chữ (cụm ngắn, có dấu, bỏ từ đệm "em / nha / ạ", không thêm ý khách không nói): quy_hoach (quy hoạch, lộ giới), the_chap
   (đang thế chấp), tranh_chap, tho_cu (thổ cư bao nhiêu / full / toàn / hết thổ cư — "ko biết, toàn thổ cư" vẫn là tho_cu = "toàn thổ cư": chỉ không biết số m²), len_tho_cu, xay_dung (được xây mấy tầng, giấy
-  phép), so_phong (TỔNG số phòng cho thuê của CHDV / toà nhà / dãy trọ), dien_tich_san (TỔNG sàn xây dựng / sử dụng của NHÀ nhiều tầng; diện tích CĂN HỘ ghi dien_tich), chieu_cao
+  phép), so_phong (TỔNG số phòng cho thuê của CHDV / toà nhà / dãy trọ), dien_tich_san (TỔNG sàn xây dựng / sử dụng của NHÀ nhiều tầng — "Dtsd", "DTSD", "dt sử dụng", "tổng sàn" đều là ô này, KHÔNG phải dien_tich; diện tích CĂN HỘ ghi dien_tich), chieu_cao
   (cao thông thủy), hem_thong (hẻm thông / cụt), duong_vao (đường nhựa, bê tông…), ngap_nuoc, tien_ich_gan (tiện ích gần,
   ĐÚNG chữ khách — bài rao "Gần trường A, chợ, siêu thị B, công viên C" → tien_ich_gan là cả danh sách đó), tiem_nang (CHỈ khi khách nói
   thẳng — "dễ kinh doanh hoặc cho thuê", "phù hợp gia đình hoặc đầu tư" là tiem_nang, KHÔNG phải nhà đang cho thuê), muc_dich, hinh_dang (vuông vức, nở hậu, tóp hậu), san_vuon, pccc,

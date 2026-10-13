@@ -1217,6 +1217,19 @@ ok("ZZZZZH-K2c (đối chứng) vị trí giữ phường, diện tích giữ ng
   ok("ZZZZZI-K2 docDongY gật «ừ» trích «ừ» → dong_y", docDongYT({ la: "dong_y", trich_dan: "ừ" }, "ừ")?.la === "dong_y");
   ok("ZZZZZI-K2b docDongY trích «ừ» mà tin «chưa» → null", docDongYT({ la: "dong_y", trich_dan: "ừ" }, "chưa") === null);
 }
+// SRS-5.1zzzzzr (Zalo thật 13/10/2026 04:59Z, nhà Nhà Bè): "Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu." → AI trả `dien_tich` trích "Dtsd: 42,8m" → area_m2
+// = 42,8 (đất thật là 3x14 ở lượt sau). Viết tắt diện tích SỬ DỤNG / XÂY DỰNG là ô sàn: kiểm bằng chứng đổi khoá, không bỏ im. Căn hộ thì sàn
+// chính là diện tích căn (SRS-5.1zr) nên giữ dien_tich. Cách nói mới: "dtxd 120 m2", "DT SD: 80m".
+{
+  const a = mot("Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu.", "dien_tich", "42,8", "Dtsd: 42,8m");
+  ok("ZZZZZR-K1 (ca gốc) 'Dtsd: 42,8m' → dien_tich_san, KHÔNG dien_tich", a.dat.some((d) => d.khoa === "dien_tich_san") && !a.dat.some((d) => d.khoa === "dien_tich"), JSON.stringify(a));
+  const b = mot("nhà 3 lầu dtxd 120 m2", "dien_tich", "120", "dtxd 120 m2");
+  ok("ZZZZZR-K1b (cách nói mới) 'dtxd 120 m2' → dien_tich_san", b.dat.some((d) => d.khoa === "dien_tich_san") && !b.dat.some((d) => d.khoa === "dien_tich"), JSON.stringify(b));
+  const c = kiemDeXuat([{ khoa: "loai_bds", gia_tri: "chung_cu", trich_dan: "căn hộ" }, { khoa: "dien_tich", gia_tri: "76", trich_dan: "DT SD: 76m" }], "căn hộ DT SD: 76m 2pn");
+  ok("ZZZZZR-K1c (đối chứng) căn hộ 'DT SD: 76m' → giữ dien_tich (sàn = diện tích căn)", c.dat.some((d) => d.khoa === "dien_tich" && !c.dat.some((x) => x.khoa === "dien_tich_san")), JSON.stringify(c));
+  const d = mot("đất 5x20 100m2", "dien_tich", "100", "100m2");
+  ok("ZZZZZR-K1d (đối chứng) '100m2' không chữ sàn → dien_tich như cũ", d.dat.some((x) => x.khoa === "dien_tich"), JSON.stringify(d));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

@@ -742,6 +742,14 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {})
       const moi = oTheoChuDeSoDo(d.khoa, kdDung ?? kdCum);
       if (moi && !(deXuat ?? []).some((x) => x?.khoa === moi)) d = { ...d, khoa: moi };
     }
+    // SRS-5.1zzzzzr (Zalo thật 13/10/2026 04:59Z, nhà Nhà Bè): "Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu." → AI trả `dien_tich` trích "Dtsd: 42,8m" →
+    // area_m2 = 42,8 (đất thật "DT 3x14" tới lượt sau). Viết tắt diện tích SỬ DỤNG / XÂY DỰNG là ô SÀN với mọi loại trừ căn hộ (sàn = diện
+    // tích căn, SRS-5.1zr — `docAiChinh` đổi lại theo loại tin). Đổi khoá ở ĐÂY, một chỗ, trước mọi kiểm theo ô.
+    if (d.khoa === "dien_tich" && /\b(dtsd|dtxd|dt\s*(?:sd|xd))\b/.test(kdDung ?? kdCum) &&
+      !(deXuat ?? []).some((x) => x?.khoa === "dien_tich_san") &&
+      chuanSo((deXuat ?? []).find((x) => x?.khoa === "loai_bds")?.gia_tri ?? "").replace(/\s+/g, "_") !== "chung_cu") {
+      d = { ...d, khoa: "dien_tich_san" };
+    }
     // 30/09/2026 (bắn thật lx-ban-a): "hẻm 45 Nguyễn Trãi" → AI ghi độ rộng hẻm 45m, bản nháp in "Đường vào: 45m".
     // 45 là SỐ HẺM (số nhà), không phải bề rộng — số có trong câu nên kiểm số lọt.
     if (d.khoa === "do_rong_hem" && laSoHemKhongPhaiDoRong(tin, d.gia_tri)) { bo.push({ ...d, ly_do: "so_hem_khong_phai_do_rong" }); continue; }
@@ -1129,7 +1137,8 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
       case "dien_tich": {
         // Sàn / sử dụng / tổng-của-nhà-có-tầng / tim tường KHÔNG phải diện tích đất — luật tiền
         // định cố ý để trống `area_m2` (16/09: "diện tích tổng 240m2" của nhà 4 tấm).
-        if (/\b(san|su dung|tong|xay dung|tim tuong)\b/.test(kd) || co("dien_tich_san") || co("dien_tich_dat") || co("dien_tich_tim_tuong")) {
+        // SRS-5.1zzzzzr: "dtsd" / "dtxd" đã được `kiemDeXuat` đổi khoá sang sàn; tới đây còn là lưới cuối.
+        if (/\b(san|su dung|tong|xay dung|tim tuong|dtsd|dtxd)\b/.test(kd) || co("dien_tich_san") || co("dien_tich_dat") || co("dien_tich_tim_tuong")) {
           bo.push({ ...d, ly_do: "dien_tich_khong_phai_dat" }); continue;
         }
         // SRS-5.1zzzzzb (khách mô phỏng 11/10: "diện tích 4 mét x 16 mét" → AI dien_tich = "4 x 16", qua kiểm trích dẫn, rồi ở đây đọc SỐ ĐẦU
