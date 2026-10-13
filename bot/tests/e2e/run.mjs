@@ -10814,6 +10814,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const goiI = async (uid, text, ai) => {
     globalThis.__model = { parse: (p) => (laBocI(p) || laYI(p)) ? (ai ? { ...rongI, ...ai } : (() => { throw new Error("AI im"); })()) : OUT(), create: () => "Dạ vâng ạ." };
     const r = await send({ external_user_id: uid, text });
+    globalThis.__msCuoiI = r.body?._ms;
     return (r.body?.replies ?? []).join(" | ");
   };
   let nI = 0;
@@ -10850,10 +10851,24 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
       lrI(L).ward === "Phường Chợ Quán" && !treoI(L).includes("phuong") && !/chưa tìm thấy phường/.test(rep) && lrI(L).boc_tach?.phuong_lua_chon === false,
       JSON.stringify({ w: lrI(L).ward, treo: treoI(L), rep: rep.slice(0, 200), bt: lrI(L).boc_tach }));
   }
-  // (3) Đối chứng: phường AI nói KHÔNG nằm trong danh sách đã kể (Bến Thành — Quận 1), hay trích dẫn không có trong tin → không ghi.
-  for (const [ma, tl, ai] of [["03 (ngoài danh sách)", "cái đầu", [T("phuong", "Phường Bến Thành", "cái đầu")]], ["03b (trích không có trong tin)", "cái đầu", [T("phuong", "Phường Chợ Quán", "cái thứ hai")]]]) {
+  // (2c) Hình production 12/10 (thu-zi-phuong): model thật đặt phường ở `tra_loi`, `truong` rỗng.
+  for (const [ma, tl, cum] of [["02c (tra_loi, ca gốc production)", "cái thứ 2", "cái thứ 2"], ["02d (tra_loi, cách nói mới)", "chắc cái số hai á", "cái số hai"]]) {
     const { uid, L } = await toiCauPhuong("Trần Hưng Đạo");
-    await goiI(uid, tl, { truong: ai, tra_loi: { co_tra_loi: true, gia_tri: tl, trich_dan: tl } });
+    const rep = await goiI(uid, tl, { truong: [], tra_loi: { co_tra_loi: true, gia_tri: "Phường Chợ Quán", trich_dan: cum } });
+    check(`ZZZZZI-${ma} «${tl}», AI để phường ở tra_loi → ward Phường Chợ Quán, không "chưa tìm thấy phường"`,
+      lrI(L).ward === "Phường Chợ Quán" && !treoI(L).includes("phuong") && !/chưa tìm thấy phường/.test(rep),
+      JSON.stringify({ w: lrI(L).ward, treo: treoI(L), rep: rep.slice(0, 200) }));
+  }
+  // Đồng hồ từng lượt model (13/10/2026, "tốc độ hơi chậm"): payload `_ms.ai` liệt kê lượt AI đã gọi kèm mốc bắt đầu + thời gian.
+  {
+    const ai = globalThis.__msCuoiI?.ai ?? [];
+    check("ZZZZZI-MS lượt người bán → _ms.ai có lượt boc_rao và doc_y_luot dạng «loại bắt_đầu+thời_gian»",
+      ai.some((x) => /^boc_rao \d+\+\d+/.test(x)) && ai.some((x) => /^doc_y_luot \d+\+\d+/.test(x)), JSON.stringify(globalThis.__msCuoiI));
+  }
+  // (3) Đối chứng: phường AI nói KHÔNG nằm trong danh sách đã kể (Bến Thành — Quận 1), hay trích dẫn không có trong tin → không ghi.
+  for (const [ma, tl, ai] of [["03 (ngoài danh sách)", "cái đầu", [T("phuong", "Phường Bến Thành", "cái đầu")]], ["03b (trích không có trong tin)", "cái đầu", [T("phuong", "Phường Chợ Quán", "cái thứ hai")]], ["03c (tra_loi ngoài danh sách)", "cái đầu", null]]) {
+    const { uid, L } = await toiCauPhuong("Trần Hưng Đạo");
+    await goiI(uid, tl, ai ? { truong: ai, tra_loi: { co_tra_loi: true, gia_tri: tl, trich_dan: tl } } : { truong: [], tra_loi: { co_tra_loi: true, gia_tri: "Phường Bến Thành", trich_dan: "cái đầu" } });
     check(`ZZZZZI-${ma} «${tl}» → không ghi phường, câu phường còn treo`, !lrI(L).ward && treoI(L).includes("phuong"), JSON.stringify({ w: lrI(L).ward, treo: treoI(L) }));
   }
   // (4) Một phường (Lương Nhữ Học ở Quận 5 chỉ Chợ Lớn) → hỏi xác nhận; khách gật MỘT chữ — AI đọc gật, trích "ừ" phải qua kiểm.
