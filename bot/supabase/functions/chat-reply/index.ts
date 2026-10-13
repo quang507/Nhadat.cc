@@ -60,7 +60,7 @@ import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docKhongBiet, docNgungHangLoat, khongBietCua, giaTriKhongDoi, vaiTuCau, laChiGat, laCauHoiXacNhan } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb, boSungDiaChiTuKienThuc } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu, phuongCot, tenPhuongCot, viTriGhiDuoc } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -196,7 +196,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { coMuiBDS, donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 import { boKeRieng, canTheoAi } from "../_shared/extraction/kiem-bang-chung.ts";
-import { coCauHoi, coMenhDeDaDang, damBaoCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { coCauHoi, coMenhDeDaDang, damBaoCauHoi, suaTenRiengLechDau } from "../_shared/extraction/van-tra-loi.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { type ConThieu, dapBaoLauBan, dapHoiVeTin, hoiVeTin, LEGAL_VI, type LoaiHoiTin, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
@@ -2541,6 +2541,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const kq = chonDuong(goc, (data ?? null) as UngVienDuong[] | null, quan ?? null, phuong ?? null);
       if (kq.loai === "sua") return { viTri: theTenDuong(viTri, goc, kq.ten), goiY: null };
       if (kq.loai === "hoi") return { viTri, goiY: { goc, ten: kq.ten, vi_tri: theTenDuong(viTri, goc, kq.ten) } };
+      // SRS-5.1zzzzzy: tên đã KHỚP ĐÚNG từ điển (một hay nhiều tên cùng chữ bỏ dấu) thì không có gì để tìm theo nghĩa — tìm theo nghĩa chỉ
+      // cho tên KHÔNG có trong từ điển. 13/10: "Trương Đình Hội" khớp hai tên → tìm theo nghĩa ra "Trương Định", khách gật → đường sai.
+      if (kq.khop) return { viTri, goiY: null };
       // 30/09/2026: lệch hơn 2 ký tự ("huyn tanphat") → tìm theo nghĩa; ra tên đường thì chỉ HỎI XÁC NHẬN như gợi ý thường.
       const tenNghia = await timDuongTheoNghia(client, goc, quan);
       if (tenNghia && boDau(tenNghia) !== boDau(goc)) return { viTri, goiY: { goc, ten: tenNghia, vi_tri: theTenDuong(viTri, goc, tenNghia) } };
@@ -3543,6 +3546,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       sach = sach.map(boGachDai); mocVan("boGachDai");
       // SRS-5.1zm (03/10/2026): cả lượt chỉ một bong bóng hỏi (2–3 ý gần nhau gộp trong bong bóng đó vẫn được).
       sach = motCauHoiLuot(sach); mocVan("motCauHoiLuot");
+      // SRS-5.1zzzzzy (Zalo thật 13/10: bot "Căn Trương Đình Hối này…"): tên riêng của căn trong lời bot lệch DẤU so với tên đã biết (cột
+      // tin đầu lượt + ô vị trí / phường vừa ghi lượt này) → thay đúng tên. Lưới an toàn luôn bật, không phải van sửa văn.
+      {
+        const tenBiet: Array<string | null | undefined> = [];
+        const tenTran = (dc: string | null | undefined) => dc ? tenDuong(dc).replace(/^(?:đường|duong|phố|pho)\s+/iu, "") : null;
+        for (const t of idsTinDauLuot?.values() ?? []) tenBiet.push(t.street, t.ward, tenTran(t.location_raw));
+        for (const g of ghiLuot) if (g.question === "vi_tri") tenBiet.push(tenTran(g.ghi)); else if (g.question === "phuong") tenBiet.push(g.ghi);
+        sach = suaTenRiengLechDau(sach, tenBiet); mocVan("suaTenRiengLechDau");
+      }
       // 23/09/2026 (bắn 26 tin): "Căn góc view thoáng khó bán lắm cô" — khen mà nói ngược nghĩa.
       if (luatDu) sach = suaKhenNguocNghia(sach); mocVan("suaKhenNguocNghia");
       ackSua = null;
@@ -4194,13 +4206,27 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
                 await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
                 if (!kq.ket) return null;
                 // SRS-5.1zzzzze: số căn AI đánh theo ngữ cảnh (`can: 3` cho một mảnh một căn) đã chuẩn hoá ở `bocRaoBangModel`.
-                return docAiChinh(kiemDeXuat(kq.truong, manhChu).dat, null);
+                return docAiChinh(boSungDiaChiTuKienThuc(kiemDeXuat(kq.truong, manhChu).dat, kq.kienThuc, manhChu), null); // SRS-5.1zzzzzy
               } catch (e) {
                 await ghiLoi(client, "chat-reply gan manh(ai)", e);
                 return null;
               }
             };
-            for (const m of manh.filter((x) => !laTreo(x))) {
+            // SRS-5.1zzzzzy (Zalo thật 13/10/2026 16:15, Trương Đình Hội): một bài rao dán nguyên bị lượt gán mảnh cắt thành BA mảnh cùng về
+            // một tin → mỗi mảnh một lượt AI đọc RỜI; mảnh "Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ" không thấy "chỉ 6.950 TỶ" ở mảnh
+            // trước nên thành giá, fact giá đè giá thật. Mảnh cùng MÃ TIN (không phải MOI, không phải mảnh trả lời câu treo) gộp thành MỘT
+            // mảnh theo thứ tự xuất hiện — AI đọc cả đoạn như một câu rao, kiểm bằng chứng vẫn trên chính đoạn đó.
+            const manhGop = (() => {
+              const ra: typeof manh = []; const viTri = new Map<string, number>();
+              for (const m of manh) {
+                if (laTreo(m) || m.ma === "MOI") { ra.push(m); continue; }
+                const i = viTri.get(m.ma);
+                if (i == null) { viTri.set(m.ma, ra.length); ra.push({ ...m }); }
+                else ra[i] = { ...ra[i], trich: `${ra[i].trich}\n${m.trich}` };
+              }
+              return ra;
+            })();
+            for (const m of manhGop.filter((x) => !laTreo(x))) {
               let tin = dsMo.find((t) => t.code!.toUpperCase() === m.ma) ?? null;
               const aiManh = await docManhBangAi(m.trich);
               const factAi = aiManh ? aiManh.ghi.map((g) => ({ question: g.question, answer: g.answer })) : null;
@@ -7125,9 +7151,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
         // SRS-5.1zzzzu: loại tin còn trống → trích dẫn loại / ý giao dịch ở tin chủ nhà trước cũng nhận (`kiemYCuocRao`).
         const loaiTrong = !pendingReq.listings?.property_type || pendingReq.listings.property_type === "chua_ro";
-        const datAi = !kqAi ? [] : loaiTrong
+        // SRS-5.1zzzzzy: "Tại đường Trương Đình Hội" model xếp vào kien_thuc → thành đề xuất duong (code kiểm như đề xuất của model).
+        const datAi = !kqAi ? [] : boSungDiaChiTuKienThuc(loaiTrong
           ? kiemYCuocRao(kqAi.truong, text, tinChuNhaGoc().join("\n"), { quan: quanChacCua(pendingReq.listings), cauDangHoi: pendingReq.question }).dat
-          : kiemDeXuat(kqAi.truong, text, { quan: quanChacCua(pendingReq.listings), cauDangHoi: pendingReq.question }).dat;
+          : kiemDeXuat(kqAi.truong, text, { quan: quanChacCua(pendingReq.listings), cauDangHoi: pendingReq.question }).dat, kqAi.kienThuc, text);
         // FR-224 (25/09/2026, chủ dự án: "bắt theo nguyên cả câu của khách để AI đọc lại"): chế độ `chinh`, AI đọc NGUYÊN tin
         // và trả lời thẳng câu đang hỏi (`tra_loi`, đã kiểm trích dẫn + con số). Câu SỐ CHẶT (tiền, diện tích, kích thước) vẫn
         // lấy giá trị ô đã chuẩn hoá của AI (`giaTriChoCauTreo`); câu khác lấy nguyên câu trả lời của AI ("hẻm xe hơi vào tận
@@ -8537,8 +8564,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // "chưa rõ quận", bot hỏi lại quận khách đã nói). Người đã có tin với em mà câu này rao căn THÊM: quận CHUNG khách nói ở tin
           // trước là của cả lô — AI được trích quận từ đó (code vẫn kiểm cụm có thật trong lời khách); loại / giá / địa chỉ thì không.
           const raoCanThem = !laTinRongDangDien && (tinCuaNguoi ?? []).length >= 1;
-          const datAi = laTinRongDangDien ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n")).dat
-            : raoCanThem ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n"), {}, ["quan"]).dat : kdAi.dat;
+          const datAi = boSungDiaChiTuKienThuc(laTinRongDangDien ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n")).dat
+            : raoCanThem ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n"), {}, ["quan"]).dat : kdAi.dat, kqAi.kienThuc, textBongAi); // SRS-5.1zzzzzy
           // SRS-5.1zb: chế độ `ai` không đưa loại giao dịch đoán bằng từ khoá vào — "Chào bạn, mình cho thuê…" ("bạn" → "bán")
           // từng làm khoảng giá thành khoảng giá BÁN, giá thuê của AI bị bỏ vì ngoài khoảng.
           aiRao = { ...docAiChinh(datAi, { deal: laCheDoAi ? null : dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], textBongAi, datAi) };

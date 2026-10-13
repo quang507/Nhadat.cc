@@ -4301,6 +4301,44 @@ nhận do CODE soạn (`xac_nhan_goi_y`) vẫn là đường riêng cho 6 ô ch�
 K2/K2b/K2c (gật câu xác nhận → "80m2"; câu không xác nhận → không; số lạ → không); e2e ZZZZZX-01/02/02b/03; vi-du-boc-rao ví dụ mới. Đỏ khi hoàn
 một trong bốn chỗ sửa.
 
+### SRS-5.1zzzzzy · Tiền làm thêm không phải giá; mảnh cùng tin đọc chung; "Tại đường X" là địa chỉ; tên khớp từ điển không tìm theo nghĩa; bot không gõ sai tên khách (13/10/2026)
+
+`[nguồn: Zalo thật 13/10/2026 16:12–16:15, căn Trương Đình Hội (BDS-NP-Q8-0001); chủ dự án: "sao trích xuất 1.2 tỉ vậy, ở dưới 6.950 thì đúng"]`
+
+**Ca gốc.** Chị chủ "cần bán thêm 1 căn khác", nhắn "Tại đường Trương Đình Hội" → 🤖 in "thông tin bổ sung: Tại đường Trương Đình Hội" (AI xếp vào
+`kien_thuc`, không có đề xuất `duong`), địa chỉ không được ghi; bot đáp "Căn Trương Đình Hối này…" (model gõ sai dấu). Rồi chị dán nguyên bài rao
+"KHU NHÀ PHỐ BIỆT LẬP chỉ 6.950 TỶ … Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ - Trương Đình Hội • MT 20 mét…". Lượt gán mảnh (FR-214) cắt bài
+thành BA mảnh cùng về tin đó; mỗi mảnh một lượt AI đọc RỜI, mảnh "hoàn thiện … tầm 1,2 tỷ" không thấy "chỉ 6.950 TỶ" nên đưa `gia = 1,2 tỷ`, kiểm bằng
+chứng cho qua (số có trong cụm), fact giá 1,2 tỷ (16:15:29) đè 6.950 tỷ (16:15:22) → 🤖 "giá mong muốn: 1,2 tỷ". Cùng lúc `tim_duong("Trương Đình
+Hội")` trả HAI tên khớp đúng (Trương Đình Hợi Q4, Trương Đình Hội Q8), `chonDuong` → `giu` trơn, nơi gọi rơi xuống tìm theo nghĩa → gợi ý "Trương
+Định", khách gật → đường ghi sai.
+
+**Lớp lỗi.** (1) Kiểm tiền chỉ soát ngữ cảnh cọc / phí / hoa hồng / thuê (`TRUOC_KHONG_PHAI_GIA`), chưa biết lớp "tiền làm thêm" (hoàn thiện, nội
+thất, sửa chữa) — và vế chủ ngữ của nó dài hơn 12 ký tự. (2) Gán mảnh xử lý từng mảnh như một câu rao độc lập, kể cả khi nhiều mảnh thuộc cùng MỘT
+tin — ngữ cảnh của chính bài rao bị cắt đi. (3) `kien_thuc` nhận mọi cụm nguyên văn; cụm chỉ là CHỖ căn nằm không có đường về ô địa chỉ. (4)
+`chonDuong` trả cùng một `giu` cho hai nghĩa khác nhau ("không có trong từ điển" và "có nhưng không chọn được"), nơi gọi chỉ đọc `giu`. (5) Lời model
+không có lưới đối chiếu tên riêng với dữ liệu đã ghi — tên đường / phường của khách là dữ liệu, gõ sai là nói sai dữ liệu.
+
+**Sửa.** (1) `boc-cau-rao.ts` `TRUOC_LA_CHI_PHI` (một nguồn cho luật regex `chonGiaRao` và kiểm bằng chứng): chữ làm thêm + chữ ước lượng (tầm /
+khoảng / chừng / hết / tốn / mất / thêm) ngay trước số, hoặc "chi phí" / "tiền <việc>"; có "giá / bán / chốt" chen giữa thì vẫn là giá ("gia chủ" không
+phải "giá"). `kiem-bang-chung.ts` `giaLaChiPhiLamThem` → `gia_la_chi_phi_lam_them` ở cả kiểm đủ và kiểm nhẹ; prompt `boc-rao.ts` luật 4 + ví dụ mẫu.
+(2) `chat-reply` gán mảnh: mảnh cùng mã tin (không MOI, không mảnh trả lời câu treo) gộp thành một mảnh theo thứ tự trước khi `docManhBangAi` — AI
+đọc cả đoạn. (3) `kiem-bang-chung.ts` `diaChiTuYThem` + `boSungDiaChiTuKienThuc`: ý thêm dạng "tại / ở / trên / nằm ở + đường / hẻm + tên" → đề xuất
+`duong` + `ten_duong` (qua `kiemDeXuat`) khi model chưa đưa `duong`; `kiemKienThuc` bỏ cụm đó; nối ở ba chỗ đọc đề xuất AI (câu treo, câu rao, gán
+mảnh); prompt luật `duong`. (4) `tra-duong.ts` `KetQuaDuong.giu.khop`: khớp đúng từ điển (khách gõ đúng y một tên, hoặc nhiều tên cùng chữ bỏ dấu chưa
+biết quận) → `suaTenDuong` giữ chữ khách, KHÔNG tìm theo nghĩa. (5) `van-tra-loi.ts` `suaTenRiengLechDau` ở `traLoiSeller` (luôn bật, lưới an toàn):
+cụm trong lời bot cùng số chữ, cùng chữ bỏ dấu với tên đã biết (cột street / ward / location_raw tin đầu lượt + ô vi_tri / phuong vừa ghi lượt này)
+nhưng khác dấu → thay đúng tên; chỉ khác hoa / thường thì giữ; bong bóng code không đụng.
+
+**Chỗ khác cùng lớp.** Tiền thuê đang thu / cọc / phí đã có luật riêng (SRS cũ) — cùng bảng `TRUOC_*`, nay thêm một dòng, không rải. Mảnh "MOI" không
+gộp: hai mảnh MOI có thể là hai căn thật. Tên riêng khác (tên dự án, tên khách) chưa vào lưới (5) — dự án đi qua kho `projects`, để sau nếu thấy sai.
+
+**Kiểm.** `kiem-bang-chung.mjs` ZZZZZY-K1…K1e (đủ + nhẹ; cách nói mới "nội thất chủ làm thêm khoảng 800 triệu"; đối chứng "chỉ 6.950 TỶ", "full nội
+thất, giá 5 tỷ"), K2…K2g (địa chỉ từ ý thêm, "ở hẻm 45 Nguyễn Trãi", đối chứng "ở gần đường"); `tra-duong.mjs` khớp hai tên / đúng y / không ứng viên;
+`van-tra-loi.mjs` ZZZZZY-V1…V1e; e2e ZZZZZY-01 (ba mảnh cùng tin → một lượt AI có cả "6.950" và "hoàn thiện", giá 6,95 tỷ, không fact 1,2 tỷ),
+ZZZZZY-02 (địa chỉ ghi, không bo_sung, câu đóng), ZZZZZY-03 (tìm theo nghĩa bật mà không nhúng, không gợi ý "Trương Định"), ZZZZZY-04 ("Hối" → "Hội");
+`vi-du-boc-rao.mjs` (trần 14700). Hoàn một trong năm chỗ sửa là đỏ đúng ca đó.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

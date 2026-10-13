@@ -1927,3 +1927,38 @@ export function anCauDaDap(tin: string, cau: string | null | undefined): string 
   while (cuoi < t.length && /[?!.…]/.test(t[cuoi])) cuoi++;
   return `${t.slice(0, dau)} ${t.slice(cuoi)}`.replace(/\s+/g, " ").replace(/^[\s,;:.\-–]+|[\s,;:.\-–]+$/g, "").trim();
 }
+
+/**
+ * SRS-5.1zzzzzy (Zalo thật 13/10/2026 16:12: khách "Tại đường Trương Đình Hội", bot "Căn Trương Đình Hối này…" — model gõ sai DẤU tên
+ * đường khách vừa nói, trong khi tên đúng đang nằm trong cột tin). Tên riêng của căn (đường, phường, địa chỉ đã ghi) là chữ của KHÁCH / từ
+ * điển, không phải của model: cụm trong lời bot cùng số chữ, cùng chữ bỏ dấu với một tên đã biết nhưng khác dấu → thay đúng tên đã biết.
+ * Chỉ khác hoa / thường thì giữ nguyên lời model. Lưới an toàn (nói sai tên đường của khách là nói sai dữ liệu), không phải van sửa văn —
+ * luôn bật; bong bóng 📋 💾 🤖 📝 là chữ code ghép từ DB, không đụng.
+ */
+export function suaTenRiengLechDau(replies: string[], tenBiet: Array<string | null | undefined>): string[] {
+  const ten = [...new Set(tenBiet.map((t) => (t ?? "").normalize("NFC").replace(/\s+/g, " ").trim()).filter((t) => t.split(" ").length >= 2 && t.length >= 6 && !/\d/.test(t)))];
+  if (!ten.length) return replies;
+  const chuan = (s: string) => boDau(s).toLowerCase();
+  const loi = (w: string) => w.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "");
+  return replies.map((r) => {
+    if (/^(?:📋|💾|🤖|📝)/u.test(r)) return r;
+    const parts = r.normalize("NFC").split(/(\s+)/); // chữ và khoảng trắng xen kẽ: chỉ số chẵn là chữ
+    let doi = false;
+    for (const t of ten) {
+      const tu = t.split(" ");
+      for (let i = 0; i + (tu.length - 1) * 2 < parts.length; i += 2) {
+        const cum = tu.map((_, j) => parts[i + j * 2]);
+        if (cum.some((w) => !w || !loi(w))) continue;
+        const goc = cum.map(loi).join(" ");
+        if (chuan(goc) !== chuan(t) || goc.toLowerCase() === t.toLowerCase()) continue;
+        // Chỉ thay chữ lệch dấu; chữ chỉ khác hoa / thường ("phường" ↔ "Phường") giữ của model.
+        for (let j = 0; j < tu.length; j++) {
+          const w = loi(parts[i + j * 2]);
+          if (w.toLowerCase() !== tu[j].toLowerCase()) parts[i + j * 2] = parts[i + j * 2].replace(w, tu[j]);
+        }
+        doi = true;
+      }
+    }
+    return doi ? parts.join("") : r;
+  });
+}

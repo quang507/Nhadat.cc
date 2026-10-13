@@ -1517,5 +1517,20 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ok("ZZZZZF-V2 không truyền sổ ghi lượt (lượt soát người mua) → đi đường căn cứ thường: '16 mét' có trong lời → giữ, '4m' không → bỏ",
     bo2.length === 1 && bo2[0].startsWith("Dạ hẻm 4m"), JSON.stringify(bo2));
 }
+// SRS-5.1zzzzzy (Zalo thật 13/10/2026 16:12: bot "Căn Trương Đình Hối này…"): tên riêng lệch DẤU so với tên đã biết → thay đúng tên.
+{
+  const { suaTenRiengLechDau: sua } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  const biet = ["Trương Đình Hội", "Phường Phú Định", null, "Lê Lợi"];
+  const a = sua(["Căn Trương Đình Hối này chị muốn bán giá bao nhiêu ạ?"], biet);
+  ok("ZZZZZY-V1 (ca gốc) 'Trương Đình Hối' → 'Trương Đình Hội'", a[0] === "Căn Trương Đình Hội này chị muốn bán giá bao nhiêu ạ?", a[0]);
+  const b = sua(["Dạ nhà ở phường Phú Dinh, đường Truơng Đinh Hội đúng không anh?"], biet);
+  ok("ZZZZZY-V1b (cách nói mới) hai tên lệch dấu trong một câu, có dấu phẩy sau tên → sửa cả hai, giữ dấu phẩy",
+    b[0] === "Dạ nhà ở phường Phú Định, đường Trương Đình Hội đúng không anh?", b[0]);
+  const c = sua(["Dạ nhà ở phường Phú Định, đường Trương Đình Hội ạ.", "🤖 Hiểu: Trương Đình Hối", "Dạ đường lê lợi ạ."], biet);
+  ok("ZZZZZY-V1c (đối chứng) đúng tên → giữ; bong bóng 🤖 không đụng; chỉ khác hoa / thường → giữ",
+    c[0] === "Dạ nhà ở phường Phú Định, đường Trương Đình Hội ạ." && c[1] === "🤖 Hiểu: Trương Đình Hối" && c[2] === "Dạ đường lê lợi ạ.", JSON.stringify(c));
+  ok("ZZZZZY-V1d không có tên đã biết → trả nguyên mảng", sua(["Căn Trương Đình Hối"], [null, "Lê"]).length === 1 && sua(["Căn Trương Đình Hối"], [])[0] === "Căn Trương Đình Hối");
+  ok("ZZZZZY-V1e tên khác chữ (không chỉ lệch dấu: 'Trương Định') → không đụng", sua(["Căn Trương Định này"], biet)[0] === "Căn Trương Định này");
+}
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

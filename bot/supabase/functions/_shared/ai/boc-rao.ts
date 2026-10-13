@@ -142,6 +142,8 @@ LUẬT CỨNG (code kiểm từng trường, sai là bị bỏ):
 2. Không suy luận, không đoán, không lấy kiến thức ngoài: không tự điền quận từ tên đường/dự án, không tự đổi "3 tấm" thành số tầng khác, không tự tính diện tích nếu khách không nói diện tích hoặc ngang×dài.
 3. Giá trị phải đọc ra được từ chính cụm trích: tiền "32 tỷ" thì cụm phải có "32 tỷ".
 4. Tiền cọc, phí sang nhượng, hoa hồng, tiền thuê ĐANG THU của căn bán KHÔNG phải "gia". Tiền thuê đang thu → "thu_nhap_thue". Cọc → "tien_coc".
+   Tiền LÀM THÊM của chủ nhà (hoàn thiện, nội thất, sửa chữa, đầu tư thêm: "hoàn thiện theo ý gia chủ tầm 1,2 tỷ", "nội thất làm thêm 800
+   triệu") cũng KHÔNG phải "gia" — bài rao có giá rao ("chỉ 6.950 tỷ") thì gia là số đó; câu tiền làm thêm vào kien_thuc nguyên văn.
 5. Sửa lời ("à nhầm, 6 tỷ 5 nha", "là đất trống chứ không phải nhà") → chỉ đưa giá trị MỚI, trích đúng cụm giá trị mới.
 6. Tin rao nhiều căn → điền "can" cho từng trường.
 
@@ -170,6 +172,8 @@ KHOÁ:
 - phuong: ĐỌC THEO NGHĨA, không cần chữ "phường / xã" đứng trước — "nhà ở Vĩnh Lộc B", "bên Thảo Điền", "an hoi tay", gõ sai một hai chữ đều là nói phường. Trả tên phường MỚI ĐẦY ĐỦ đúng như DANH SÁCH PHƯỜNG gửi kèm tin nhắn (chỉ gồm các phường câu khách có thể đang nhắc; không có danh sách thì chỉ đưa phuong khi khách nói rõ "phường / xã X") ("Phường An Hội Tây", "Xã Tân Vĩnh Lộc"): khách nói tên CŨ thì đổi sang phường mới theo bảng tên cũ ("Vĩnh Lộc B" → "Xã Tân Vĩnh Lộc", "Thảo Điền" → "Phường An Khánh"); phường cũ bị chia (dấu *) sang nhiều phường mới mà câu không đủ để biết phần nào thì KHÔNG đưa phuong. KHÔNG cắt bớt chữ ("An Hội Tây" ≠ "An Hội"). trich_dan = cụm khách nói nguyên văn ("Vĩnh Lộc B"). Tên trùng tên quận cũ ("gò vấp", "phú nhuận") mà khách không nói "phường" thì là QUẬN. Phường đánh số ("phường 12", "p4") giữ số: "Phường 12".
 - duong / ten_duong CHỈ khi tin có tên đường, hẻm hoặc số nhà. Tên xã / phường / huyện / quận và kích thước ("10x50") KHÔNG phải địa
   chỉ — "đất 10x50 củ chi xã tân an hội" chỉ có quan + phuong + ngang × dài, KHÔNG đưa duong / ten_duong (code bỏ, bot sẽ hỏi đường).
+  Tin CHỈ nói chỗ căn nằm ("Tại đường Trương Đình Hội", "ở hẻm 45 Nguyễn Trãi", "nhà nằm trên đường Lê Lợi") LÀ duong + ten_duong (trích
+  "đường Trương Đình Hội"), KHÔNG phải kien_thuc.
 - duong (ĐỊA CHỈ ĐẦY ĐỦ, có dấu, như khách nói; ô này hiện dưới tên "vi_tri" trong "Thông tin đang ghi" và cap_nhat — hai tên, MỘT ô): giữ nguyên số nhà, SỐ HẺM và ĐÚNG THỨ TỰ CHỮ khách gõ — KHÔNG đảo, KHÔNG sắp xếp lại
   ("hẻm 45 Nguyễn Trãi" giữ là "hẻm 45 Nguyễn Trãi", không thành "45 hẻm Nguyễn Trãi"; "hẻm 18/5 đường Cách Mạng Tháng 8", "12/3 Lê Văn Sỹ",
   "88 hẻm Tân Kỳ Tân Quý" là khi khách gõ đúng thứ tự đó). trich_dan của duong là CỤM ĐỊA CHỈ NGUYÊN VĂN trong tin — hệ thống ghi chính cụm

@@ -21,6 +21,16 @@ ok("hai tên cùng chữ bỏ dấu, biết Quận 5 → sua theo tên có Quậ
 r = chonDuong("hoa binh", [uv("Hòa Bình", 0), uv("Hoà Bình", 0)]);
 ok("hai cách bỏ dấu 'Hòa/Hoà' cùng quận → giu", r.loai === "giu", JSON.stringify(r));
 
+// ── SRS-5.1zzzzzy (Zalo thật 13/10/2026): "Trương Đình Hội" khớp cả Hợi (Q4) lẫn Hội (Q8) → bản cũ `giu` trơn, nơi gọi đi tìm theo nghĩa, ra "Trương Định" ──
+r = chonDuong("Trương Đình Hội", [uv("Trương Đình Hợi", 0, ["Quận 4"]), uv("Trương Đình Hội", 0, ["Quận 8"])]);
+ok("khách gõ ĐÚNG Y một tên trong hai tên cùng chữ bỏ dấu, chưa biết quận → giu + khop (không tìm theo nghĩa)", r.loai === "giu" && r.khop === true, JSON.stringify(r));
+r = chonDuong("truong dinh hoi", [uv("Trương Đình Hợi", 0, ["Quận 4"]), uv("Trương Đình Hội", 0, ["Quận 8"])]);
+ok("không dấu, hai tên cùng chữ bỏ dấu, chưa biết quận → giu + khop", r.loai === "giu" && r.khop === true, JSON.stringify(r));
+r = chonDuong("Phạm Thế Hiển", [uv("Phạm Thế Hiển", 0)]);
+ok("đã đúng y từ điển → giu + khop", r.loai === "giu" && r.khop === true, JSON.stringify(r));
+ok("không ứng viên → giu KHÔNG khop (được tìm theo nghĩa)", chonDuong("huyn tanphat", []).khop !== true);
+ok("khớp gần → hoi, không khop", chonDuong("pham the hier", [uv("Phạm Thế Hiển", 1)]).loai === "hoi");
+
 // ── khớp GẦN → hỏi xác nhận, một ứng viên ──
 r = chonDuong("pham the hier", [uv("Phạm Thế Hiển", 1)]);
 ok("'pham the hier' (1 phép sửa) → hoi 'Phạm Thế Hiển'", r.loai === "hoi" && r.ten === "Phạm Thế Hiển", JSON.stringify(r));

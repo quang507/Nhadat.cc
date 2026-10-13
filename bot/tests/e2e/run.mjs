@@ -10525,6 +10525,83 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const x4 = await goi(uid, "đưa lại bản tin mà bạn rao đi", { yeu_cau: "hoi_noi_dung", yeu_cau_trich: "đưa lại bản tin mà bạn rao đi" });
     check("ZZZZZX-03 fact mặt tiền thô '80m' mà cột frontage_m trống (DB không nhận) → bản tin KHÔNG in 'mặt tiền 80m'", /📋/.test(x4.rep) && !/mặt tiền 80/.test(x4.rep), x4.rep.slice(0, 600));
   }
+  // ── SRS-5.1zzzzzy (Zalo thật 13/10 16:12–16:15, căn Trương Đình Hội): (1) bài rao dán nguyên bị gán thành 3 mảnh cùng tin, mảnh "hoàn thiện
+  // theo ý gia chủ tầm 1,2 tỷ" đọc rời thành giá đè 6.950 tỷ; (2) "Tại đường Trương Đình Hội" vào kiến thức thêm thay vì địa chỉ; (3) tên khớp
+  // hai tên từ điển (Hợi Q4 / Hội Q8) → tìm theo nghĩa gợi ý "Trương Định"; (4) bot gõ "Trương Đình Hối".
+  {
+    const RAO = "KHU NHÀ PHỐ BIỆT LẬP chỉ 6.950 TỶ. Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ - Trương Đình Hội, MT 20 mét";
+    const TIN_TDH = { deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", can_chu_duyet: true, location_raw: "đường Trương Đình Hội", street: "Trương Đình Hội",
+      ward: null, district: "Quận 8", code: "BDS-NP-XX-0002", boc_tach: { _thong_so_ai: true } };
+    const { uid, khac } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z" }, cauTreo: "duyet_tin", them: [TIN_TDH],
+      botNoi: ["Căn Trương Đình Hội này chị muốn bán giá bao nhiêu ạ?"] });
+    const LB = khac[0];
+    const ganManh = { manh: [{ trich: "KHU NHÀ PHỐ BIỆT LẬP chỉ 6.950 TỶ", ma_tin: "BDS-NP-XX-0002" }, { trich: "Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ", ma_tin: "BDS-NP-XX-0002" },
+      { trich: "Trương Đình Hội, MT 20 mét", ma_tin: "BDS-NP-XX-0002" }] };
+    const tinCua = (s) => (s.match(/Tin nhắn chủ nhà: \\"([^"]*)"/) ?? [])[1] ?? "";
+    const bocTach = [];
+    globalThis.__model = {
+      parse: (p) => {
+        if (laLuotGanManh(p)) return ganManh;
+        if (laBocY(p)) {
+          const tin = tinCua(JSON.stringify(p.messages ?? ""));
+          bocTach.push(tin);
+          // Model giả đọc như model thật 13/10: mảnh chỉ có "hoàn thiện … tầm 1,2 tỷ" (không thấy giá rao) → đưa 1,2 tỷ làm giá; thấy cả đoạn → giá rao.
+          const truong = /6\.950/.test(tin) ? [T("gia", "6.950 tỷ", "chỉ 6.950 TỶ"), T("loai_bds", "nha_pho", "NHÀ PHỐ")] : /hoàn thiện/.test(tin) ? [T("gia", "1,2 tỷ", "tầm 1,2 tỷ")] : [];
+          return { ...rongY, truong, kien_thuc: /hoàn thiện/.test(tin) ? ["Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ"] : [] };
+        }
+        return laYLuotY(p) ? { ...rongY } : OUT();
+      },
+      create: () => "Dạ em ghi rồi ạ.",
+    };
+    const r = await send({ external_user_id: uid, text: RAO });
+    const gia = fq(LB, "gia");
+    const luotHT = bocTach.filter((s) => /hoàn thiện/.test(s));
+    check("ZZZZZY-01 (ca gốc) bài rao gán thành 3 mảnh cùng tin → gộp MỘT lượt AI (mảnh 'hoàn thiện' đọc chung với 'chỉ 6.950 TỶ'); giá tin 6,95 tỷ, không fact giá 1,2 tỷ",
+      luotHT.length >= 1 && luotHT.every((s) => /6\.950/.test(s)) && Number(lr(LB).price_vnd) === 6.95e9 && !gia.some((g) => /1,2/.test(g ?? "")),
+      JSON.stringify({ luot: bocTach.length, luotHT: luotHT.length, gia, pv: lr(LB).price_vnd, reps: (r.body?.replies ?? []).slice(0, 3) }));
+  }
+  {
+    // (2)+(3)+(4) một lượt: câu treo địa chỉ, AI xếp "Tại đường Trương Đình Hội" vào kien_thuc; từ điển có cả Hợi (Q4) lẫn Hội (Q8); tìm theo
+    // nghĩa đang BẬT và sẵn sàng gợi ý "Trương Định"; model viết "Trương Đình Hối".
+    const TIN_B = { deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", can_chu_duyet: true, location_raw: null, street: null, ward: null, district: null,
+      area_m2: null, frontage_m: null, length_m: null, floors: null, floors_text: null, legal_status: null, price_raw: null, price_vnd: null, boc_tach: { _thong_so_ai: true } };
+    const { uid, L } = dung({ tin: TIN_B, cauTreo: "vi_tri", botNoi: ["Căn thứ hai này ở đâu vậy chị?"] });
+    for (const [ten, p, q] of [["Trương Đình Hợi", "Phường Khánh Hội", "Quận 4"], ["Trương Đình Hội", "Phường Phú Định", "Quận 8"]]) {
+      db().insert("duong", { ten, tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: p, quan_cu: q, nguon: "test" });
+    }
+    const env = globalThis.Deno.env; const getCu = env.get; env.get = (k) => k === "GEMINI_API_KEY" ? "gem-test" : getCu(k);
+    const chCu = globalThis.__cauHinh;
+    globalThis.__cauHinh = { ...chCu, tim_theo_nghia: "bat" };
+    let daNhung = false;
+    globalThis.__nhung = () => { daNhung = true; return Array.from({ length: 768 }, () => 0.01); };
+    globalThis.__rpc = { tim_dia_danh_theo_nghia: () => ({ data: [{ loai: "duong", ten: "Trương Định", quan_cu: "Quận 1", do_gan: 0.8 }], error: null }) };
+    const cau = "Tại đường Trương Đình Hội";
+    const y = await goi(uid, cau, { kien_thuc: [cau], truong: [] }, "Căn Trương Đình Hối này chị muốn bán giá bao nhiêu ạ?");
+    env.get = getCu; delete globalThis.__nhung; globalThis.__rpc = {}; globalThis.__cauHinh = chCu;
+    const repKhach = y.reps.filter((x) => !/^🤖/.test(x)).join(" | ");
+    check("ZZZZZY-02 (ca gốc) «Tại đường Trương Đình Hội» AI xếp vào kiến thức thêm → code đọc ra ĐỊA CHỈ: vi_tri 'đường Trương Đình Hội', KHÔNG bo_sung, câu địa chỉ đóng",
+      /Trương Đình Hội/.test(lr(L).location_raw ?? "") && !fq(L, "bo_sung").length && !treo(L).includes("vi_tri"),
+      JSON.stringify({ loc: lr(L).location_raw, st: lr(L).street, bs: fq(L, "bo_sung"), treo: treo(L), rep: y.rep }));
+    check("ZZZZZY-03 (ca gốc) tên khớp đúng HAI tên từ điển (Hợi Q4 / Hội Q8), chưa biết quận → giữ chữ khách, KHÔNG tìm theo nghĩa, không gợi ý 'Trương Định'",
+      !daNhung && !lr(L).boc_tach?.duong_goi_y && !/Trương Định/.test(repKhach), JSON.stringify({ daNhung, gy: lr(L).boc_tach?.duong_goi_y, rep: repKhach }));
+  }
+  {
+    // (4) Lời model dùng thật (không câu treo, ô kèm) mà gõ "Trương Đình Hối" — tên đúng nằm trong cột tin → lưới thay đúng tên.
+    const { uid } = dung({ tin: { ...TIN_NHA, location_raw: "đường Trương Đình Hội", street: "Trương Đình Hội", ward: null, district: "Quận 8", price_raw: null, price_vnd: null },
+      botNoi: ["Dạ em cảm ơn chị ạ."] });
+    // Đường lời model đi thật: khách hỏi ngược về dịch vụ → model trả lời (lượt soát cho qua: nhắc lại điều đã biết).
+    const cau = "căn này bên em đăng được chưa?";
+    const loi = "Dạ căn Trương Đình Hối này em còn thiếu giá nên chưa đăng ạ. Chị muốn bán giá bao nhiêu ạ?";
+    globalThis.__model = {
+      parse: (p) => laLuotSoatKhen(p) ? { nhan_xet: [{ cau: loi, khang_dinh: "chưa đăng vì thiếu giá", can_cu: "đăng được chưa", kieu: "nhac_lai", danh_gia_thi_truong: false }] }
+        : (laBocY(p) || laYLuotY(p)) ? { ...rongY, hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "dich_vu" } } : OUT(),
+      create: () => loi,
+    };
+    const z = await send({ external_user_id: uid, text: cau });
+    const repKhach = (z.body?.replies ?? []).filter((x) => !/^🤖/.test(x)).join(" | ");
+    check("ZZZZZY-04 (ca gốc) model viết 'Trương Đình Hối' → lời gửi khách sửa thành 'Trương Đình Hội' (tên đúng ở cột street của tin)",
+      /Trương Đình Hội/.test(repKhach) && !/Hối/.test(repKhach), repKhach);
+  }
   {
     // Gật trơn sau câu ĐÓNG của bot → im (không gửi gì, không gọi model); sau câu chưa đóng → "Dạ vâng ạ." tiền định.
     const { uid } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z" }, botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
