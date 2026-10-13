@@ -51,6 +51,8 @@ const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "applic
 
 const DAY = process.argv.includes("--day");
 const KEO = process.argv.includes("--keo");
+// 13/10/2026: `--chi k1,k2` — chỉ so / đẩy các khoá này (khoá khác trên DB có bản chủ dự án sửa tay, vd cau_tien_dinh 12/10, không bị đè).
+const CHI = (() => { const i = process.argv.indexOf("--chi"); return i >= 0 && process.argv[i + 1] ? new Set(process.argv[i + 1].split(",").map((x) => x.trim()).filter(Boolean)) : null; })();
 const md5 = (s) => createHash("md5").update(s ?? "").digest("hex");
 
 // Bản trong CODE: import thẳng module dùng chung, không đọc bằng regex — regex
@@ -81,7 +83,7 @@ if (KEY) {
 }
 const TU_DB = Object.fromEntries(dongDb.map((x) => [x.key, x.content]));
 
-const khoa = [...new Set([...Object.keys(TU_CODE), ...Object.keys(TU_DB)])].sort();
+const khoa = [...new Set([...Object.keys(TU_CODE), ...Object.keys(TU_DB)])].filter((k) => !CHI || CHI.has(k)).sort();
 const lech = [];
 console.log("khoá".padEnd(22), "code".padEnd(10), "DB".padEnd(10), "trạng thái");
 for (const k of khoa) {

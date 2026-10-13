@@ -10,6 +10,10 @@ on:
         description: Đẩy bản CODE lên DB (để trống = chỉ so sánh, không ghi gì)
         type: boolean
         default: false
+      chi_khoa:
+        description: "Chỉ so / đẩy các khoá này (cách nhau dấu phẩy, vd fee_rules). Trống = mọi khoá"
+        type: string
+        default: ""
 
 env:
   PROJECT_REF: rqxmmqmctpklqcmbfxuj
@@ -30,6 +34,9 @@ jobs:
       - name: So / đẩy
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+          CHI_KHOA: ${{ inputs.chi_khoa }}
         run: |
           set -euo pipefail
-          if [ "${{ inputs.day }}" = "true" ]; then bun scripts/dong-bo-prompt.mjs --day; else bun scripts/dong-bo-prompt.mjs || true; fi
+          CHI=()
+          if [ -n "$CHI_KHOA" ]; then CHI=(--chi "$CHI_KHOA"); fi
+          if [ "${{ inputs.day }}" = "true" ]; then bun scripts/dong-bo-prompt.mjs --day "${CHI[@]}"; else bun scripts/dong-bo-prompt.mjs "${CHI[@]}" || true; fi
