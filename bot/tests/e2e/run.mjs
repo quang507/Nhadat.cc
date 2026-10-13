@@ -4936,6 +4936,25 @@ fresh(seedKho);
       JSON.stringify(tTD.map((l) => [l.property_type, l.ward, l.district, l.price_raw])));
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzzzt (Zalo thật 13/10/2026 13:36): "Mình cần cho thuê nhà" → AI im về loại giao dịch → mặc định bán, 🤖 "BĐS bán". Câu mở đầu
+  // nói thẳng "cần cho thuê" là ý giao dịch rõ → tin rỗng mang deal cho_thue. Cách nói mới: "em muốn cho thuê căn hộ". Đối chứng: "cần bán nhà".
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nhà", can: null }] } : OUT();
+    r = await send({ external_user_id: "td-thue", text: "Mình cần cho thuê nhà" });
+    const tThue = db().t.listings.filter((l) => l.seller_id === db().t.sellers.find((x) => x.zalo_user_id === "td-thue")?.id);
+    check("FR250-E1c (ca gốc 13/10) 'Mình cần cho thuê nhà', AI im về loại giao dịch → tin rỗng deal cho_thue, 🤖 không 'BĐS bán'",
+      tThue.length === 1 && tThue[0].deal === "cho_thue" && !r.body.replies.some((x) => /BĐS bán|Nhà phố bán/.test(x)), JSON.stringify({ t: tThue.map((l) => l.deal), rep: r.body.replies }));
+    r = await send({ external_user_id: "td-thue-2", text: "em muốn cho thuê căn hộ" });
+    const tThue2 = db().t.listings.filter((l) => l.seller_id === db().t.sellers.find((x) => x.zalo_user_id === "td-thue-2")?.id);
+    check("FR250-E1d (cách nói mới) 'em muốn cho thuê căn hộ' → deal cho_thue", tThue2.length === 1 && tThue2[0].deal === "cho_thue", JSON.stringify(tThue2.map((l) => l.deal)));
+    r = await send({ external_user_id: "td-ban", text: "em cần bán nhà" });
+    const tBan = db().t.listings.filter((l) => l.seller_id === db().t.sellers.find((x) => x.zalo_user_id === "td-ban")?.id);
+    check("FR250-E1e (đối chứng) 'em cần bán nhà' → deal ban", tBan.length === 1 && tBan[0].deal === "ban", JSON.stringify(tBan.map((l) => l.deal)));
+    globalThis.__cauHinh = cuCH;
+  }
   // (a2) cùng loại: "em cần bán nhà" rồi câu rao NHÀ đủ chi tiết (AI chết) — tin rỗng đang hỏi địa chỉ nên câu rao bị coi là câu
   // trả lời địa chỉ, cả câu vào "bổ sung", không ra giá / diện tích (bắn thật thu-groq-02, 30/09).
   {
@@ -6730,6 +6749,35 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     check("DAM-S2 (ca gốc: 'đăng giúp anh thông tin này nhé' AI đọc là đủ rồi) 'đủ rồi' + bài rao tới ngay sau → lượt này NHƯỜNG trước khi đóng: câu treo vi_tri còn pending, chu_noi_du_at trống, không bong bóng",
       r.body.superseded === true && r.body.superseded_luc === "du_roi" && r.body.replies.length === 0 && pend("vi_tri", tin.id) && !tin.chu_noi_du_at && !db().t.messages.some((m) => m.sender === "bot" && /thôi hỏi/.test(m.body)),
       JSON.stringify({ body: r.body, pend: db().t.info_requests.filter((q) => q.listing_id === tin.id), cnd: tin.chu_noi_du_at }));
+  }
+  // SRS-5.1zzzzzt (Zalo thật 13/10 13:36): "đăng cho mình với nội dung này" khi tin RỖNG, nội dung tới 46 giây sau (không còn trong cùng
+  // lượt) → bản cũ "Dạ em thôi hỏi ạ … còn thiếu …" và đóng mọi câu. Nay: mời gửi nội dung, câu treo giữ, không đóng dấu đủ rồi.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    tin.status = "cho_thong_tin"; tin.chu_duyet_at = null; tin.price_raw = null; tin.price_vnd = null; tin.area_m2 = null;
+    tin.district = null; tin.ward = null; tin.location_raw = null; tin.project_id = null; tin.unit_code = null;
+    sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "vi_tri", status: "pending" });
+    // Production chạy chế độ `ai`: AI đọc câu này là ý định `du_roi` (không ô nào, không trả lời câu địa chỉ) — mock đúng như vậy.
+    const cuCH4 = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    const aiDu = (trich) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [],
+      tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+      cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "du_roi", trich_dan: trich } } : OUT();
+    globalThis.__model.parse = aiDu("đăng cho mình với nội dung này");
+    r = await send({ external_user_id: "z-ccrb", text: "đăng cho mình với nội dung này" });
+    check("DAM-S4 (ca gốc 13/10 13:36) tin rỗng + 'đăng cho mình với nội dung này' (chưa có nội dung) → mời gửi nội dung, KHÔNG 'thôi hỏi', câu vi_tri còn pending, không đóng dấu đủ rồi",
+      r.body.sap_gui_noi_dung === true && r.body.replies.some((x) => /gửi nội dung tin qua đây/.test(x)) && !r.body.replies.some((x) => /thôi hỏi|còn thiếu/.test(x)) &&
+        pend("vi_tri", tin.id) && !tin.chu_noi_du_at,
+      JSON.stringify({ body: r.body, pend: db().t.info_requests.filter((q) => q.listing_id === tin.id), cnd: tin.chu_noi_du_at }));
+    globalThis.__model.parse = aiDu("đủ rồi em");
+    r = await send({ external_user_id: "z-ccrb", text: "đủ rồi em" });
+    check("DAM-S4b (cách nói mới) tin rỗng + 'đủ rồi em' → cũng mời gửi nội dung (tin rỗng không có gì để đăng), không đóng",
+      r.body.sap_gui_noi_dung === true && pend("vi_tri", tin.id) && !tin.chu_noi_du_at, JSON.stringify(r.body.replies));
+    globalThis.__cauHinh = cuCH4;
+    globalThis.__model.parse = () => OUT();
   }
   fresh(seedKho);
   {

@@ -1230,6 +1230,16 @@ ok("ZZZZZH-K2c (đối chứng) vị trí giữ phường, diện tích giữ ng
   const d = mot("đất 5x20 100m2", "dien_tich", "100", "100m2");
   ok("ZZZZZR-K1d (đối chứng) '100m2' không chữ sàn → dien_tich như cũ", d.dat.some((x) => x.khoa === "dien_tich"), JSON.stringify(d));
 }
+// SRS-5.1zzzzzt (Zalo thật 13/10/2026 13:43, nhà cho thuê): "ưu tiên khách thuê lâu dài" → AI ghi thoi_han_su_dung (thời hạn sử dụng ĐẤT)
+// vì khớp "lâu dài". Cụm nói về thuê → bỏ; đất "sổ lâu dài" → giữ. Cách nói mới: "cho thuê dài hạn 5 năm".
+{
+  const a = mot("Điều kiện thuê: cọc 2 tháng, ưu tiên khách thuê lâu dài", "thoi_han_su_dung", "lâu dài", "ưu tiên khách thuê lâu dài");
+  ok("ZZZZZT-K1 (ca gốc) 'ưu tiên khách thuê lâu dài' → không ghi thời hạn sử dụng đất", !a.dat.some((d) => d.khoa === "thoi_han_su_dung") && a.bo.some((b) => b.ly_do === "thoi_han_su_dung_khong_phai_thue"), JSON.stringify(a));
+  const b = mot("cho thuê dài hạn 5 năm", "thoi_han_su_dung", "5 năm", "cho thuê dài hạn 5 năm");
+  ok("ZZZZZT-K1b (cách nói mới) 'cho thuê dài hạn 5 năm' → không ghi thời hạn sử dụng đất", !b.dat.some((d) => d.khoa === "thoi_han_su_dung"), JSON.stringify(b));
+  const c = mot("đất thổ cư, sổ lâu dài", "thoi_han_su_dung", "lâu dài", "sổ lâu dài");
+  ok("ZZZZZT-K1c (đối chứng) 'sổ lâu dài' của đất → giữ", c.dat.some((d) => d.khoa === "thoi_han_su_dung"), JSON.stringify(c));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

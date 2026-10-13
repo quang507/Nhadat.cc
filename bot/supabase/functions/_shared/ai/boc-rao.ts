@@ -146,7 +146,7 @@ LUẬT CỨNG (code kiểm từng trường, sai là bị bỏ):
 6. Tin rao nhiều căn → điền "can" cho từng trường.
 
 KHOÁ:
-- loai_giao_dich: "ban" | "cho_thue". "Sang nhượng mặt bằng / quán" là cho_thue; "sang nhượng căn hộ / nhà" là ban. Tin không nói bán hay thuê thì KHÔNG đưa.
+- loai_giao_dich: "ban" | "cho_thue". "Sang nhượng mặt bằng / quán" là cho_thue; "sang nhượng căn hộ / nhà" là ban. Câu chào mở đầu "mình cần cho thuê nhà" / "em muốn cho thuê căn hộ" / "có nhà cho thuê" CŨNG là cho_thue (trích "cần cho thuê nhà") dù chưa có dữ liệu khác; "cần bán" là ban. Tin không nói bán hay thuê thì KHÔNG đưa.
 - loai_bds: chung_cu | nha_pho | nha_cap4 | dat | biet_thu | phong_tro | mat_bang | toa_nha | dat_nong_nghiep | dat_kinh_doanh | kho_xuong. "Đất nền KDC" là dat.
   Tin RAO hay câu TẢ CĂN của người bán (kể cả KHÔNG có chữ bán / cho thuê: "nhà anh ở hẻm 137 Nguyễn Trãi", "chỗ anh 1 trệt 2 lầu")
   LUÔN đưa loai_bds khi có chữ chỉ loại, kể cả không dấu: "bán nhà", "nhà hẻm", "nhà mặt tiền", "nhà 1 trệt 2 lầu", "nhà anh ở",
@@ -210,7 +210,7 @@ KHOÁ:
   (cao thông thủy), hem_thong (hẻm thông / cụt), duong_vao (đường nhựa, bê tông…), ngap_nuoc, tien_ich_gan (tiện ích gần,
   ĐÚNG chữ khách — bài rao "Gần trường A, chợ, siêu thị B, công viên C" → tien_ich_gan là cả danh sách đó), tiem_nang (CHỈ khi khách nói
   thẳng — "dễ kinh doanh hoặc cho thuê", "phù hợp gia đình hoặc đầu tư" là tiem_nang, KHÔNG phải nhà đang cho thuê), muc_dich, hinh_dang (vuông vức, nở hậu, tóp hậu), san_vuon, pccc,
-  thoi_han_su_dung (lâu dài / 50 năm), han_hop_dong_thue (hợp đồng thuê ĐANG CHẠY của căn bán), ty_le_lap_day, phi_gui_xe,
+  thoi_han_su_dung (thời hạn sử dụng ĐẤT ghi trên sổ — "lâu dài" / "50 năm" — CHỈ đất, kho xưởng; "khách thuê lâu dài", "ưu tiên thuê lâu dài" của tin cho thuê KHÔNG phải ô này, để vào kien_thuc), han_hop_dong_thue (hợp đồng thuê ĐANG CHẠY của căn bán), ty_le_lap_day, phi_gui_xe,
   mat_do_xd, tang_cao_toi_da, tai_trong_san, toa_thap (toà / block), khu_compound, ha_tang, fit_out, duong_container (xe
   container vào được không), tram_bien_ap, xu_ly_nuoc_thai, nguon_nuoc, ranh_gioi, hinh_thuc_thue_dat (trả tiền một lần /
   hằng năm), hien_trang_su_dung (chủ ĐANG Ở / đang cho thuê / để trống — không phải hien_trang), truot_gia.
