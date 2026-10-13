@@ -540,6 +540,7 @@ Sau khi gộp: `bun run prompt --day` (khoá `cau_hoi_mau`, `cau_tien_dinh`, `se
 | Gật trơn sau câu đóng (SRS-5.1zzzzzv) | bot vừa cảm ơn / "Dạ vâng" / "báo … liền" (không hỏi) mà khách "ok" → im, không gửi gì; chưa đóng → "Dạ vâng ạ."; 🤖 "Hiểu: {ac} xác nhận, không có thông tin mới" | gật có kèm dữ liệu / câu hỏi |
 | Ghi chú / tiện ích bài rao dài (SRS-5.1zzzzzw) | 🤖 "thông tin bổ sung" in ĐỦ các ý của lượt, mỗi ý một dòng; bản nháp dòng 🏫 Tiện ích / 📝 Thêm đủ từng tiện ích kèm khoảng cách (tối đa 12 ý một lượt, mỗi ý ≤ 160 ký tự) | ý thuần số đo vẫn không vào Thêm (zzzzzu) |
 | 🏫 Tiện ích: mặt tiền (SRS-5.1zzzzzx) | chỉ in "mặt tiền Nm" từ cột `frontage_m` đã qua trigger; fact thô DB không nhận không in; số kèm m² không bao giờ thành mặt tiền / hẻm / đường | các mục tiện ích còn lại |
+| Tên riêng trong lời bot (SRS-5.1zzzzzy) | tên đường / phường của căn lệch DẤU so với tên đã ghi ("Trương Đình Hối") → in đúng tên đã ghi ("Trương Đình Hội"); 🤖 "thông tin bổ sung" không bao giờ là một câu chỉ chỗ căn nằm ("Tại đường X" → ô vị trí); 🤖 "giá mong muốn" không lấy tiền làm thêm (hoàn thiện / nội thất) | chữ chỉ khác hoa / thường, bong bóng code |
 | `FEE_RULES` | thêm: không hẹn "sẽ báo sau / báo rõ khi rao" — chưa rõ vai thì hỏi vai ngay | các mức phí, luật thuyết phục |
 | Lời ghi nhận ngoài câu treo | đọc tên ô ngắn ("độ rộng hẻm trước nhà, đường vào"), không đọc câu hỏi | câu hỏi kế (`cauHoiMau`) |
 | Câu lệnh khi khách nói không biết | "Chủ nhà nói không biết … — đáp nhẹ một tiếng là không sao, KHÔNG hỏi lại câu đó" | các câu lệnh câu treo khác |

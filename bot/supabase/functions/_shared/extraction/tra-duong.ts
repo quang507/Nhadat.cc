@@ -18,7 +18,12 @@
 //          KHÔNG có nghĩa là khách gõ sai.
 
 export type UngVienDuong = { ten: string; khoang_cach: number; quan_cu: string[] | null; phuong: string[] | null; tinh: string[] | null };
-export type KetQuaDuong = { loai: "giu" } | { loai: "sua"; ten: string } | { loai: "hoi"; ten: string };
+/**
+ * `khop` (SRS-5.1zzzzzy): tên khách gõ KHỚP ĐÚNG ít nhất một tên trong từ điển (khoảng cách 0) — không sửa gì (đã đúng, hoặc hai tên cùng chữ
+ * bỏ dấu mà chưa biết quận), nhưng nơi gọi KHÔNG được đi tìm theo nghĩa nữa: 13/10/2026 "Trương Đình Hội" khớp cả "Trương Đình Hợi" (Q4)
+ * lẫn "Trương Đình Hội" (Q8), kết quả `giu` trơn rơi xuống tìm theo nghĩa, ra gợi ý "Trương Định", khách gật → đường sai.
+ */
+export type KetQuaDuong = { loai: "giu"; khop?: boolean } | { loai: "sua"; ten: string } | { loai: "hoi"; ten: string };
 export type GoiYDuong = { goc: string; ten: string; vi_tri: string };
 
 const boDau = (s: string): string =>
@@ -36,9 +41,11 @@ export function chonDuong(goc: string, ungVien: UngVienDuong[] | null | undefine
   // Khớp ĐÚNG (khoảng cách 0): chỉ khác dấu / hoa thường.
   const dung = ds.filter((u) => u.khoang_cach === 0 && khoa(u.ten) === k);
   if (dung.length) {
+    // Khách gõ ĐÚNG Y một tên trong từ điển (có dấu) → tên đó là tên đúng, kể cả khi có tên khác cùng chữ bỏ dấu (Hội / Hợi).
+    if (dung.some((u) => u.ten === goc.trim())) return { loai: "giu", khop: true };
     const chon = dung.length === 1 ? dung[0] : (dung.filter(trongQuan).length === 1 ? dung.find(trongQuan)! : null);
-    if (!chon) return { loai: "giu" };
-    return chon.ten === goc.trim() ? { loai: "giu" } : { loai: "sua", ten: chon.ten };
+    if (!chon) return { loai: "giu", khop: true };
+    return { loai: "sua", ten: chon.ten };
   }
   // Khớp GẦN: tên đủ dài, ứng viên gần nhất là duy nhất (hoặc duy nhất trong quận đã biết).
   if (soChuCai(goc) < 6) return { loai: "giu" };

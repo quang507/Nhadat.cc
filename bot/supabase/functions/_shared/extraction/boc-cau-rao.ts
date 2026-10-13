@@ -36,6 +36,18 @@ export function dealCauRao(kd: string): "ban" | "cho_thue" {
 // Tiền KHÔNG phải giá rao: cọc, phí sang, hoa hồng, lương, doanh thu. 14/09 (đo bóng): có ranh giới
 // từ — bản trước khớp "no" trong "nói" và "luong" trong "thương lượng", bỏ mất giá thật.
 export const TRUOC_KHONG_PHAI_GIA = /\b(?:coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|(?<!thuong )luong|doanh thu|thu nhap|tra truoc|vay)\b(?:\s+\d{1,2}\s*(?:thang|th))?\s*[^\d,;]{0,12}$/;
+// SRS-5.1zzzzzy (Zalo thật 13/10/2026 16:15, bài rao Trương Đình Hội: "chỉ 6.950 TỶ … Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ" → giá
+// 1,2 tỷ đè 6.950 tỷ). Tiền đứng sau chữ LÀM THÊM (hoàn thiện, nội thất, sửa chữa, đầu tư thêm) là CHI PHÍ của chủ nhà, không phải giá rao —
+// cùng lớp TRUOC_KHONG_PHAI_GIA nhưng vế chủ ngữ dài hơn ("theo ý gia chủ tầm"), nên lùi tới 30 ký tự không số và đòi một chữ ước lượng
+// ngay trước số (tầm / khoảng / chừng / hết / tốn / mất / thêm) hoặc chữ "chi phí" / "tiền <việc>" đứng đầu. Có chữ giá / bán / chốt
+// chen giữa ("nội thất đẹp, giá 5 tỷ") thì vẫn là giá. Một nguồn cho luật regex (`chonGiaRao`) và kiểm bằng chứng AI (`kiem-bang-chung.ts`).
+const TU_LAM_THEM = "hoan thien|noi that|sua chua|sua lai|sua sang|cai tao|xay them|lam them|trang tri|dau tu|ton them|lam lai|xay dung them|thiet ke";
+// "gia" bỏ dấu vừa là "giá" vừa là "gia (chủ / đình)" — chỉ chặn khi không phải "gia chủ / gia đình".
+const KHONG_CHEN_GIA = "(?:(?!\\b(?:gia(?!\\s+(?:chu|dinh))|ban|chot)\\b)[^\\d,;.])";
+export const TRUOC_LA_CHI_PHI = new RegExp(
+  `\\b(?:chi phi|tien (?:${TU_LAM_THEM}))\\b${KHONG_CHEN_GIA}{0,30}$` +
+  `|\\b(?:${TU_LAM_THEM})\\b${KHONG_CHEN_GIA}{0,30}\\b(?:tam|khoang|chung|het|ton|mat|them)\\s*$`,
+);
 const TRUOC_LA_GIA = /(?:gia|tong|chot|ban|con|chi|muon ban)\s*(?:ban|chot|chao|mong muon|tong|thue|cho thue)?\s*:?\s*$/;
 // 29/09/2026 (kịch bản K6): "cho thuê ĐƯỢC 12 triệu một tháng" (không có "đang") cũng là thu nhập thuê — bản cũ chỉ biết
 // "đang/hiện/hợp đồng cho thuê", nên 12 triệu lọt vào ô GIÁ và có thể đè giá bán 6,8 tỷ.
@@ -63,7 +75,7 @@ export function chonGiaRao(text: string, deal: "ban" | "cho_thue", duoi: string 
   for (const m of text.matchAll(re)) {
     const truoc = kd.slice(Math.max(0, m.index! - 30), m.index!);
     const sau = kd.slice(m.index! + m[0].length, m.index! + m[0].length + 12);
-    if (TRUOC_KHONG_PHAI_GIA.test(truoc)) continue;
+    if (TRUOC_KHONG_PHAI_GIA.test(truoc) || TRUOC_LA_CHI_PHI.test(truoc)) continue;
     const moiThang = /^\s*(?:\/|mot|1|moi)?\s*(?:thang|th)\b/.test(sau) || /\/\s*(?:thang|th)\b/.test(boDau(m[0]));
     if (deal === "ban" && (TRUOC_LA_THUE.test(truoc) || moiThang)) continue;
     ung.push({ s: m[1], uuTien: TRUOC_LA_GIA.test(truoc) });

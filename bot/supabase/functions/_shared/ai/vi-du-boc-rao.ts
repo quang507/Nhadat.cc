@@ -22,6 +22,17 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // SRS-5.1zzzzzy (Zalo thật 13/10/2026, Trương Đình Hội): "chỉ 6.950 TỶ … hoàn thiện theo ý gia chủ tầm 1,2 tỷ" → gia 1,2 tỷ đè giá rao;
+    // "Tại đường Trương Đình Hội" xếp vào kien_thuc. Cách nói khác ca gốc cho cả hai.
+    cau_dang_hoi: null,
+    tin: "Bán nhà ở đường Lê Quang Định chỉ 7,5 tỷ. Nội thất gia chủ làm thêm khoảng 800 triệu, sổ hồng riêng.",
+    so_can: 1,
+    truong: [t("loai_giao_dich", "ban", "Bán nhà"), t("loai_bds", "nha_pho", "Bán nhà"), t("duong", "đường Lê Quang Định", "đường Lê Quang Định"),
+      t("ten_duong", "Lê Quang Định", "đường Lê Quang Định"), t("gia", "7,5 tỷ", "chỉ 7,5 tỷ"), t("phap_ly", "sổ hồng riêng", "sổ hồng riêng")],
+    kien_thuc: ["Nội thất gia chủ làm thêm khoảng 800 triệu"],
+    luu_y: "800 triệu là tiền chủ nhà LÀM THÊM, không phải giá — giá rao là 7,5 tỷ; \"ở đường Lê Quang Định\" là địa chỉ (duong + ten_duong), không phải kien_thuc.",
+  },
+  {
     // SRS-5.1zzzzzx (Zalo thật 13/10/2026, The Sholi): "Diện tích đất 80m²*" bị đọc thành ngang 80 → "mặt tiền 80m". Cách nói khác ca gốc.
     cau_dang_hoi: null,
     tin: "Nhà phố 2 mặt tiền đường Tên Lửa & số 7. Thiết kế 1 trệt 1 lửng 2 lầu. Diện tích đất 72m²*. Chỉ 600m tới Aeon Mall.",

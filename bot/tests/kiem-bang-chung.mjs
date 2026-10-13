@@ -8,6 +8,7 @@ import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang
 import { trichCoTrongTin as trichCoTrongTinT, docDongY as docDongYT, canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest, yLuotLech, kiemYCuocRao } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { anCauDaDap } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { diaChiTuYThem, boSungDiaChiTuKienThuc } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
 import { chiLechChinhTa, gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
@@ -1269,6 +1270,44 @@ ok("ZZZZZH-K2c (đối chứng) vị trí giữ phường, diện tích giữ ng
   const kt = kiemKienThuc(["trong hẻm làng ốc", "Lầu 1 + 2 : 3,5m x 6,5m", "Gần trung tâm thuận tiện qua các quận 1, 5, 7"], T, []);
   ok("ZZZZZU-K1 (ca gốc) 'Lầu 1 + 2 : 3,5m x 6,5m' là số đo → không vào kiến thức thêm; hai ý chữ giữ", kt.length === 2 && !kt.some((k) => /3,5m/.test(k)), JSON.stringify(kt));
   ok("ZZZZZU-K1b (cách nói mới) 'sân sau 12m2' là số đo → bỏ", kiemKienThuc(["sân sau 12m2"], "nhà có sân sau 12m2", []).length === 0);
+}
+// SRS-5.1zzzzzy (Zalo thật 13/10/2026 16:12–16:15, Trương Đình Hội): "hoàn thiện theo ý gia chủ tầm 1,2 tỷ" thành giá, đè 6.950 tỷ; "Tại đường
+// Trương Đình Hội" thành kiến thức thêm thay vì địa chỉ. Cách nói mới: "nội thất chủ làm thêm khoảng 800 triệu", "ở hẻm 45 Nguyễn Trãi".
+{
+  const RAO = "KHU NHÀ PHỐ BIỆT LẬP chỉ 6.950 TỶ. Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ - Trương Đình Hội, MT 20 mét";
+  for (const nhe of [false, true]) {
+    datKiemNhe(nhe);
+    const a = mot(RAO, "gia", "1,2 tỷ", "tầm 1,2 tỷ");
+    ok(`ZZZZZY-K1 (ca gốc, kiểm ${nhe ? "nhẹ" : "đủ"}) giá 1,2 tỷ trích "tầm 1,2 tỷ" sau "hoàn thiện theo ý gia chủ" → BỎ (tiền làm thêm)`,
+      a.dat.length === 0 && a.bo.some((b) => b.ly_do === "gia_la_chi_phi_lam_them"), JSON.stringify(a));
+    const a2 = mot(RAO, "gia", "1,2 tỷ", "hoàn thiện theo ý gia chủ tầm 1,2 tỷ");
+    ok(`ZZZZZY-K1b (trích cả vế, kiểm ${nhe ? "nhẹ" : "đủ"}) → bỏ`, a2.dat.length === 0, JSON.stringify(a2));
+    const b = mot("bán nhà hẻm Lê Quang Định 7,5 tỷ, nội thất chủ làm thêm khoảng 800 triệu", "gia", "800 triệu", "khoảng 800 triệu");
+    ok(`ZZZZZY-K1c (cách nói mới, kiểm ${nhe ? "nhẹ" : "đủ"}) "nội thất chủ làm thêm khoảng 800 triệu" → không phải giá`, b.dat.length === 0, JSON.stringify(b));
+    const c = mot(RAO, "gia", "6.950 tỷ", "chỉ 6.950 TỶ");
+    ok(`ZZZZZY-K1d (đối chứng, kiểm ${nhe ? "nhẹ" : "đủ"}) giá rao "chỉ 6.950 TỶ" vẫn nhận`, c.dat.length === 1, JSON.stringify(c));
+    const d = mot("nhà full nội thất, giá 5 tỷ", "gia", "5 tỷ", "giá 5 tỷ");
+    ok(`ZZZZZY-K1e (đối chứng, kiểm ${nhe ? "nhẹ" : "đủ"}) "full nội thất, giá 5 tỷ" có chữ giá chen giữa → nhận`, d.dat.length === 1, JSON.stringify(d));
+  }
+  datKiemNhe(false);
+  // Địa chỉ trong kiến thức thêm → đề xuất duong + ten_duong; kiemKienThuc bỏ.
+  const T = "Tại đường Trương Đình Hội";
+  ok("ZZZZZY-K2 (ca gốc) diaChiTuYThem('Tại đường Trương Đình Hội') → duong 'đường Trương Đình Hội', tên 'Trương Đình Hội'",
+    JSON.stringify(diaChiTuYThem(T)) === JSON.stringify({ duong: "đường Trương Đình Hội", tenDuong: "Trương Đình Hội" }), JSON.stringify(diaChiTuYThem(T)));
+  ok("ZZZZZY-K2b (cách nói mới) 'ở hẻm 45 Nguyễn Trãi' → duong 'hẻm 45 Nguyễn Trãi', tên 'Nguyễn Trãi'",
+    diaChiTuYThem("ở hẻm 45 Nguyễn Trãi")?.tenDuong === "Nguyễn Trãi" && diaChiTuYThem("ở hẻm 45 Nguyễn Trãi")?.duong === "hẻm 45 Nguyễn Trãi", JSON.stringify(diaChiTuYThem("ở hẻm 45 Nguyễn Trãi")));
+  ok("ZZZZZY-K2c (đối chứng) 'ở gần đường Nguyễn Trãi', 'thông ra đường Lê Lợi 200m', 'gần chợ Bà Chiểu' → không phải địa chỉ",
+    diaChiTuYThem("ở gần đường Nguyễn Trãi") === null && diaChiTuYThem("ra đường Lê Lợi 200m") === null && diaChiTuYThem("gần chợ Bà Chiểu") === null, "");
+  const kt = kiemKienThuc([T], T, []);
+  ok("ZZZZZY-K2d kiemKienThuc bỏ 'Tại đường Trương Đình Hội' (không vào bo_sung)", kt.length === 0, JSON.stringify(kt));
+  const bs = boSungDiaChiTuKienThuc([], [T], T);
+  ok("ZZZZZY-K2e boSungDiaChiTuKienThuc: AI không đưa duong → thêm đề xuất duong + ten_duong qua kiểm bằng chứng",
+    bs.some((d) => d.khoa === "duong" && d.gia_tri === "đường Trương Đình Hội") && bs.some((d) => d.khoa === "ten_duong" && d.gia_tri === "Trương Đình Hội"), JSON.stringify(bs));
+  const daCo = [{ khoa: "duong", gia_tri: "hẻm 12 Lê Lợi", trich_dan: "hẻm 12 Lê Lợi", can: null }];
+  ok("ZZZZZY-K2f (đối chứng) AI đã đưa duong → không thêm", boSungDiaChiTuKienThuc(daCo, [T], `${T}, hẻm 12 Lê Lợi`).length === 1, "");
+  const dc = docAiChinh(boSungDiaChiTuKienThuc([], [T], T), null);
+  ok("ZZZZZY-K2g docAiChinh từ đề xuất đó → vi_tri 'đường Trương Đình Hội', tenDuong 'Trương Đình Hội'",
+    dc.duong === "đường Trương Đình Hội" && dc.tenDuong === "Trương Đình Hội", JSON.stringify({ d: dc.duong, t: dc.tenDuong }));
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

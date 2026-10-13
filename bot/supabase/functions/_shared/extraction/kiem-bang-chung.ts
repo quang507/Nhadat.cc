@@ -14,7 +14,7 @@ import { docTien, giaTheoM2, TIEN_KD } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import { type CanTrongTin, trungY } from "./khop-cau-tra-loi.ts";
 import { cumPhongNguTheoTang, cungHoFact, DEM_LUNG_RO, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
-import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
+import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_CHI_PHI, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, tenPhuongCot, phuongChuan, phuongSoCuTrongCau, phuongTrongTrich, phuongTuTenCu, quanTrongCau, viTriGhiDuoc } from "./khop-phuong.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
 
@@ -444,6 +444,7 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ng
         if (/\b(coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|(?<!thuong )luong|doanh thu)\b/.test(kd)) return "ngu_canh_coc_phi_hoa_hong";
         const truoc = kdTin.slice(Math.max(0, viTri - 30), viTri);
         if (TRUOC_KHONG_PHAI_GIA.test(truoc)) return "ngu_canh_coc_phi_hoa_hong";
+        if (giaLaChiPhiLamThem(kd, kdTin, viTri)) return "gia_la_chi_phi_lam_them";
         const sau = kdTin.slice(viTri + kd.length, viTri + kd.length + 12);
         const moiThang = /\b(thang|th)\b/.test(kd) || /^\s*(?:\/|mot|1|moi)?\s*(?:thang|th)\b/.test(sau);
         if (dealCauRao(kdTin) === "ban" && (TRUOC_LA_THUE.test(truoc) || moiThang)) return "tien_thue_khong_phai_gia_ban";
@@ -617,6 +618,18 @@ function tienCatThieu(tin: string, trich: string, b: number): boolean {
   const b2 = docTien(`${trich} ${m[1]}`);
   return b2 != null && b2 !== b;
 }
+/**
+ * SRS-5.1zzzzzy (Zalo thật 13/10/2026, Trương Đình Hội): "Bên trong hoàn thiện theo ý gia chủ tầm 1,2 tỷ" → AI đưa gia 1,2 tỷ, kiểm cho qua
+ * (số có trong cụm) và fact giá đè 6.950 tỷ của câu rao. Số tiền trong cụm mà chữ đứng TRƯỚC nó (trong cụm hoặc 40 ký tự trước cụm trong
+ * tin) là chữ làm thêm + chữ ước lượng (`TRUOC_LA_CHI_PHI`, một nguồn với luật regex) → không phải giá.
+ */
+function giaLaChiPhiLamThem(kd: string, kdTin: string, viTri: number): boolean {
+  const viTien = kd.search(/\d/);
+  if (viTien < 0) return false;
+  const dau = viTri >= 0 ? viTri + viTien : kdTin.indexOf(kd) + viTien;
+  const truocTien = dau >= 0 ? kdTin.slice(Math.max(0, dau - 40), dau) : kd.slice(0, viTien);
+  return TRUOC_LA_CHI_PHI.test(truocTien);
+}
 function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ngu: NguCanhKiem = {}): string | null {
   const v = d.gia_tri.trim();
   const kd = kdCumSua ?? chuanSo(d.trich_dan);
@@ -632,6 +645,9 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string,
       // Bắn thử 01/10 (lx-ai-08): "3 tỏi 9 TL" → AI trích "3 tỏi" (giá 3 tỷ) và đẩy "9 TL" sang thương lượng. Ngay sau cụm
       // trích còn một số lẻ không đơn vị mà đọc gộp ra số tiền KHÁC → AI cắt thiếu, bỏ để luật tiền đọc nguyên cụm.
       if (tienCatThieu(tin, d.trich_dan, b)) return "tien_cat_thieu";
+      // SRS-5.1zzzzzy: tiền làm thêm (hoàn thiện / nội thất / sửa chữa) không phải giá — kiểm nhẹ cũng chặn, vì đây là ngữ cảnh
+      // tiền (cùng họ cọc / phí / thuê), không phải đoán nghĩa chữ.
+      if (d.khoa === "gia" && giaLaChiPhiLamThem(kd, chuanSo(tin), viTri)) return "gia_la_chi_phi_lam_them";
       return null;
     }
     case "gia_m2": case "so_tang": case "quan": case "phuong":
@@ -2066,6 +2082,32 @@ export function boKeRieng(kienThuc: string[], keRieng: string[]): string[] {
   const rieng = keRieng.filter((x) => (x ?? "").trim().length >= 3);
   return kienThuc.filter((k) => !rieng.some((r) => trungY(k, r)));
 }
+/**
+ * SRS-5.1zzzzzy (Zalo thật 13/10/2026 16:12: "Tại đường Trương Đình Hội" → model xếp vào kien_thuc, 🤖 in "thông tin bổ sung: Tại đường
+ * Trương Đình Hội", địa chỉ căn không được ghi, bot vẫn gọi tên đường trong lời đáp). Ý thêm CHỈ NÓI CHỖ căn nằm ("tại / ở / trên / nằm ở +
+ * đường / hẻm / ngõ + tên") là ĐỊA CHỈ, không phải kiến thức thêm: `kiemKienThuc` bỏ nó; `boSungDiaChiTuKienThuc` đổi thành đề xuất duong +
+ * ten_duong (qua `kiemDeXuat` như đề xuất của model) khi model chưa đưa duong. "ở gần đường X", "ra đường X 200m" là chỗ ĐI TỚI, không phải.
+ */
+const CHI_CHO_RE = /^(?:nha\s+)?(?:nam\s+)?(?:tai|o|tren|thuoc|ngay)\s+((?:duong|hem|ngo|pho)\s+\S.{1,45})$/;
+export function diaChiTuYThem(k: string): { duong: string; tenDuong: string } | null {
+  const v = String(k ?? "").replace(/\s+/g, " ").trim().replace(/[.!?,;]+$/, "");
+  const m = CHI_CHO_RE.exec(chuanSo(v));
+  if (!m || /\b(?:gan|cach|ra|toi|den|di|phut|met|m|m2)\b/.test(m[1])) return null;
+  const duong = v.replace(/^(?:nhà\s+|nha\s+)?(?:nằm\s+|nam\s+)?(?:tại|tai|ở|o|trên|tren|thuộc|thuoc|ngay)\s+/iu, "").trim();
+  const tenDuong = duong.replace(/^(?:đường|duong|phố|pho)\s+/iu, "").replace(/^(?:hẻm|hem|ngõ|ngo)\s+(?:[0-9][0-9a-z/]*\s+)?/iu, "").trim();
+  if (!tenDuong || tenDuong.split(" ").length > 6) return null;
+  return { duong, tenDuong };
+}
+export function boSungDiaChiTuKienThuc(dat: DeXuat[], kienThuc: string[] | null | undefined, tin: string): DeXuat[] {
+  if (dat.some((d) => d.khoa === "duong")) return dat;
+  for (const k of kienThuc ?? []) {
+    const dc = diaChiTuYThem(k);
+    if (!dc) continue;
+    const them = kiemDeXuat([{ khoa: "duong", gia_tri: dc.duong, trich_dan: dc.duong, can: null }, { khoa: "ten_duong", gia_tri: dc.tenDuong, trich_dan: dc.duong, can: null }], tin).dat;
+    if (them.some((d) => d.khoa === "duong")) return [...dat, ...them];
+  }
+  return dat;
+}
 export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daGhi: readonly string[] = []): string[] {
   const kdTin = chuanSo(tin);
   const daCo = dat.map((d) => chuanSo(d.trich_dan));
@@ -2087,6 +2129,8 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daG
     // SRS-5.1zzzzzu (chủ dự án 13/10: "lầu 1+2 3.5x6.5m dư, thông tin ghi đủ đúng vào trong ô bóc tách thôi ko dc ghi nhiều chỗ quá"):
     // mảnh chỉ là SỐ ĐO (kích thước "3,5m x 6,5m", "45m2", "ngang 4") thuộc về ô số, không phải kiến thức thêm — không in ra "📝 Thêm".
     if (/\d+(?:[.,]\d+)?\s*m?\s*x\s*\d+(?:[.,]\d+)?\s*m?\b/.test(kd) || /^(?:[a-z+ ]{0,20})?\d+(?:[.,]\d+)?\s*(?:m2|m|met)\s*$/.test(kd)) continue;
+    // SRS-5.1zzzzzy: "Tại đường Trương Đình Hội" là địa chỉ (ô vi_tri), không phải kiến thức thêm.
+    if (diaChiTuYThem(v)) continue;
     // 21/09/2026 (bắn thật mau-v-03): "để em coi lại sổ rồi báo" là LỜI HỨA / lời nói chuyện của chủ
     // nhà, không phải điều gì về căn nhà — không vào mô tả.
     if (LOI_NOI_CHUYEN.test(kd)) continue;
