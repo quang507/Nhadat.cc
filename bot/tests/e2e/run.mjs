@@ -1352,9 +1352,11 @@ fresh(seedKho);
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
     r.body.ban_nhap === true && r.body.diem >= 70 && /Em sẽ rao như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
       // 24/09/2026 (chủ dự án): câu cuối bản nháp = "👉 Có khách quan tâm là <tên trợ lý> báo lại <cách gọi> liền ạ.", đứng SAU CÙNG.
-      // 13/10/2026 (chủ dự án): bản nháp HAI bong bóng — bong bóng tin rao không có "Độ đầy đủ"; bong bóng kế mở bằng "Độ đầy đủ", kết bằng 👉.
-      !/nhắn Zalo cho em/.test(nhap) && (() => { const i = r.body.replies.findIndex((x) => /Em sẽ rao như vầy/.test(x)); const sau = r.body.replies[i + 1] ?? "";
-        return i >= 0 && !/Độ đầy đủ|👉/.test(r.body.replies[i]) && /^Độ đầy đủ \d+\/100/.test(sau) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(sau); })() && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ rao như vầy/.test(prompt(c))) &&
+      // 13/10/2026 (chủ dự án): bản nháp HAI bong bóng — bong bóng tin rao không có "Độ đầy đủ"; bong bóng kế mở bằng "Độ đầy đủ".
+      // 13/10/2026 tối (SRS-5.1zzzzzza, chủ dự án "câu này tách ra với câu dưới"): câu điểm KHÔNG kèm câu hỏi duyệt / 👉 — bong bóng thứ ba mang
+      // câu hỏi duyệt và kết bằng 👉.
+      !/nhắn Zalo cho em/.test(nhap) && (() => { const i = r.body.replies.findIndex((x) => /Em sẽ rao như vầy/.test(x)); const sau = r.body.replies[i + 1] ?? ""; const hoi = r.body.replies[i + 2] ?? "";
+        return i >= 0 && !/Độ đầy đủ|👉/.test(r.body.replies[i]) && /^Độ đầy đủ \d+\/100/.test(sau) && !/👉/.test(sau) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(hoi); })() && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ rao như vầy/.test(prompt(c))) &&
       pend("duyet_tin") && H.status === "cho_thong_tin",
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });
@@ -6796,6 +6798,31 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     check("DAM-S3 lời bot soạn xong mà tin chủ nhà mới hơn đã vào → nhường trước khi gửi, không ghi lời bot vào messages",
       r.body.superseded === true && r.body.superseded_luc === "truoc_gui" && r.body.replies.length === 0 && db().t.messages.filter((m) => m.sender === "bot").length === nBot,
       JSON.stringify(r.body));
+  }
+  // SRS-5.1zzzzzzb (Zalo thật 13/10/2026 17:22–17:23): lượt trả lời câu cuối soạn BẢN NHÁP + mở câu chờ duyet_tin, rồi nhường lượt vì tin
+  // mới hơn → bản nháp không tới khách mà câu duyệt vẫn mở; lượt ảnh sau nói "Bản nháp ở trên … nhắn ok" dù chưa có bản nháp nào.
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-nhap-rut", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0119", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", gap: false, location_raw: "Sunrise City", ward: "Phường 4", price_raw: "3 tỷ 9", price_vnd: 3.9e9, area_m2: 70, floor: 12, legal_status: "so_hong_rieng", can_chu_duyet: true }).data;
+    for (const [q, a] of [["phi_quan_ly", "phí quản lý 20 nghìn/m2"], ["so_phong_ngu", "2 phòng ngủ"], ["so_wc", "2 WC"], ["hien_trang_su_dung", "đang để trống"], ["hinh_anh", "https://x/1.jpg"]]) {
+      d.insert("listing_facts", { listing_id: l.id, question: q, answer: a, source: "seller_chat" });
+    }
+    d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
+  });
+  {
+    const tinR = db().t.listings.find((l) => l.code === "BDS-Q5-0119");
+    globalThis.__afterInsertMsgSeller = (d, m) => d.insert("messages", { conversation_id: m.conversation_id, sender: "seller", body: "[khách gửi ảnh] [ảnh: https://x/sau.jpg]", zalo_msg_id: `nhap-rut-${Date.now()}` });
+    r = await send({ external_user_id: "z-nhap-rut", text: "để ở hoặc cho thuê đều được" });
+    check("NHAPRUT-01 lượt soạn bản nháp mà tin mới hơn đã vào → nhường lượt, KHÔNG ghi 📋, câu chờ duyet_tin vừa mở bị đóng (trạng thái khớp điều khách thấy)",
+      r.body.superseded === true && r.body.superseded_luc === "truoc_gui" && r.body.nhap_rut === true && !db().t.messages.some((m) => m.sender === "bot" && /📋/.test(m.body ?? "")) &&
+        !pend("duyet_tin", tinR.id) && db().t.info_requests.some((q) => q.listing_id === tinR.id && q.question === "duyet_tin" && q.status === "expired"),
+      JSON.stringify({ body: r.body, ir: db().t.info_requests.filter((q) => q.listing_id === tinR.id).map((q) => [q.question, q.status]) }));
+    // Lượt kế (tin mới hơn được xử lý): hết câu hỏi → gửi bản nháp THẬT, không nói "Bản nháp ở trên" khi chưa có bản nháp.
+    r = await send({ external_user_id: "z-nhap-rut", text: "xây được 6 tầng" });
+    const repR = r.body.replies.join("\n");
+    check("NHAPRUT-02 lượt kế → gửi 📋 bản nháp thật (câu duyệt mở lại); không có câu 'Bản nháp ở trên' đứng một mình khi sổ chưa có 📋",
+      /📋 Em sẽ rao như vầy/.test(repR) && pend("duyet_tin", tinR.id) && !(/Bản nháp ở trên/.test(repR) && !/📋/.test(repR)),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === tinR.id).map((q) => [q.question, q.status]) }));
   }
   // FR-220 (24/09/2026): câu hỏi bù "có tầng lửng, sân thượng hay tầng hầm không" → phần CÓ chen vào kết cấu chữ.
   fresh(seedKho);

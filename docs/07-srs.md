@@ -4392,8 +4392,36 @@ duyệt + 👉 bong bóng riêng (`chat-reply` hai chỗ gửi).
 **Chỗ khác cùng lớp.** Mọi đường đọc `cap_nhat` nay cùng một `dangGhiCua`. Lưới (3) chỉ cho ô giá; sửa diện tích / phường lúc duyệt đi đường AI
 (đã có ô trong danh sách đang ghi).
 
+**Hồi quy bắt ở CI sau khi merge (13/10 tối, e2e H5 / H7).** Bản nháp thành BA bong bóng làm `soLuotTreo` (SRS-5.1zzzzo) đếm sai: nó đếm
+lượt khách trên cửa sổ lịch sử 9 dòng `lichSuRows`, cửa sổ đó đếm cả bong bóng bot, bot nói nhiều bong bóng là lượt khách cũ rơi ra và
+"phí sao em?" lúc chờ duyệt thành lượt bên lề thay vì câu hỏi ngược. Lớp lỗi: ĐẾM LƯỢT KHÁCH trên một cửa sổ cắt theo tổng số dòng.
+Sửa: đếm trên `lichSuDai` (40 dòng). Cùng lớp còn `daNoiPhiRoi()` và `botDaNoiGan()` (đọc 9 dòng / 8 dòng bot) — chưa thấy ca sai,
+để nguyên; thêm bong bóng cố định vào một lượt thì nhớ ba chỗ này. Bài kiểm đỏ khi tắt bản sửa: e2e H7.
+
 **Kiểm.** `tin-nhap-rao.mjs` HAIBONG-1/2 (ba phần), `vi-du-boc-rao.mjs`, `kieu:bot`; bộ e2e chạy ở CI (chủ dự án 13/10: lỗi phát hiện khi test
 thì sửa và deploy thẳng, không chờ e2e).
+
+### SRS-5.1zzzzzzb · Nhường lượt mà lời mang bản nháp → đóng câu chờ duyệt vừa mở (13/10/2026)
+
+**Ca gốc (Zalo thật 13/10 17:22–17:23, đất Q8).** Chủ nhà nhắn liền ba tin: "xây được 6 tầng" (17:22:40), "Đất có sổ đỏ chính chủ"
+(17:22:50), rồi hai ảnh (17:22:58, 17:23:08). Lượt tin 2 ghi pháp lý, hết câu hỏi → soạn bản nháp, MỞ câu chờ `duyet_tin` (17:23:04),
+rồi tới chỗ gửi thì thấy ảnh đã vào → nhường lượt (SRS-5.1zzzzzq): bản nháp KHÔNG tới khách, câu chờ vẫn mở. Lượt ảnh thấy
+`duyet_tin` nên kết bằng "Bản nháp ở trên anh chị thấy được thì nhắn ok" trong khi khách chưa thấy bản nháp nào. Sổ lỗi trống —
+không chỗ nào hỏng, chỉ là trạng thái DB không khớp điều khách thấy.
+
+**Lớp lỗi.** Lượt nhường (không gửi lời) nhưng ĐÃ ghi tác dụng phụ của lời đó (mở câu chờ cho một câu hỏi / bản nháp chưa nói). Lượt sau
+đọc câu chờ và tin rằng khách đã nghe.
+
+**Sửa (một chủ).** Đường nhường lượt trong `traLoiSeller`: lời mang bản nháp (`ban_nhap` + `nhap_cua`) mà nhường → đóng (`expired`) câu
+chờ `duyet_tin` của tin đó mở TRONG lượt này (`created_at ≥` giờ tin chủ nhà vừa ghi; câu duyệt của bản nháp đã gửi trước đó giữ nguyên),
+meta `nhap_rut`. Lượt sau hết câu hỏi thì soạn và gửi bản nháp như thường (SRS-5.1zzzy).
+
+**Chỗ khác cùng lớp.** Câu hỏi thường mở trong lượt nhường (ca gốc: lượt "xây được 6 tầng" mở `mat_tien` rồi nhường) — câu chờ còn
+nhưng khách chưa nghe; lượt sau vẫn hỏi lại nó (r2b "quay lại câu đang hỏi"), chỉ lệch ở câu lệnh model nói "em vừa hỏi". Chưa đổi.
+Lượt ảnh khi KHÔNG còn câu chờ nào mà tin đã đủ điểm: chỉ khen ảnh, bản nháp chờ tới tin chữ kế của khách. Chưa đổi, ghi để theo dõi.
+
+**Kiểm.** e2e `NHAPRUT-01` (nhường lượt lúc soạn nháp → không 📋, câu duyệt đóng, `nhap_rut`), `NHAPRUT-02` (lượt kế gửi 📋 thật, không
+"Bản nháp ở trên" đứng một mình). Tắt bản sửa thì NHAPRUT-01 đỏ (câu duyệt còn pending).
 
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 

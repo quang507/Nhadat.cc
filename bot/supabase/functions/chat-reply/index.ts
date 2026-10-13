@@ -3680,7 +3680,19 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         try { moiHon = await kiemTinMoiHon(); } catch (e) { await ghiLoi(client, "chat-reply kiem tin moi hon (ban)", e); }
         if (moiHon) {
           console.log("chat-reply: tin chủ nhà mới hơn tới trước khi gửi → nhường lượt");
-          return await hoanTat({ reply: null, replies: [], role: "seller", superseded: true, superseded_luc: "truoc_gui", ...extra });
+          // SRS-5.1zzzzzzb (Zalo thật 13/10/2026 17:22–17:23): lượt "Đất có sổ đỏ chính chủ" soạn BẢN NHÁP và đã mở câu chờ `duyet_tin`,
+          // rồi nhường lượt vì ảnh tới — bản nháp KHÔNG tới khách mà câu chờ vẫn mở; lượt ảnh thấy `duyet_tin` nên nói "Bản nháp ở trên…
+          // nhắn ok" trong khi chưa có bản nháp nào. Trạng thái phải khớp điều khách thấy: nhường lượt mà lời mang bản nháp thì đóng
+          // câu chờ duyệt vừa mở (chỉ câu mở TRONG lượt này — câu duyệt của bản nháp đã gửi trước đó giữ nguyên); lượt sau hết câu
+          // hỏi sẽ soạn và gửi bản nháp lại như thường.
+          let nhapRut = false;
+          if (extra.ban_nhap === true && typeof extra.nhap_cua === "string" && lucTinChu) {
+            const { error: rutErr } = await client.from("info_requests").update({ status: "expired" })
+              .eq("listing_id", extra.nhap_cua).eq("question", "duyet_tin").eq("status", "pending").gte("created_at", lucTinChu);
+            if (rutErr) await ghiLoi(client, "chat-reply rut cau duyet (nhuong luot)", rutErr.message);
+            else nhapRut = true;
+          }
+          return await hoanTat({ reply: null, replies: [], role: "seller", superseded: true, superseded_luc: "truoc_gui", ...(nhapRut ? { nhap_rut: true } : {}), ...extra });
         }
       }
       // MỘT câu INSERT cho cả loạt bong bóng (FR-171 h): `seq` là identity nên
@@ -6385,7 +6397,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo duyet_tin", irErr.message);
       const { nhap_cu: _nc, ...extraGui } = extra;
       const nhapHai = soanTinNhapHaiBong({ ...thamNhap, lai, ...(await layKhen()) });
-      return await traLoiSeller([...truoc, nhapHai.than, ...(nhapHai.duoi ? [nhapHai.duoi] : []), ...(nhapHai.hoi ? [nhapHai.hoi] : [])], { ...extraGui, ban_nhap: true, diem: d.diem });
+      // SRS-5.1zzzzzzb: `nhap_cua` để đường nhường lượt biết câu duyệt nào vừa mở cho bản nháp này.
+      return await traLoiSeller([...truoc, nhapHai.than, ...(nhapHai.duoi ? [nhapHai.duoi] : []), ...(nhapHai.hoi ? [nhapHai.hoi] : [])], { ...extraGui, ban_nhap: true, nhap_cua: listingId, diem: d.diem });
     }
     /**
      * SRS-5.1zzzy (bắn production 09/10/2026): HẾT câu để hỏi trước bản nháp → việc kế là MỘT: gửi bản nháp; chưa đủ điểm thì
@@ -7695,7 +7708,13 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // cũng không né nó (không nói sang ô khác). Câu đó vẫn mở, trả lời chuyện bên lề rồi quay lại nó (r2b) — không chọn câu kế.
         // Chặn trên: đã có hai lượt khách từ lúc mở câu mà chưa trả lời (câu đã hỏi ba lần) → thôi như cũ, để không hỏi dồn.
         const moCau = pendingReq.created_at ?? null;
-        const soLuotTreo = moCau ? lichSuRows.filter((m) => laTinNguoi(m.sender) && !!m.created_at && m.created_at > moCau).length : 0;
+        // SRS-5.1zzzzzza (e2e H7 đỏ sau khi bản nháp thành BA bong bóng): đếm trên `lichSuDai` (40 dòng), không trên cửa sổ 9 dòng
+        // `lichSuRows` — cửa sổ đó đếm cả bong bóng bot, bot nói nhiều bong bóng là lượt khách cũ rơi khỏi cửa sổ và số đếm sai.
+        // Đếm lượt khách TRƯỚC lượt này (tin vừa nhắn đã nằm trong sổ ở dòng mới nhất — bỏ nó, như `lichSuRows` đã bỏ).
+        const soLuotTreo = moCau
+          ? ((lichSuDai ?? []) as Array<{ sender: string; created_at?: string | null }>)
+            .filter((m, i) => !(i === 0 && laTinNguoi(m.sender)) && laTinNguoi(m.sender) && !!m.created_at && m.created_at > moCau).length
+          : 0;
         const luotBenLe = !kq.chuyenSang && !kemLech.length && !daGhiChuLech && kq.loai !== "xung_ho" && kq.loai !== "ack" &&
           (!!hoiNguoc || !!vaiTuNoiLuot) && soLuotTreo < 2;
         // SRS-5.1zzzzz: chủ nhà nói KHÔNG BIẾT điều đang hỏi → thôi câu, kể cả khi họ có nói một phần (chỉ quận / chỉ xã) — hỏi tiếp
