@@ -238,7 +238,7 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("ZZZZZ-T1 (ca gốc) 'cũ, còn sử dụng được' (kết cấu) + 'cũ rồi nhưng còn sử dụng được' (hiện trạng) → ý in một lần", (b1.match(/sử dụng được/g) ?? []).length === 1 && !/🏠/u.test(b1), b1);
   const khac = { ...NHA_PHO, facts: [...goc, { question: "hien_trang", answer: "mới sơn lại" }, { question: "hien_trang_su_dung", answer: "đang cho thuê" }] };
   const b2 = soanTinNhap({ l: NHA_PHO.l, facts: khac.facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
-  la("ZZZZZ-T2 đối chứng 'mới sơn lại' + 'đang cho thuê' (hai ý) → giữ cả hai dòng", /📝 Thêm: mới sơn lại · đang cho thuê/u.test(b2), b2);
+  la("ZZZZZ-T2 đối chứng 'mới sơn lại' + 'đang cho thuê' (hai ý) → giữ cả hai dòng", /📝 Thêm: mới sơn lại · hiện trạng đang cho thuê/u.test(b2), b2);
 }
 // 13/10/2026 (chủ dự án): bản nháp hai bong bóng — thân là tin rao, đuôi từ "Độ đầy đủ" trở xuống; ghép lại đúng bằng bản một chuỗi.
 {
@@ -304,5 +304,14 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("QUYMO-2 không có danh sách AI xếp (AI không chạy) → ý thêm ở dòng Thêm như cũ, không đoán bằng từ khoá", /sân rộng/.test(t2.split("\n").find((x) => x.startsWith("📝")) ?? "") && !/sân rộng/.test(t2.split("\n").find((x) => x.startsWith("🏗")) ?? ""), t2);
 }
 console.log(`\n${dat} đạt · ${hong} hỏng`);
+// SRS-5.1zzzzzo (test Zalo 13/10/2026): "nhà trống" → bản nháp từng in "🛋 Nội thất: khong" và "🏠 Hiện trạng: trống".
+{
+  const f0 = NHA_PHO.facts.filter((f) => !/^hien_trang|^noi_that/.test(f.question));
+  const b = soanTinNhap({ l: { ...NHA_PHO.l, furnishing: "khong" }, facts: [...f0, { question: "hien_trang_su_dung", answer: "trống" }], diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
+  la("TRONG-1 (ca gốc) nội thất mã 'khong' → không in dòng 🛋; hiện trạng sử dụng 'trống' → '📝 Thêm: … hiện trạng trống'", !/🛋/u.test(b) && !/khong/.test(b) && /hiện trạng trống/u.test(b), b);
+  const b2 = soanTinNhap({ l: { ...NHA_PHO.l, furnishing: "full" }, facts: [...f0, { question: "hien_trang_su_dung", answer: "để trống từ tết" }], diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
+  la("TRONG-2 (cách nói mới) nội thất 'full' → '🛋 Nội thất: đầy đủ'; 'để trống từ tết' → 'hiện trạng để trống từ tết'", /🛋 Nội thất: đầy đủ/u.test(b2) && /hiện trạng để trống từ tết/u.test(b2), b2);
+}
+
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");

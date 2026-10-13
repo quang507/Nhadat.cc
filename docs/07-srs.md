@@ -3967,6 +3967,32 @@ Dòng "🏫 Tiện ích" vẫn xếp theo vị trí fact (`tien_ich_gan`, mặt 
 `kiem-bang-chung.mjs` VAI-ZZZZK "Nhà chính chủ cần bán" / "chính chủ gửi bán" / "giấy tờ chính chủ" (đối chứng). Cách nói mới: "bên em lấy phí sao vậy",
 "anh là chủ nhà luôn nè", "có sân thượng phơi đồ thoáng". e2e **1302/1302**.
 
+### SRS-5.1zzzzzo · Phòng ngủ hỏi trước bản nháp; cấp 4 không bị đòi "mấy tầng"; không in nội thất khách không nói; "hiện trạng trống" (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026 sau test Zalo tin nhà cấp 4 Hóc Môn: "sao nó ko đọc được có phòng ngủ ở đây, dài quá à"; "rao tin mà cái gì ko có thì ko
+được ghi vào, sao nó lại ghi thêm nội thất trong vào tin z… hiện trạng trống chứ chữ trống ko ai đọc mà hiểu được"]`
+
+**Ca gốc** (production 13/10 10:30–10:41): bản nháp ra với "thêm mấy tầng và mấy phòng ngủ là tin mạnh hơn"; khách nhắn thêm "2 phòng ngủ, 3 vệ sinh" →
+bản nháp gửi lại có "🛋 Nội thất: khong" (khách chỉ nói "nhà trống" lúc trả lời câu hiện trạng) và "🏠 Hiện trạng: trống".
+
+**Lớp lỗi.** (1) Số phòng ngủ của nhà phố / cấp 4 / biệt thự nằm nhóm `sau_dang` (chỉ hỏi bù sau khi lên kệ) trong khi `diem_tin` lại tính điểm và nhắc nó
+trong bản nháp — hai chỗ quyết "câu nào cần trước bản nháp" nói khác nhau. (2) `diem_tin` đòi "mấy tầng" cho nhà cấp 4 (nhà trệt) trừ khi có fact
+`hien_trang`. (3) Bản nháp in thẳng mã cột (`furnishing = khong`) và in dòng cho giá trị "không có". (4) AI đọc "nhà trống" thành nội thất. (5) Truy vấn
+`listing_missing_facts` lấy `limit(12)` theo priority của MỌI nhóm — câu `sau_dang` priority thấp (đứng tên 17 … diện tích khớp sổ 21) chen vào, nên thêm
+một câu `co_ban` là câu phường (22) rơi khỏi danh sách (e2e PH-13 bắt được ngay).
+
+**Sửa.** Migration `20261013b`: `so_phong_ngu` → `co_ban` ưu tiên 18 (sau hiện trạng sử dụng 17, trước phường 22) cho nhà phố / cấp 4 / biệt thự; `diem_tin`
+coi nhà cấp 4 luôn có "tầng" (mock e2e chép cùng commit). Bản nháp (`tin-nhap.ts`): nội thất in chữ (`full` → "đầy đủ", `co_ban` → "cơ bản"), `khong` → không
+in dòng; hiện trạng sử dụng in kèm nhãn ("hiện trạng trống"). `boc-rao.ts`: "nhà trống / để trống" là `hien_trang_su_dung`, không phải `noi_that`. Bảy truy
+vấn `listing_missing_facts` trong `chat-reply` lấy 40 dòng.
+
+**Chỗ khác cùng lớp.** (1) Căn hộ đã có phòng ngủ `co_ban` 4; đất không hỏi. (3) Các dòng khác của bản nháp in từ fact chữ khách (không mã) — soát `tin-nhap.ts`
+chỉ `furnishing` là mã enum in thẳng. (5) `ask-seller` không giới hạn số dòng (không dính).
+
+**Kiểm.** e2e THUTU-tt-np / tt-mt (phòng ngủ trong trình tự trước bản nháp, ≤ 9 câu — đỏ khi bỏ dòng mock), PH-13/13b/08c (đỏ khi trả `limit(12)`);
+`tin-nhap-rao.mjs` TRONG-1 ("khong" không in, "hiện trạng trống") / TRONG-2 (cách nói mới "để trống từ tết", nội thất "đầy đủ"). Ca dựng sẵn tin đo việc khác
+mang luôn câu trả lời phòng ngủ (`daHtsd`, `DAP_PHAP_LY`); ca đo chính câu phòng ngủ tắt bằng `{ pn: false }`. e2e **1302/1302**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
