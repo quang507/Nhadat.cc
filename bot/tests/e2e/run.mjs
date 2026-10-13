@@ -10488,6 +10488,20 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const i = await goi(uidT, "cách tính phí sao em", { hoi_lai: { co_hoi: true, cau_hoi: "cách tính phí sao em", chu_de: "phi" } });
     check("ZZZZZV-08d tin cho thuê 6 triệu/tháng → ví dụ phí 3/4 tháng = 4,5 triệu", /3\/4 tháng tiền thuê/.test(i.rep) && /Ví dụ giá thuê 6 triệu\/tháng thì phí là 4,5 triệu/.test(i.rep), JSON.stringify(i.r.body));
   }
+  // ── SRS-5.1zzzzzw (Zalo thật 13/10 15:47, bài rao KDC Cầu Tràm): 7 tiện ích + trục giao thông → chỉ còn "thông ra ĐT 835D chỉ 200 mét".
+  {
+    const TIN_CT = "Nhà 1 trệt 1 lầu, gồm phòng khách, bếp, 2 phòng ngủ và 2 nhà vệ sinh.\nNhà có sân trước và giếng trời sân sau nên rất thoáng.\nThông ra ĐT 835D chỉ 200 mét.\nTiện ích xung quanh:\nChợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút.\nUBND xã và trạm y tế ~ 2 - 3 phút.\nHệ thống trường học các cấp ~ 10 phút.\nKhu công nghiệp Cầu Tràm ~ 10 phút.\nChợ Bình Chánh ~ 20 phút.\nVinhomes Hưng Long Bình Chánh ~ 20 phút.\nThuận tiện kết nối các trục giao thông huyết mạch như: DT835, DT826, Quốc lộ 1A, cao tốc Bến Lức - Long Thành.";
+    const Y_CT = ["sân trước và giếng trời sân sau", "Thông ra ĐT 835D chỉ 200 mét", "Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút", "UBND xã và trạm y tế ~ 2 - 3 phút",
+      "Hệ thống trường học các cấp ~ 10 phút", "Khu công nghiệp Cầu Tràm ~ 10 phút", "Chợ Bình Chánh ~ 20 phút", "Vinhomes Hưng Long Bình Chánh ~ 20 phút", "cao tốc Bến Lức - Long Thành"];
+    const { uid, L } = dung({ tin: { ...TIN_NHA, ward: null, district: null, location_raw: null, street: null, price_raw: null, price_vnd: null }, cauTreo: "gia" });
+    const w = await goi(uid, TIN_CT, { truong: [T("so_phong_ngu", "2", "2 phòng ngủ"), T("so_wc", "2", "2 nhà vệ sinh"), T("ket_cau", "1 trệt 1 lầu", "1 trệt 1 lầu")], kien_thuc: Y_CT });
+    const bs = fq(L, "bo_sung");
+    check("ZZZZZW-01 (ca gốc) bài rao 9 ý thêm (7 tiện ích kèm thời gian) → ghi ĐỦ 9 ý bổ sung, không cắt còn một ý",
+      bs.length >= 9 && bs.includes("Khu công nghiệp Cầu Tràm ~ 10 phút") && bs.includes("Chợ Rạch Kiến hoặc Chợ Phước Vân ~ 3 - 5 phút") && bs.includes("cao tốc Bến Lức - Long Thành"),
+      JSON.stringify({ n: bs.length, bs }));
+    const bong = w.reps.find((x) => /^🤖/.test(x)) ?? db().t.messages.filter((m) => m.sender === "bot" && /^🤖/.test(m.body ?? "")).map((m) => m.body).at(-1) ?? "";
+    check("ZZZZZW-01b 🤖 báo lại dòng thông tin bổ sung đủ các tiện ích (không chỉ 'thông ra ĐT 835D')", /Khu công nghiệp Cầu Tràm/.test(bong) && /Chợ Bình Chánh/.test(bong), bong.slice(0, 900));
+  }
   {
     // Gật trơn sau câu ĐÓNG của bot → im (không gửi gì, không gọi model); sau câu chưa đóng → "Dạ vâng ạ." tiền định.
     const { uid } = dung({ tin: { ...TIN_DBT, status: "dang_ban", chu_duyet_at: "2026-10-13T07:55:00Z" }, botNoi: ["Dạ vâng, em cảm ơn chị ạ."] });
