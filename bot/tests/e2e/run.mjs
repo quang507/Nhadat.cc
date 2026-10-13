@@ -22,6 +22,7 @@ seedBotPrompts(globalThis.__db);
 // mọi URL khác lỗi (chat-reply không được gọi ra ngoài trong bài kiểm).
 globalThis.__anhTaiDuoc = true;
 globalThis.__choAlbumMs = 0; // 01/10/2026: gộp album ảnh chờ 8s trên production; e2e không chờ
+globalThis.__nguGopCum = async () => {}; // SRS-5.1zzzzzzg: giấc chờ gộp cụm (3 s production) — e2e không chờ; ca GOPCUM chèn tin mới hơn qua hook này
 globalThis.fetch = async (url) => {
   globalThis.__fetches = [...(globalThis.__fetches ?? []), String(url)];
   // FR-209: Nominatim giả — đặt `globalThis.__nominatim` = JSON là "tra được"; mặc định 404
@@ -638,9 +639,9 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 25 truy vấn (+1 09/10 SRS-5.1zzzzo: đọc fact của tin MỘT lần trước lượt ghi đầu — ảnh chụp «trước lượt» để 🤖 / EM VỪA GHI chỉ in giá trị đổi; v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu; +1 24/09 FR-223: đọc tin + fact (một truy vấn nhúng) để rẽ nhánh câu kế, chỉ khi có luật đụng tới; +1 30/09: đọc công tắc app_config.luat_loi_bot, một lần mỗi lượt; +1 13/10 SRS-5.1zzzzzq: kiểm tin chủ nhà mới hơn NGAY TRƯỚC khi ghi lời bot — nhường lượt khi hai tin tới liền)", v.n <= 26 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 27 truy vấn (+2 13/10 SRS-5.1zzzzzzg: công tắc app_config.gop_cum + MỘT truy vấn tin lân cận (tin mới hơn / cụm liền trước) sau giấc chờ; +1 09/10 SRS-5.1zzzzo: đọc fact của tin MỘT lần trước lượt ghi đầu — ảnh chụp «trước lượt» để 🤖 / EM VỪA GHI chỉ in giá trị đổi; v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu; +1 24/09 FR-223: đọc tin + fact (một truy vấn nhúng) để rẽ nhánh câu kế, chỉ khi có luật đụng tới; +1 30/09: đọc công tắc app_config.luat_loi_bot, một lần mỗi lượt; +1 13/10 SRS-5.1zzzzzq: kiểm tin chủ nhà mới hơn NGAY TRƯỚC khi ghi lời bot — nhường lượt khi hai tin tới liền)", v.n <= 28 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
-check("TOIUU-07b lượt sau của cùng người bán ≤ 27 (+1 09/10 SRS-5.1zzzzo: ảnh chụp fact trước lượt; không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn; +1 24/09 FR-223: đọc tin + fact để rẽ nhánh; +1 30/09: công tắc app_config.luat_loi_bot; +1 13/10 SRS-5.1zzzzzq: kiểm tin mới hơn trước khi ghi lời bot)", v.n <= 28, `${v.n}`);
+check("TOIUU-07b lượt sau của cùng người bán ≤ 29 (+2 13/10 SRS-5.1zzzzzzg: công tắc gop_cum + truy vấn tin lân cận; +1 09/10 SRS-5.1zzzzo: ảnh chụp fact trước lượt; không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn; +1 24/09 FR-223: đọc tin + fact để rẽ nhánh; +1 30/09: công tắc app_config.luat_loi_bot; +1 13/10 SRS-5.1zzzzzq: kiểm tin mới hơn trước khi ghi lời bot)", v.n <= 30, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -5298,7 +5299,8 @@ fresh(seedKho);
     await send({ external_user_id: "noi-tren", text: "bán đất Cần Đước Long An 425m2 giá 6 tỷ" });
     const LT = db().t.listings.at(-1);
     const conv = db().t.conversations.at(-1);
-    for (const t of ["ko có gì hết", "425m2"]) db().insert("messages", { conversation_id: conv.id, sender: "seller", body: t });
+    // Tin CŨ (2 phút trước, bot đã trả lời giữa chừng trong đời thật) — không phải cụm giật cục (SRS-5.1zzzzzzg gộp tin cách ≤ 2,5 s).
+    for (const [i, t] of ["ko có gì hết", "425m2"].entries()) db().insert("messages", { conversation_id: conv.id, sender: "seller", body: t, created_at: new Date(Date.now() - 120000 + i * 1000).toISOString() });
     db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
     db().insert("info_requests", { listing_id: LT.id, question: "len_tho_cu", status: "pending" });
     const rT = await send({ external_user_id: "noi-tren", text: "nói ở trên ròi mà" });
@@ -6774,7 +6776,8 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     globalThis.__afterInsertMsgSeller = (d, m) => d.insert("messages", { conversation_id: m.conversation_id, sender: "seller", body: "Chính chủ cần bán nhà cấp 4 đường Huỳnh Tấn Phát, DT 3x14, giá 4,6 tỷ", zalo_msg_id: `dam-s2-${Date.now()}` });
     r = await send({ external_user_id: "z-ccrb", text: "đủ rồi em, đừng hỏi nữa" });
     check("DAM-S2 (ca gốc: 'đăng giúp anh thông tin này nhé' AI đọc là đủ rồi) 'đủ rồi' + bài rao tới ngay sau → lượt này NHƯỜNG trước khi đóng: câu treo vi_tri còn pending, chu_noi_du_at trống, không bong bóng",
-      r.body.superseded === true && r.body.superseded_luc === "du_roi" && r.body.replies.length === 0 && pend("vi_tri", tin.id) && !tin.chu_noi_du_at && !db().t.messages.some((m) => m.sender === "bot" && /thôi hỏi/.test(m.body)),
+      // SRS-5.1zzzzzzg: tin 2 vào trong lúc chờ gộp cụm → lượt thoát ngay ở cổng đầu (`dau_luot`), còn sớm hơn cổng "đủ rồi".
+      r.body.superseded === true && ["du_roi", "dau_luot"].includes(r.body.superseded_luc) && r.body.replies.length === 0 && pend("vi_tri", tin.id) && !tin.chu_noi_du_at && !db().t.messages.some((m) => m.sender === "bot" && /thôi hỏi/.test(m.body)),
       JSON.stringify({ body: r.body, pend: db().t.info_requests.filter((q) => q.listing_id === tin.id), cnd: tin.chu_noi_du_at }));
   }
   // SRS-5.1zzzzzt (Zalo thật 13/10 13:36): "đăng cho mình với nội dung này" khi tin RỖNG, nội dung tới 46 giây sau (không còn trong cùng
@@ -6816,7 +6819,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     globalThis.__afterInsertMsgSeller = (d, m) => d.insert("messages", { conversation_id: m.conversation_id, sender: "seller", body: "à mà nhà anh hướng Tây nha", zalo_msg_id: `dam-s3-${Date.now()}` });
     r = await send({ external_user_id: "z-ccrb", text: "anh đang coi lại" });
     check("DAM-S3 lời bot soạn xong mà tin chủ nhà mới hơn đã vào → nhường trước khi gửi, không ghi lời bot vào messages",
-      r.body.superseded === true && r.body.superseded_luc === "truoc_gui" && r.body.replies.length === 0 && db().t.messages.filter((m) => m.sender === "bot").length === nBot,
+      r.body.superseded === true && ["truoc_gui", "dau_luot"].includes(r.body.superseded_luc) && r.body.replies.length === 0 && db().t.messages.filter((m) => m.sender === "bot").length === nBot, // SRS-5.1zzzzzzg: cổng chờ bắt sớm hơn
       JSON.stringify(r.body));
   }
   // SRS-5.1zzzzzzb (Zalo thật 13/10/2026 17:22–17:23): lượt trả lời câu cuối soạn BẢN NHÁP + mở câu chờ duyet_tin, rồi nhường lượt vì tin
@@ -6843,6 +6846,72 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     check("NHAPRUT-02 lượt kế → gửi 📋 bản nháp thật (câu duyệt mở lại); không có câu 'Bản nháp ở trên' đứng một mình khi sổ chưa có 📋",
       /📋 Em sẽ rao như vầy/.test(repR) && pend("duyet_tin", tinR.id) && !(/Bản nháp ở trên/.test(repR) && !/📋/.test(repR)),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === tinR.id).map((q) => [q.question, q.status]) }));
+  }
+  // SRS-5.1zzzzzzg (chủ dự án 13/10 tối, "gật" gộp cụm; Zalo thật 17:20 "Đường 156 An Dương Vương" rồi 11 s sau "Phường Phú Định"):
+  // khách nhắn giật cục → lượt tin đầu thoát sạch khi tin chữ mới hơn tới trong lúc chờ; lượt tin cuối gộp cụm thành MỘT tin, mốc 🤖
+  // là tin đầu cụm (fact lượt anh em cũng vào bong bóng), tin đã gộp không còn trong lịch sử đưa model.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    sC.active_listing_id = tin.id;
+    const cuCHg = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
+    r = await send({ external_user_id: "z-ccrb", text: "anh đang coi lại" }); // mở hội thoại + có lời bot làm ranh giới cụm
+    const conv = db().t.conversations.find((c) => c.seller_id === sC.id);
+    const noiDungGoi = (c) => [...(c.params.system ?? []).map((s) => s.text ?? ""), ...(c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : JSON.stringify(m.content))].join("\n");
+    // (1) Hai tin 2 s và 1 s trước (lượt của chúng đã thoát ở cổng chờ) + một fact lượt anh em ghi 1,5 s trước → lượt này gộp cả ba.
+    // Câu treo là HƯỚNG để dòng đầu tin gộp trả lời đúng ô (ca đo việc gộp, không đo luật đoán loại).
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: tin.id, question: "huong", status: "pending" });
+    // Đồng hồ mock đơn điệu (`now()` = max(Date.now(), mốc trước + 1 ms)) có thể chạy trước giờ thật — mốc lấy theo dòng messages cuối, không theo Date.now().
+    const t0 = Date.parse(db().t.messages.at(-1).created_at);
+    db().insert("messages", { conversation_id: conv.id, sender: "seller", body: "nhà anh hướng Đông", zalo_msg_id: "gop-1a", created_at: new Date(t0 - 2000).toISOString() });
+    db().insert("listing_facts", { listing_id: tin.id, question: "so_phong_ngu", answer: "3 phòng ngủ", source: "seller_chat", created_at: new Date(t0 - 1500).toISOString() });
+    db().insert("messages", { conversation_id: conv.id, sender: "seller", body: "có 3 phòng ngủ", zalo_msg_id: "gop-1b", created_at: new Date(t0 - 1000).toISOString() });
+    const nCallTruoc = createCalls().length;
+    const lucGui1 = new Date().toISOString();
+    r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng nha" });
+    const goiG = createCalls().slice(nCallTruoc).map(noiDungGoi).join("\n---\n");
+    const bongG = r.body.replies.find((x) => x.startsWith("🤖")) ?? "";
+    // Lượt này đọc "hướng Đông" của tin 2 s trước → fact hướng ghi TRONG lượt này (tin đã gộp); lịch sử đưa model (nếu có gọi) không còn dòng riêng.
+    const huongLuotNay = db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "huong" && /Đông/.test(f.answer) && f.created_at >= lucGui1);
+    check("GOPCUM-01 hai tin giật cục trước + tin này → gộp thành MỘT tin: hướng Đông của tin 2 s trước được lượt này ghi; tin đã gộp không còn dòng 'CHỦ NHÀ:' riêng trong câu lệnh model",
+      huongLuotNay && !/CHỦ NHÀ: nhà anh hướng Đông/.test(goiG) && !/CHỦ NHÀ: có 3 phòng ngủ/.test(goiG),
+      JSON.stringify({ facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer]), rep: r.body.replies, goi: goiG.slice(0, 500) }));
+    check("GOPCUM-01b 🤖 lấy mốc tin ĐẦU CỤM: fact lượt anh em ghi trước tin này (phòng ngủ) có trong bong bóng, cùng pháp lý lượt này",
+      /phòng ngủ/.test(bongG) && /pháp lý|sổ hồng/i.test(bongG), JSON.stringify(r.body.replies));
+    // (2) Tin CHỮ mới hơn tới trong lúc chờ → thoát sạch: không fact, không lượt model, không lời bot, không bong bóng.
+    const nFact2 = db().t.listing_facts.length, nCall2 = globalThis.__calls.length, nBot2 = db().t.messages.filter((m) => m.sender === "bot").length;
+    globalThis.__nguGopCum = async () => { db().insert("messages", { conversation_id: conv.id, sender: "seller", body: "phường Chợ Quán", zalo_msg_id: "gop-2b" }); };
+    r = await send({ external_user_id: "z-ccrb", text: "đường Trần Bình Trọng" });
+    globalThis.__nguGopCum = async () => {};
+    check("GOPCUM-02 tin chữ mới hơn tới trong lúc chờ gộp cụm → lượt này thoát ngay (dau_luot): không fact, không gọi model, không lời bot",
+      r.body.superseded === true && r.body.superseded_luc === "dau_luot" && r.body.replies.length === 0 && db().t.listing_facts.length === nFact2 &&
+        globalThis.__calls.length === nCall2 && db().t.messages.filter((m) => m.sender === "bot").length === nBot2,
+      JSON.stringify({ body: r.body, fact: db().t.listing_facts.length - nFact2, call: globalThis.__calls.length - nCall2 }));
+    // (3) Tin mới hơn là ẢNH → không thoát ở cổng chờ (lượt ảnh không gộp chữ): fact lượt này vẫn ghi; chỉ nhường trước khi gửi như cũ.
+    db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "Dạ anh." });
+    const nFact3 = db().t.listing_facts.length;
+    globalThis.__nguGopCum = async () => { db().insert("messages", { conversation_id: conv.id, sender: "seller", body: "[khách gửi ảnh] [ảnh: https://x/a.jpg]", zalo_msg_id: "gop-3b" }); };
+    r = await send({ external_user_id: "z-ccrb", text: "nhà anh hướng Tây nha" });
+    globalThis.__nguGopCum = async () => {};
+    check("GOPCUM-03 tin mới hơn là ẢNH → không thoát ở cổng chờ, fact lượt này vẫn ghi (nhường trước khi gửi như cũ)",
+      r.body.superseded_luc !== "dau_luot" && db().t.listing_facts.length > nFact3, JSON.stringify({ body: r.body, fact: db().t.listing_facts.length - nFact3 }));
+    // (4) Tin trước cách 20 s (lượt của nó đã chạy / trả lời) → KHÔNG gộp chữ (đọc hai lần là tạo tin trùng) nhưng vẫn là mốc 🤖.
+    db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "Dạ anh." });
+    const t4 = Date.parse(db().t.messages.at(-1).created_at);
+    db().insert("messages", { conversation_id: conv.id, sender: "seller", body: "nhà anh hướng Nam", zalo_msg_id: "gop-4a", created_at: new Date(t4 - 20000).toISOString() });
+    db().insert("listing_facts", { listing_id: tin.id, question: "so_wc", answer: "2 WC", source: "seller_chat", created_at: new Date(t4 - 19000).toISOString() });
+    const lucGui4 = new Date().toISOString();
+    r = await send({ external_user_id: "z-ccrb", text: "hẻm 4m" });
+    const bong4 = r.body.replies.find((x) => x.startsWith("🤖")) ?? "";
+    // Không gộp: lượt này KHÔNG ghi lại "hướng Nam" của tin 20 s trước (lượt đó đã tự xử); mốc 🤖 vẫn lùi về tin đó nên WC lượt anh em vào bong bóng.
+    const huongNamLuotNay = db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "huong" && /Nam/.test(f.answer) && f.created_at >= lucGui4);
+    check("GOPCUM-04 tin trước cách 20 s → không gộp vào tin này (không ghi lại hướng Nam), nhưng fact lượt đó (WC) vẫn vào 🤖 lượt này",
+      !huongNamLuotNay && /WC|toilet/i.test(bong4),
+      JSON.stringify({ bong: r.body.replies, facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id && f.created_at >= lucGui4).map((f) => [f.question, f.answer]) }));
+    globalThis.__cauHinh = cuCHg;
   }
   // SRS-5.1zzzzzzd (chủ dự án 13/10: "tin đợt trước nó đọc đủ thông tin rồi mà không ra tin nháp mà ra cái bảng nhỏ nhỏ là vì sao"):
   // câu rao ĐỦ ĐIỂM (≥ 70, giá đọc ra số) → bản nháp NGAY ở lượt câu rao, không hỏi câu cơ bản còn thiếu; công tắc `nhap_som = tat` về đường cũ.

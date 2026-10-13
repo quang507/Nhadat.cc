@@ -1116,7 +1116,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   // SEC-06 — cắt cứng ở cửa vào. 4.000 ký tự đã dài gấp nhiều lần câu rao dài
   // nhất từng thấy; cắt ở đây thay vì ở từng chỗ dùng, vì chuỗi này đi thẳng
   // vào prompt model.
-  const text = String(body.text ?? "").trim().slice(0, 4000);
+  // `let`: SRS-5.1zzzzzzg — nhánh bán GỘP CỤM tin chủ nhà nhắn giật cục vào `text` của lượt cuối (gán lại sau khi ghi tin vào sổ;
+  // câu lưu vào `messages` vẫn là tin đơn). Mọi chỗ đọc `text` phía sau thấy bản gộp; cổng phân vai ở trên đọc tin đơn như cũ.
+  let text = String(body.text ?? "").trim().slice(0, 4000);
   const msgId = body.msg_id ? String(body.msg_id).slice(0, 200) : null;
   const channel = String(body.channel ?? "zalo_oa").slice(0, 40);
   // SEC-08 — chỉ nhận ảnh từ host của Zalo. Bản trước đưa URL thô của người
@@ -1149,8 +1151,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   // 11/09/2026 (42 ca): câu gõ bằng giọng nói đọc số bằng chữ ("quận năm, năm
   // mươi mét vuông, bốn tỷ rưỡi") → đổi sang chữ số TRƯỚC khi dò. Chỉ dùng để DÒ
   // và BÓC; câu lưu vào sổ và câu đưa model vẫn là `text` gốc.
-  const textBoc = soChuThanhSo(text);
-  const tKD = boDau(textBoc);
+  let textBoc = soChuThanhSo(text);
+  let tKD = boDau(textBoc);
   const khop = (coDau: RegExp, khongDau: RegExp) =>
     coDau.test(text) || khongDau.test(tKD);
 
@@ -2116,6 +2118,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     }).select("created_at, seq").maybeSingle();
     /** Giờ DB của tin chủ nhà vừa ghi — gộp album ảnh so "có tin nào mới hơn không" theo đồng hồ DB, không theo máy chạy hàm. */
     const lucTinChu = (msgSRow as { created_at?: string } | null)?.created_at ?? null;
+    /** SRS-5.1zzzzzzg: giờ DB của tin ĐẦU CỤM (chuỗi tin chủ nhà liền trước, chưa có lời bot chen) — mốc của bong bóng 🤖; null = không có cụm. */
+    let lucDauCum: string | null = null;
+    /** SRS-5.1zzzzzzg: `seq` các tin trước đã GỘP vào `text` lượt này — bỏ khỏi lịch sử đưa model (chúng nằm trong tin vừa nhắn). */
+    const seqGop = new Set<number>();
+    /** Tin chủ nhà vừa nhắn, NGUYÊN BẢN đơn (trước gộp cụm) — đúng dòng đã ghi `messages`. */
+    const textTinNay = text;
     // SRS-5.1zzzzzq (Zalo thật 13/10/2026 11:42: "Cháu đăng giúp Bác thông tin này nhé!" rồi 12 giây sau cả bài rao; lượt tin 1 đang chạy
     // model, đọc "đăng giúp" là đủ rồi → "thôi hỏi", đóng câu treo, đóng dấu `chu_noi_du_at`; lượt tin 2 chạy song song ghi fact nhưng
     // không còn câu nào để hỏi, không nháp): nhánh bán chưa từng có check nhường lượt FR-131. Hàm này được gọi (a) trước quyết định
@@ -2157,6 +2165,81 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // vòng drip hỏi lại đúng câu người ta vừa trả lời — CTV vào tay một cái là
     // dữ liệu căn đó đứng hình. Nên cổng chỉ khoá ĐƯỜNG RA (traLoiSeller) và
     // khoá lượt gọi model, không khoá đường ghi.
+    // ─── SRS-5.1zzzzzzg (chủ dự án 13/10 tối, "gật"): KHÁCH NHẮN GIẬT CỤC → GỘP CỤM ─────────────────────────────────────────
+    // Zalo thật 13/10 17:20–17:23 (đất Q8): "Đường 156 An Dương Vương" rồi 11 giây sau "Phường Phú Định"; "xây được 6 tầng" / "Đất có sổ
+    // đỏ chính chủ" / ảnh cách nhau 8–10 giây. Mỗi tin một lượt: lượt trước ghi fact rồi IM (nhường lượt), lượt cuối trả lời — fact của
+    // lượt im không được 🤖 nào báo (mốc 🤖 là giờ tin cuối), và lượt cuối đọc câu kế trên DB lúc nó chạy, lượt trước ghi xong SAU đó.
+    // Nay: (1) sau khi ghi tin, CHỜ `app_config.gop_cum` giây (mặc định 3; `tat` = không chờ) rồi soi tin CHỮ mới hơn của khách — có thì
+    // THOÁT SẠCH (chưa ghi gì ngoài dòng `messages`), lượt của tin cuối đọc cả cụm; tin mới hơn là ẢNH / FILE thì không thoát (lượt ảnh
+    // không gộp chữ). (2) Lượt đi tiếp đọc cụm tin chủ nhà liền trước (không lời bot chen, cách nhau ≤ 90 s): mốc 🤖 = tin đầu cụm, và
+    // GỘP VĂN BẢN những tin mà lượt của nó CHẮC đã thoát ở cổng (1) — tin kế tới trong lúc nó còn chờ (cách < gop_cum − 0,5 s); vùng mập
+    // mờ ±1 s tra sổ `inbound_ledger` (completed + `dau_luot`); tin có lượt đang chạy / đã trả lời KHÔNG gộp (đọc hai lần là tạo tin
+    // trùng), fact của nó vẫn vào 🤖 qua mốc đầu cụm. Chuỗi gộp dừng ở tin đầu không gộp được. Lượt ảnh / file / link và lượt chạy lại
+    // (`soAttempts > 1`) đi như cũ. e2e: `globalThis.__nguGopCum` thay giấc chờ.
+    if (!imageUrl && !fileUrl && !linkUrl && lucTinChu && !(coSo && soAttempts > 1)) {
+      const seqChu = (msgSRow as { seq?: number } | null)?.seq;
+      const { data: cfgGop, error: cfgErr } = await client.rpc("cau_hinh", { p_key: "gop_cum" });
+      if (cfgErr) await ghiLoi(client, "chat-reply cau_hinh(gop_cum)", cfgErr.message);
+      const chuoiGop = String(cfgGop ?? "").trim();
+      const giayGop = chuoiGop === "tat" ? 0 : Math.min(8, Math.max(0, Number(chuoiGop) || 3));
+      const laTinMedia = (b: string | null | undefined) => /\[(?:ảnh|file|link): /.test(b ?? "");
+      type DongCum = { sender: string; body: string | null; seq: number; created_at: string | null; zalo_msg_id?: string | null };
+      let truocDo: DongCum[] = [];
+      if (typeof seqChu === "number") {
+        if (giayGop > 0) {
+          const ngu = (globalThis as { __nguGopCum?: (ms: number) => Promise<void> }).__nguGopCum
+            ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+          await ngu(giayGop * 1000);
+        }
+        // MỘT truy vấn sau giấc chờ: dòng seq > tin này = tin mới hơn (cổng thoát); dòng seq < = cụm liền trước.
+        const { data: lanCan, error: lcErr } = await client.from("messages").select("sender, body, seq, created_at, zalo_msg_id")
+          .eq("conversation_id", convSId).neq("seq", seqChu).order("seq", { ascending: false }).limit(12);
+        if (lcErr) await ghiLoi(client, "chat-reply gop cum (doc lan can)", lcErr.message);
+        const ds = (lanCan ?? []) as DongCum[];
+        if (giayGop > 0 && ds.some((m) => m.seq > seqChu && laTinNguoi(m.sender) && !laTinMedia(m.body))) {
+          console.log("chat-reply: tin chữ mới hơn tới trong lúc chờ gộp cụm → thoát, lượt tin cuối đọc cả cụm");
+          return await hoanTat({ reply: null, replies: [], role: "seller", superseded: true, superseded_luc: "dau_luot" });
+        }
+        truocDo = ds.filter((m) => m.seq < seqChu);
+      }
+      const giayCach = (sau: string, truoc: string) => (Date.parse(sau) - Date.parse(truoc)) / 1000;
+      const cum: DongCum[] = []; // mới → cũ
+      let sau = lucTinChu;
+      for (const r of truocDo) {
+        if (!laTinNguoi(r.sender) || !r.created_at) break;
+        // Ảnh / file / link và thả cảm xúc giữa hai câu chữ không cắt cụm, cũng không gộp (không mang chữ để đọc).
+        if (laTinMedia(r.body) || laThaCamXuc(r.body ?? "")) continue;
+        if (giayCach(sau, r.created_at) > 90) break;
+        cum.push(r); sau = r.created_at;
+      }
+      if (cum.length) {
+        lucDauCum = cum[cum.length - 1].created_at;
+        const gop: DongCum[] = [];
+        let ke = lucTinChu;
+        for (const r of cum) {
+          const cach = giayCach(ke, r.created_at!);
+          let duocGop = giayGop > 0 && cach <= giayGop - 0.5;
+          if (!duocGop && giayGop > 0 && cach <= giayGop + 1 && r.zalo_msg_id) {
+            try {
+              const { data: so } = await client.from("inbound_ledger").select("status, reply").eq("zalo_msg_id", r.zalo_msg_id).maybeSingle();
+              const soRow = so as { status?: string; reply?: { superseded_luc?: string } | null } | null;
+              duocGop = soRow?.status === "completed" && soRow.reply?.superseded_luc === "dau_luot";
+            } catch (e) { await ghiLoi(client, "chat-reply gop cum (so inbound)", e); }
+          }
+          if (!duocGop) break;
+          gop.push(r); ke = r.created_at!;
+        }
+        if (gop.length) {
+          gop.reverse();
+          for (const g of gop) seqGop.add(g.seq);
+          text = [...gop.map((g) => (g.body ?? "").trim()), text].filter(Boolean).join("\n").slice(0, 4000);
+          textBoc = soChuThanhSo(text);
+          tKD = boDau(textBoc);
+          console.log(`chat-reply: gộp ${gop.length} tin trước vào lượt này (cụm ${cum.length} tin)`);
+        }
+      }
+    }
+
     const nguoiThatDangCham = convSRow?.c_human_touch_at;
     // FR-189 (10/09/2026): người thật GIỮ khách ("#mã giữ") → bot im vô thời hạn
     // tới khi "trả bot"; ngoài ra vẫn nhường sân 30 phút sau tin gõ tay (FR-141).
@@ -3148,7 +3231,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     let tinTrongLuot: string | null = null;
     const aiNoiTrangThai: string[] = [];
     let ackSua: string | null = null;
-    /** SRS-5.1zzzzzzc: ô vừa SỬA theo lời sửa FR-164 trong lượt (để 🤖 in "Đã trích xuất yêu cầu cho bot thực hiện"). */
+    /** SRS-5.1zzzzzzc: ô vừa SỬA theo lời sửa FR-164 trong lượt (để 🤖 in dòng yêu cầu `BOC_YEU_CAU` của bao_lai.ts). */
     let suaLuotKhoa: string[] = [];
     // SRS-5.1zzzzg: nội dung lời GHI THÊM (không phải sửa) của `ackSua` — lượt có model viết lời thì đưa vào câu lệnh để model ghi nhận
     // gộp một lần, bong bóng code bỏ (một ý một nguồn).
@@ -3289,7 +3372,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // SRS-5.1zzzzzr (Zalo thật 13/10/2026 04:59Z, Nhà Bè): "Dtsd: 42,8m, 2pn, 1 trệt, 1 lầu." rồi 9 giây sau "DT 3x14" — fact lượt 1 ghi lúc
         // :11, mốc lấy TIN CHỦ NHÀ MỚI NHẤT (:13) → không fact nào ≥ mốc → "🤖 Không trích xuất được gì" dù đã ghi ba ô. Mốc phải là giờ ghi
         // CHÍNH TIN LƯỢT NÀY (`lucTinChu`); chỉ khi không có (tin trùng zalo_msg_id) mới lấy tin mới nhất như cũ.
-        let moc: string | null = lucTinChu;
+        // SRS-5.1zzzzzzg: khách nhắn giật cục → mốc là tin ĐẦU CỤM, fact các lượt im (nhường lượt) trong cụm cũng vào bong bóng này.
+        let moc: string | null = lucDauCum ?? lucTinChu;
         if (!moc) {
           const { data: mMsg, error: mErr } = await client.from("messages").select("created_at")
             .eq("conversation_id", convSId).eq("sender", "seller")
@@ -3309,9 +3393,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // AI chỉ ra, rồi chữ đưa vào cửa ghi. Không đọc lại DB, không đoán: bao_lai chỉ in đoạn tìm lại được trong tin khách.
           // SRS-5.1zzzzo: fact ghi lại GIÁ TRỊ KHÔNG ĐỔI (mọi lượt ghi khớp nó trong sổ đều `doi = false`) không phải thứ tin này trích
           // xuất được — bỏ khỏi 🤖 (bất biến e2e KHÔNG ĐỔI). Fact không có trong sổ (đường ghi ngoài hàm bọc) giữ như cũ.
+          // SRS-5.1zzzzzzg: fact LƯỢT ANH EM trong cụm ghi (created_at trước tin lượt này) là thứ cụm này trích xuất được — giữ, dù lượt này
+          // ghi lại cùng giá trị (`doi = false`); dòng ghi lại của chính lượt này thì bỏ như cũ (một fact in một lần).
+          const luotAnhEm = (f: FactBaoLai) => !!lucDauCum && !!lucTinChu && !!f.created_at && Date.parse(f.created_at) < Date.parse(lucTinChu);
           factLuot = ((fs ?? []) as FactBaoLai[]).flatMap((f) => {
             const g = ghiLuot.filter((x) => x.question === f.question && x.ghi === f.answer);
-            if (g.length && g.every((x) => !x.doi)) return [];
+            if (g.length && g.every((x) => !x.doi) && !luotAnhEm(f)) return [];
             return [g.length ? { ...f, goc: g.flatMap((x) => [x.goc, x.vao]) } : f];
           });
         }
@@ -3808,7 +3895,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     }
     // 02/10/2026 (chủ dự án: "để AI có cache để đọc lại nguyên tin nhắn của khách để ko mất"): đọc 40 tin gần nhất (một truy
     // vấn như cũ) — 9 tin cuối làm lịch sử lượt như trước, phần tin CHỦ NHÀ làm "bộ nhớ" nguyên văn cho AI bóc tách.
-    const [{ data: lichSuDai }, { data: tinCuaNguoi }] = await Promise.all([
+    const [{ data: lichSuDaiTho }, { data: tinCuaNguoi }] = await Promise.all([
       // SRS-5.1zzzzo: `created_at` để đếm khách đã nhắn mấy lượt từ lúc câu đang treo mở (`soLuotTreo`, lượt bên lề).
       client.from("messages").select("sender, body, seq, created_at")
         .eq("conversation_id", convSId).order("seq", { ascending: false }).limit(40),
@@ -3817,6 +3904,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       client.from("listings").select(`id, code, status, ${COT_TRUOC_LUOT}`)
         .eq("seller_id", sellerRow.id).order("created_at", { ascending: true }).limit(10),
     ]);
+    // SRS-5.1zzzzzzg: tin trước đã GỘP vào `text` lượt này không còn là lịch sử — bỏ, không thì model đọc chúng hai lần.
+    const lichSuDai = ((lichSuDaiTho ?? []) as Array<{ sender: string; body: string | null; seq: number; created_at?: string | null }>)
+      .filter((m) => !seqGop.has(m.seq));
     // SRS-5.1zzzzo: tin có từ ĐẦU lượt (cột lúc đầu lượt) — tin không nằm trong đây là tin vừa tạo lượt này (ảnh chụp "trước lượt" rỗng).
     // Danh sách bị cắt ở 10 tin thì không kết luận được — để null (ảnh chụp đọc cột bằng truy vấn riêng).
     idsTinDauLuot = (tinCuaNguoi ?? []).length < 10
@@ -3828,7 +3918,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     const tinChuNhaGoc = (): string[] => {
       const nguoi = ((lichSuDai ?? []) as Array<{ sender: string; body: string | null }>).filter((m) => laTinNguoi(m.sender));
       const ds = nguoi.map((m) => thayLienHe((m.body ?? "").trim(), "[liên hệ]")).filter((b) => b && !laThaCamXuc(b));
-      if (ds.length && ds[0] === thayLienHe(text.trim(), "[liên hệ]")) ds.shift();
+      if (ds.length && ds[0] === thayLienHe(textTinNay.trim(), "[liên hệ]")) ds.shift(); // SRS-5.1zzzzzzg: so với tin đơn đã ghi sổ, không so bản gộp
       const ra: string[] = [];
       let tong = 0;
       for (const b of ds) {
