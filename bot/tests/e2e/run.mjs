@@ -6844,6 +6844,80 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
       /📋 Em sẽ rao như vầy/.test(repR) && pend("duyet_tin", tinR.id) && !(/Bản nháp ở trên/.test(repR) && !/📋/.test(repR)),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === tinR.id).map((q) => [q.question, q.status]) }));
   }
+  // SRS-5.1zzzzzzd (chủ dự án 13/10: "tin đợt trước nó đọc đủ thông tin rồi mà không ra tin nháp mà ra cái bảng nhỏ nhỏ là vì sao"):
+  // câu rao ĐỦ ĐIỂM (≥ 70, giá đọc ra số) → bản nháp NGAY ở lượt câu rao, không hỏi câu cơ bản còn thiếu; công tắc `nhap_som = tat` về đường cũ.
+  {
+    // Luật đọc địa chỉ (đường không AI của e2e) nhận "hẻm xe hơi 5m 105/12 Trần Bình Trọng" (hẻm đứng TRƯỚC số nhà) — đặt vậy để ca đo
+    // đúng việc nháp sớm, không đo luật địa chỉ.
+    const RAO = "Bán nhà hẻm xe hơi 5m 105/12 Trần Bình Trọng phường 1 quận 5, 4x15, 3 lầu, sổ hồng riêng, giá 8 tỷ";
+    fresh(seedKho);
+    r = await send({ external_user_id: "z-nhap-som", text: RAO });
+    const tinNS = db().t.listings.find((l) => l.seller_id === db().t.sellers.find((s) => s.zalo_user_id === "z-nhap-som")?.id);
+    const diemNS = tinNS ? db().diemTin(tinNS).diem : null;
+    check("NHAPSOM-01 câu rao đủ điểm (≥ 70, thiếu phòng ngủ) → gửi 📋 bản nháp NGAY, mở duyet_tin, KHÔNG mở câu cơ bản còn thiếu",
+      diemNS >= 70 && r.body.ban_nhap === true && r.body.nhap_som === true && r.body.replies.some((x) => /📋 Em sẽ rao như vầy/.test(x)) &&
+        pend("duyet_tin", tinNS?.id) && !pend("so_phong_ngu", tinNS?.id) && !pend("hien_trang_su_dung", tinNS?.id),
+      JSON.stringify({ diem: diemNS, body: r.body, ir: db().t.info_requests.filter((q) => q.listing_id === tinNS?.id).map((q) => [q.question, q.status]) }));
+    // Đối chứng: công tắc tắt → đường cũ, hỏi câu cơ bản còn thiếu, không nháp.
+    const cuNS = globalThis.__cauHinh;
+    globalThis.__cauHinh = { ...(cuNS ?? { test_reset_hello: "1" }), nhap_som: "tat" };
+    fresh(seedKho);
+    r = await send({ external_user_id: "z-nhap-som-2", text: RAO });
+    const tinNS2 = db().t.listings.find((l) => l.seller_id === db().t.sellers.find((s) => s.zalo_user_id === "z-nhap-som-2")?.id);
+    check("NHAPSOM-02 đối chứng `nhap_som = tat` → không nháp, mở câu cơ bản còn thiếu như cũ",
+      r.body.ban_nhap !== true && !pend("duyet_tin", tinNS2?.id) && db().t.info_requests.some((q) => q.listing_id === tinNS2?.id && q.status === "pending"),
+      JSON.stringify({ body: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === tinNS2?.id).map((q) => [q.question, q.status]) }));
+    globalThis.__cauHinh = cuNS;
+    // Câu rao chưa đủ điểm (thiếu pháp lý, tầng, hẻm) → vẫn hỏi như cũ, không nháp.
+    fresh(seedKho);
+    r = await send({ external_user_id: "z-nhap-som-3", text: "Bán nhà 105/12 Trần Bình Trọng phường 1 quận 5, 4x15, giá 8 tỷ" });
+    const tinNS3 = db().t.listings.find((l) => l.seller_id === db().t.sellers.find((s) => s.zalo_user_id === "z-nhap-som-3")?.id);
+    check("NHAPSOM-03 câu rao chưa đủ điểm → hỏi tiếp như cũ, không nháp",
+      r.body.ban_nhap !== true && !pend("duyet_tin", tinNS3?.id) && db().t.info_requests.some((q) => q.listing_id === tinNS3?.id && q.status === "pending"),
+      JSON.stringify({ diem: tinNS3 ? db().diemTin(tinNS3).diem : null, ir: db().t.info_requests.filter((q) => q.listing_id === tinNS3?.id).map((q) => [q.question, q.status]) }));
+  }
+  // SRS-5.1zzzzzze (chủ dự án 13/10, Cầu Tràm: "nó có lưu thêm thông tin dự án được không"): tin THUỘC DỰ ÁN + bài rao dài → lượt vét
+  // dự án chạy (dù câu không có chữ "dự án / tiện ích"), tiện ích / hạ tầng vào hàng chờ duyệt `project_facts` (nguồn llm).
+  {
+    // Câu TRẢ LỜI dài (không giá, không chữ "bán" — không phải câu rao mở tin mới) cho câu kết cấu đang treo của tin trong dự án.
+    const BAI = "Nhà 1 trệt 2 lầu, đường nội bộ 12m xe hơi tránh nhau thoải mái, cách chợ 300m, trường cấp 1 cấp 2 ngay cổng khu, " +
+      "10 phút ra Quốc lộ 1, có công viên và hồ cảnh quan, bảo vệ trực đêm, điện âm nước máy đầy đủ, khu toàn người trẻ về ở nên buổi tối yên tĩnh lắm em.";
+    const seedDA = (d) => {
+      const s = d.insert("sellers", { zalo_user_id: "z-du-an-ke", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+      const p = d.insert("projects", { name: "Khu dân cư Cầu Tràm", slug: "cau-tram", district: "Long An", amenities: [], description: "" }).data;
+      const l = d.insert("listings", { code: "BDS-DA-LA-0001", seller_id: s.id, project_id: p.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "Khu dân cư Cầu Tràm", price_raw: "3 tỷ 2", price_vnd: 3.2e9, area_m2: 100 }).data;
+      s.active_listing_id = l.id;
+      d.insert("info_requests", { listing_id: l.id, question: "ket_cau", status: "pending" });
+    };
+    let goiVet = 0;
+    // `fresh()` đặt lại `__model` → gán mock SAU fresh.
+    const parseVet = (p) => {
+      if ((p?.system ?? []).some((x) => /bóc thông tin về DỰ ÁN/.test(x.text ?? ""))) {
+        goiVet++;
+        return { ten_du_an: "Khu dân cư Cầu Tràm", facts: [{ khoa: "tien_ich_gan", gia_tri: "cách chợ 300m, trường cấp 1 cấp 2 ngay cổng, có công viên và hồ cảnh quan" }, { khoa: "ha_tang", gia_tri: "đường nội bộ 12m xe hơi tránh nhau, 10 phút ra Quốc lộ 1" }] };
+      }
+      return OUT();
+    };
+    fresh(seedDA);
+    globalThis.__model.parse = parseVet;
+    r = await send({ external_user_id: "z-du-an-ke", text: BAI });
+    const pfs = (db().t.project_facts ?? []).map((f) => [f.khoa, f.nguon, f.trang_thai]);
+    check("DUANKE-01 tin thuộc dự án + bài rao dài (không chữ 'dự án / tiện ích') → lượt vét chạy, tiện ích + hạ tầng vào project_facts cho_duyet (nguồn llm)",
+      goiVet === 1 && pfs.some((x) => x[0] === "tien_ich_gan" && x[1] === "llm" && x[2] === "cho_duyet") && pfs.some((x) => x[0] === "ha_tang"),
+      JSON.stringify({ goiVet, pfs, rep: r.body.replies }));
+    // Đối chứng: tin KHÔNG thuộc dự án, cùng bài rao → không vét (van cũ: không mùi dự án).
+    goiVet = 0;
+    fresh((d) => {
+      const s = d.insert("sellers", { zalo_user_id: "z-khong-du-an", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+      const l = d.insert("listings", { code: "BDS-Q5-0120", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "25 Nguyễn Trãi", price_raw: "3 tỷ 2", price_vnd: 3.2e9, area_m2: 100 }).data;
+      s.active_listing_id = l.id;
+      d.insert("info_requests", { listing_id: l.id, question: "ket_cau", status: "pending" });
+    });
+    globalThis.__model.parse = parseVet;
+    r = await send({ external_user_id: "z-khong-du-an", text: BAI });
+    check("DUANKE-02 đối chứng: tin không thuộc dự án, bài rao không mùi dự án → không gọi lượt vét, project_facts trống",
+      goiVet === 0 && (db().t.project_facts ?? []).length === 0, JSON.stringify({ goiVet, pfs: db().t.project_facts }));
+  }
   // FR-220 (24/09/2026): câu hỏi bù "có tầng lửng, sân thượng hay tầng hầm không" → phần CÓ chen vào kết cấu chữ.
   fresh(seedKho);
   {
@@ -11775,6 +11849,6 @@ check(`BẤT BIẾN-KHÔNG ĐỔI: 🤖 không in một ô mà lượt đó ch�
 check(`BẤT BIẾN-GHI NHẬN: lượt không ghi gì → câu lệnh model không cho "em vừa ghi", nói thẳng không ghi thêm (${BB.ghiNhan.length} vi phạm)`, BB.ghiNhan.length === 0, BB.ghiNhan.slice(0, 12).join("\n       "));
 // ── kết ──
 let hong = 0;
-for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }
+for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 1400)}`); }
 console.log(hong ? `\n${hong}/${R.length} CA HỎNG` : `\nTẤT CẢ ${R.length} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

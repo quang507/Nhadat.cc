@@ -4437,6 +4437,55 @@ có). Lệnh đọc từ META của chính đường xử lý trong `chat-reply`
 **Kiểm.** e2e DAM-S1c (chữ đầu mới), `YEUCAU-01` ("à sửa giá 7 tỷ 5 nha em" lúc duyệt → yêu cầu "sửa giá đã ghi" + "• giá: …"),
 `YEUCAU-02` ("em xoá cái hẻm ghi nhầm đi" → "bỏ … đã ghi").
 
+### SRS-5.1zzzzzzd · Câu rao đủ điểm → bản nháp ngay, không hỏi thêm (13/10/2026)
+
+**Nguồn.** Chủ dự án 13/10: "cái tin đợt trước mà nó đọc đủ thông tin rồi mà không ra tin nháp mà ra cái bảng nhỏ nhỏ là vì sao", rồi tối
+cùng ngày "Fix hết merg". Trước đó bản nháp chỉ gửi khi KHÔNG còn câu nào trong nhóm cơ bản của loại tin (SRS-5.1zzzy); bài rao đã đủ dữ
+liệu vẫn chỉ ra 🤖 rồi bot hỏi tiếp từng câu (hiện trạng, cọc…).
+
+**Quy tắc.** Chỉ ở lượt CÂU RAO (tin vừa tạo), sau khi chọn câu hỏi đầu: nếu `app_config.nhap_som ≠ tat` (mặc định bật), `diem_tin ≥ 70`
+và giá đã đọc ra số (`price_vnd`), tên đường không chờ xác nhận → `guiBanNhap` ngay (meta `nhap_som`, `cau_bo_qua` = câu định hỏi), KHÔNG
+mở ô chờ câu đầu. Mục còn thiếu nằm ở dòng "Độ đầy đủ X/100, thêm …" và vòng hỏi bù sau khi lên kệ (`seller_hoi_bu_tick`) hỏi dần. Chưa đủ
+điểm → đường cũ: mở ô câu đầu, hỏi. Đường trả lời từng câu (câu treo) KHÔNG đổi: vẫn hỏi hết nhóm cơ bản (hiện trạng, phòng ngủ — quyết
+định 12–13/10) trước bản nháp; nháp sớm chỉ cho bài rao đã mang sẵn đủ điểm.
+
+**Chỗ cùng lớp.** `hetCauTruocNhap` (hết câu → nháp) và nháp sớm cùng gọi `guiBanNhap`; ô chờ câu đầu nay mở SAU quyết định nháp
+(`moCauDau`) để không có hai ô chờ (câu cơ bản + duyệt) cùng lúc. Nhánh tin nhiều căn (mở nhiều tin một lượt) không có nháp sớm — ghi để
+theo dõi.
+
+**Kiểm.** e2e `NHAPSOM-01` (câu rao 73 điểm, thiếu phòng ngủ → 📋 ngay, duyet_tin mở, không ô phòng ngủ), `NHAPSOM-02` (công tắc `tat` →
+đường cũ), `NHAPSOM-03` (câu rao chưa đủ điểm → hỏi tiếp). Tắt bản sửa thì NHAPSOM-01 đỏ.
+
+### SRS-5.1zzzzzze · Bài rao dài trong dự án → thông tin dự án chủ nhà kể vào hàng chờ duyệt (13/10/2026)
+
+**Nguồn.** Chủ dự án 13/10 (Khu dân cư Cầu Tràm): "nó có lưu thêm thông tin dự án được không"; tối cùng ngày "Fix hết merg".
+
+**Trước.** Hàng chờ duyệt `project_facts` (FR-195/199) chỉ nhận khi câu có "mùi dự án" (`coMuiDuAn`: chữ dự án / phí quản lý / tiện ích…)
+và luật tiền định chưa ghi được gì. Bài rao dài kể tiện ích, hạ tầng, bàn giao bằng lời thường ("cách chợ 300m, trường ngay cổng, 10 phút ra
+Quốc lộ 1") không có chữ mồi → không vét → kho dự án không giàu thêm dù chủ nhà đã kể.
+
+**Quy tắc.** `vetDuAnBangModel`: tin THUỘC DỰ ÁN (`listings.project_id` hoặc fact `du_an_ten`) và tin nhắn ≥ 200 chữ → luôn gọi lượt vét
+(`bocDuAnBangModel(…, batBuoc)`), bỏ hai van cũ cho trường hợp này; tin khác giữ van cũ. Kết quả vào `project_facts` trạng thái
+`cho_duyet`, nguồn `llm`; admin gật (`duyet_fact_du_an`) thì `tien_ich_gan / ha_tang / khu_compound` vào `projects.amenities`, khoá khác vào
+`specs` — lúc đó nhánh mua mới đọc được. Không có bảng riêng "chủ nhà kể": hàng chờ duyệt đã là chỗ cho nguồn chưa kiểm. Tin của lượt
+lấy `tinTrongLuot` trước `active_listing_id` (tin vừa tạo chưa được trỏ).
+
+**Kiểm.** e2e `DUANKE-01` (tin có `project_id`, bài rao 230 chữ không chữ mồi → lượt vét chạy một lần, `tien_ich_gan` + `ha_tang` vào
+`project_facts` cho_duyet / llm), `DUANKE-02` (đối chứng: tin không thuộc dự án → không vét).
+
+### SRS-5.1zzzzzzf · Gemini đọc ảnh làm dự phòng khi Claude hỏng (13/10/2026)
+
+**Nguồn.** Chủ dự án 13/10: "gemini đọc ảnh các thứ còn dùng dc ko"; tối cùng ngày "Fix hết merg". Sổ lỗi 13/10 15:35: Claude quá hạn ở
+lượt phân loại ảnh → đổi sang Gemini → "Model dự phòng không nhìn được ảnh" → ảnh cất riêng tư, không đọc.
+
+**Quy tắc.** `groq.ts`: nguồn Gemini nhận nội dung dạng MẢNG phần — khối ảnh Anthropic (`url` tải về, hạn 8 giây, trần 6 MB; `base64`
+giữ nguyên) → `image_url` data URL; chữ → `text`. Nguồn Groq vẫn mù: lượt có ảnh bỏ qua nguồn Groq (chỉ `console.log`, không sổ lỗi — đường
+đi bình thường). `document` (PDF) không nguồn dự phòng nào đọc — vẫn chỉ Claude. Thứ tự không đổi: lượt có ảnh đi Claude trước; Claude
+hỏng (`nenDoiSang`: quá hạn, 429/529/5xx, hết tiền) thì Gemini đọc. Không nguồn nào nhìn được thì ném như cũ để tầng gọi cất riêng tư.
+
+**Kiểm.** `bot/tests/thu-tu-model.mjs` ANH-01…05 (base64 → image_url; Groq bị bỏ qua không sổ lỗi; chỉ Groq → ném; PDF → ném; ảnh URL →
+tải về thành data URL). Tắt bản sửa thì ANH-01 đỏ.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

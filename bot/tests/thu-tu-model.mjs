@@ -284,5 +284,54 @@ const voiHan = async (p, ms) => { const t0 = Date.now(); const kq = await Promis
   la("HAN-07 hết tiền → không thử lại (thử lại không chữa được)", [loi, lan, ngu.length], [400, 1, 0]);
 }
 
+// ── SRS-5.1zzzzzzf (13/10/2026): Gemini ĐỌC ẢNH làm dự phòng; Groq vẫn mù ─────────────────────────────────────────────────
+{
+  const P_ANH64 = { messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "AAAA" } }, { type: "text", text: "ảnh gì" }] }], max_tokens: 400 };
+  const GM = [nguonGemini("kg", "g1")];
+  reset(); claudeNem = Object.assign(new Error("Request timed out."), { name: "APIConnectionTimeoutError" });
+  const c = bocDuPhong(claude, GM, ghiSo, "claude");
+  const r = await c.messages.create(P_ANH64);
+  const nd = thanCuoi?.messages?.find((m) => m.role === "user")?.content;
+  la("ANH-01 Claude quá hạn ở lượt có ẢNH (base64) → Gemini nhận lượt, nội dung là MẢNG phần có image_url data URL + chữ",
+    [chu(r), goiGroq, Array.isArray(nd), nd?.[0]?.type, nd?.[0]?.image_url?.url, nd?.[1]?.text],
+    ["groq:g1", ["g1"], true, "image_url", "data:image/png;base64,AAAA", "ảnh gì"]);
+}
+{
+  reset(); claudeNem = Object.assign(new Error("Overloaded"), { status: 529 });
+  const c = bocDuPhong(claude, [...G, nguonGemini("kg", "g1")], ghiSo, "claude");
+  const r = await c.messages.create({ messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "BBBB" } }, { type: "text", text: "sổ gì" }] }], max_tokens: 400 });
+  la("ANH-02 lượt có ẢNH: nguồn Groq bị BỎ QUA (không gọi, không ghi sổ 'du phong hong'), Gemini trả lời",
+    [chu(r), goiGroq, soGhiSo], ["groq:g1", ["g1"], 1 /* chỉ dòng 'model chinh hong - doi sang' */]);
+}
+{
+  reset(); claudeNem = Object.assign(new Error("Overloaded"), { status: 529 });
+  const c = bocDuPhong(claude, G, ghiSo, "claude");
+  let loi = null;
+  try { await c.messages.create({ messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "CC" } }] }] }); } catch (e) { loi = String(e.message); }
+  la("ANH-03 chỉ có Groq mà lượt có ảnh → không nguồn nào trả lời, ném lỗi (tầng gọi đi nhánh cất riêng tư), Groq không được gọi",
+    [goiGroq, /Dự phòng|không nhìn/.test(loi ?? "")], [[], true]);
+}
+{
+  reset(); claudeNem = Object.assign(new Error("Overloaded"), { status: 529 });
+  const c = bocDuPhong(claude, [nguonGemini("kg", "g1")], ghiSo, "claude");
+  let loi = null;
+  try { await c.messages.create({ messages: [{ role: "user", content: [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: "DD" } }] }] }); } catch (e) { loi = String(e.message); }
+  la("ANH-04 PDF (document) vẫn chỉ Claude: Gemini ném 'không đọc được tài liệu PDF', không gửi lên", [goiGroq, /PDF/.test(loi ?? "")], [[], true]);
+}
+{
+  // Ảnh dạng URL: tải về rồi mã hoá data URL (cổng Gemini chắc nhận data URL).
+  const fetchCu = globalThis.fetch;
+  reset(); claudeNem = Object.assign(new Error("Overloaded"), { status: 529 });
+  globalThis.fetch = async (url, init) => {
+    if (/cdn\.test\/a\.jpg$/.test(String(url))) return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
+    return await fetchCu(url, init);
+  };
+  const c = bocDuPhong(claude, [nguonGemini("kg", "g1")], ghiSo, "claude");
+  const r = await c.messages.create({ messages: [{ role: "user", content: [{ type: "image", source: { type: "url", url: "https://cdn.test/a.jpg" } }, { type: "text", text: "x" }] }] });
+  const nd = thanCuoi?.messages?.find((m) => m.role === "user")?.content;
+  la("ANH-05 ảnh dạng URL → tải về, gửi Gemini dạng data:image/jpeg;base64,…", [chu(r), nd?.[0]?.image_url?.url], ["groq:g1", "data:image/jpeg;base64,AQID"]);
+  globalThis.fetch = fetchCu;
+}
+
 console.log(`\n${dat} đạt, ${hong} hỏng`);
 process.exit(hong ? 1 : 0);
