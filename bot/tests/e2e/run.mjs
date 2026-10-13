@@ -1337,7 +1337,9 @@ fresh(seedKho);
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
     r.body.ban_nhap === true && r.body.diem >= 70 && /Em sẽ rao như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
       // 24/09/2026 (chủ dự án): câu cuối bản nháp = "👉 Có khách quan tâm là <tên trợ lý> báo lại <cách gọi> liền ạ.", đứng SAU CÙNG.
-      !/nhắn Zalo cho em/.test(nhap) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(r.body.replies.find((x) => /Em sẽ rao như vầy/.test(x)) ?? "") && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ rao như vầy/.test(prompt(c))) &&
+      // 13/10/2026 (chủ dự án): bản nháp HAI bong bóng — bong bóng tin rao không có "Độ đầy đủ"; bong bóng kế mở bằng "Độ đầy đủ", kết bằng 👉.
+      !/nhắn Zalo cho em/.test(nhap) && (() => { const i = r.body.replies.findIndex((x) => /Em sẽ rao như vầy/.test(x)); const sau = r.body.replies[i + 1] ?? "";
+        return i >= 0 && !/Độ đầy đủ|👉/.test(r.body.replies[i]) && /^Độ đầy đủ \d+\/100/.test(sau) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(sau); })() && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ rao như vầy/.test(prompt(c))) &&
       pend("duyet_tin") && H.status === "cho_thong_tin",
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });

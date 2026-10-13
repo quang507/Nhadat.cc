@@ -3846,6 +3846,16 @@ của MỌI lượt gọi model theo loại (`loaiLuotAi`: boc_rao, doc_y_luot, 
 — không lẫn giữa các lượt chạy cùng isolate); payload `_ms.ai` = `["boc_rao 410+5300", "viet 5800+2900", …]`, `ban-thu.yml` in cả `_ms`.
 Chỉ số, không nội dung; không đổi hành vi. Kiểm: e2e ZZZZZI-MS.
 
+### SRS-5.1zzzzzk · Bản nháp hai bong bóng (13/10/2026)
+
+`[nguồn: chủ dự án 13/10/2026, ảnh Zalo bản nháp Trương Đình Hội: "cái chỗ độ đầy đủ trở xuống cho xuống bong bóng chat thứ 2"]`
+
+Bản nháp gửi một bong bóng dài: tin rao (📋 … pháp lý) dính liền phần nói với chủ nhà (điểm đầy đủ + gợi ý, "thấy hấp dẫn chưa", 👉 lời hứa báo lại).
+Sửa: `soanTinNhapHaiBong` (tin-nhap.ts) trả `than` / `duoi`, tách theo VỊ TRÍ dòng trong hàm dựng (không theo chữ "Độ đầy đủ" — câu tiền định
+sửa được ở dashboard); `soanTinNhap` = ghép hai phần (một nguồn, script `xem-tin-nhap` và bài cũ không đổi). Hai chỗ gửi bản nháp trong
+`guiBanNhap` (duyệt thường, "đăng đi" lên kệ ngay) gửi hai bong bóng; so "nháp cũ y hệt" vẫn so thân. Kiểm: e2e H5 (bong bóng tin rao không có
+điểm / 👉, bong bóng kế mở bằng "Độ đầy đủ", kết bằng 👉 — đỏ khi gộp lại một bong bóng), `tin-nhap-rao.mjs` HAIBONG-1…3.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

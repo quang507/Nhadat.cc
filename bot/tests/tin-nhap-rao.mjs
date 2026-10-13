@@ -5,7 +5,7 @@
 //
 // Ba mẫu dưới đây là ba hình dạng hay gặp nhất của rổ hàng: nhà phố hẻm xe hơi
 // (đủ thông số), căn hộ CHO THUÊ (điều kiện thuê), và đất (chỉ có vài dòng).
-import { soanTinNhap, tieuDeTin } from "../supabase/functions/_shared/tin-nhap.ts";
+import { soanTinNhap, soanTinNhapHaiBong, tieuDeTin } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 
 const cachGoi = "anh";
@@ -238,6 +238,15 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   const khac = { ...NHA_PHO, facts: [...goc, { question: "hien_trang", answer: "mới sơn lại" }, { question: "hien_trang_su_dung", answer: "đang cho thuê" }] };
   const b2 = soanTinNhap({ l: NHA_PHO.l, facts: khac.facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
   la("ZZZZZ-T2 đối chứng 'mới sơn lại' + 'đang cho thuê' (hai ý) → giữ cả hai dòng", /mới sơn lại/.test(b2) && /🏠 Hiện trạng: đang cho thuê/u.test(b2), b2);
+}
+// 13/10/2026 (chủ dự án): bản nháp hai bong bóng — thân là tin rao, đuôi từ "Độ đầy đủ" trở xuống; ghép lại đúng bằng bản một chuỗi.
+{
+  const hb = soanTinNhapHaiBong({ ...NHA_PHO, lai: false, cauTD });
+  la("HAIBONG-1 thân không có điểm / câu duyệt / 👉, đuôi mở bằng 'Độ đầy đủ' và kết bằng 👉",
+    !/Độ đầy đủ|👉|hấp dẫn chưa/.test(hb.than) && /^Độ đầy đủ \d+\/100/.test(hb.duoi) && /👉/.test(hb.duoi.split("\n").at(-1)), JSON.stringify(hb));
+  la("HAIBONG-2 than + duoi = soanTinNhap (một nguồn)", `${hb.than}\n${hb.duoi}` === soanTinNhap({ ...NHA_PHO, lai: false, cauTD }));
+  const hd = soanTinNhapHaiBong({ ...NHA_PHO, lai: false, cauTD, daDang: true });
+  la("HAIBONG-3 tin đã lên kệ: đuôi chỉ còn dòng điểm", /^Độ đầy đủ/.test(hd.duoi) && !/👉|hấp dẫn chưa/.test(hd.duoi), JSON.stringify(hd));
 }
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }

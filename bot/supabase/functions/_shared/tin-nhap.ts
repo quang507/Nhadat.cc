@@ -203,6 +203,16 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
 
 /** Bản nháp đầy đủ — một chuỗi, mỗi dòng một ý (giống một tin rao thật). */
 export function soanTinNhap(t: ThamSoNhap): string {
+  const { than, duoi } = soanTinNhapHaiBong(t);
+  return [than, duoi].filter(Boolean).join("\n");
+}
+
+/**
+ * 13/10/2026 (chủ dự án, ảnh Zalo: "cái chỗ độ đầy đủ trở xuống cho xuống bong bóng chat thứ 2"): bản nháp gửi HAI bong bóng —
+ * `than` là tin rao (📋 … dòng thông số / ảnh), `duoi` là phần nói với chủ nhà (điểm đầy đủ + gợi ý, câu hỏi duyệt, lời hứa báo lại).
+ * Tách theo VỊ TRÍ dòng trong hàm dựng, không theo chữ "Độ đầy đủ" (câu tiền định sửa được ở dashboard).
+ */
+export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string } {
   const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
@@ -374,6 +384,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
   // Tiềm năng CHỈ khi chủ nhà nói (không bịa thay họ).
   them("💡", "Phù hợp", [fact("tiem_nang") ?? fact("muc_dich") ?? fact("nganh_hang_phu_hop")]);
   if (soAnh) dong.push(`📷 ${soAnh} ảnh`);
+  const hetThan = dong.length;
   // Điểm đầy đủ đi CUỐI, chung một dòng với lời gợi ý — để trên câu mở thì tin
   // rao mở đầu bằng một con số nội bộ, không giống tin rao.
   // Gamification (chủ dự án 12/09: "để kích thích người ta đưa nhiều thông tin
@@ -391,5 +402,5 @@ export function soanTinNhap(t: ThamSoNhap): string {
   // 24/09/2026 (chủ dự án): lời hứa báo lại người rao đứng SAU CÙNG. Tin đã lên kệ (daDang) thì câu
   // `dang_luon_cuoi` nói đúng ý đó ngay sau — không lặp.
   if (!daDang) dong.push(cauTD("nhap_goi_hanh_dong"));
-  return dong.filter(Boolean).join("\n");
+  return { than: dong.slice(0, hetThan).filter(Boolean).join("\n"), duoi: dong.slice(hetThan).filter(Boolean).join("\n") };
 }

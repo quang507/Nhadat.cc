@@ -37,7 +37,7 @@ import {
   tenHang, // SRS-5.1zzs: tên hạng Đồng / Bạc / Vàng cho câu lên kệ
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
-import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
+import { type FactNhap, soanTinNhapHaiBong, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
   aiDocThem, bocTachTaoTin, boBaoLai, bongTrichXuat, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, dongFact, dongVuaLuu, KHONG_BOC, NGUON_AI, nhanNgan, phuongKemQuanCu, traLoiCauBot, TU_ANH, vuaLuuBan, vuaLuuMua,
@@ -6112,14 +6112,14 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           .eq("listing_id", listingId).eq("question", "duyet_tin").eq("status", "pending");
         if (dtErr) await ghiLoi(client, "chat-reply dang luon(dong duyet)", dtErr.message);
         if (sau && sau.status !== "cho_thong_tin") {
-          const tinDang = soanTinNhap({
+          const nhapDang = soanTinNhapHaiBong({
             l: l as TinNhapRow, facts: factsNhap as FactNhap[], diem: d.diem, thieu: d.thieu ?? [],
             soAnh: d.so_anh ?? 0, lai: false, cauTD, daDang: true,
           });
           // SRS-5.1zzq: "đăng đi" lên kệ ngay cũng DẪN PHÍ một lần như nhánh duyệt thường (trước đây nhánh này quên).
           const cauDanPhiDL = daNoiPhiRoi() ? "" : cauTD("dang_xong_phi", { loai: loaiDoc(l.property_type) });
           const dongHangDL = await dongHangRao();
-          return await traLoiSeller([...truoc, tinDang, cauTD("dang_luon_cuoi") + (dongHangDL ? `\n${dongHangDL}` : "") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : "")],
+          return await traLoiSeller([...truoc, nhapDang.than, ...(nhapDang.duoi ? [nhapDang.duoi] : []), cauTD("dang_luon_cuoi") + (dongHangDL ? `\n${dongHangDL}` : "") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : "")],
             { ...extra, duyet: true, dang_luon: true, diem: d.diem, listing_status: sau.status, ...(cauDanPhiDL ? { dan_phi: true } : {}) });
         }
         // SRS-5.1zzy (chat thử 07/10: "anh không nhớ nữa em tự search xem, đăng đi" — tin có "đường Thạnh Lộc 41", Quận 12): đã có
@@ -6127,7 +6127,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const thieuDL = await noiThieuDeDang(listingId);
         return await traLoiSeller([...truoc, thieuDL.cau], { ...extra, dang_luon: true, ...thieuDL.meta });
       }
-      const tin = soanTinNhap({
+      // 13/10/2026: bản nháp HAI bong bóng — tin rao / phần nói với chủ nhà (`soanTinNhapHaiBong`).
+      const nhapHai = soanTinNhapHaiBong({
         l: l as TinNhapRow,
         facts: factsNhap as FactNhap[],
         diem: d.diem,
@@ -6136,6 +6137,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         lai,
         cauTD,
       });
+      const tin = nhapHai.than;
       // 30/09/2026 (bắn thử bán lx-ban-292a): lời sửa không đổi dòng nào của bản nháp (vd "người đứng tên" không in trong nháp)
       // → từng gửi lại nguyên bản cũ kèm "Em sửa lại rồi". Thân nháp (trước dòng điểm) y hệt thì chỉ báo đã ghi.
       // Tin bot lưu có thể gộp nhiều bong bóng (🤖 … rồi 📋 …) — so từ dấu 📋.
@@ -6151,7 +6153,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       });
       if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo duyet_tin", irErr.message);
       const { nhap_cu: _nc, ...extraGui } = extra;
-      return await traLoiSeller([...truoc, tin], { ...extraGui, ban_nhap: true, diem: d.diem });
+      return await traLoiSeller([...truoc, tin, ...(nhapHai.duoi ? [nhapHai.duoi] : [])], { ...extraGui, ban_nhap: true, diem: d.diem });
     }
     /**
      * SRS-5.1zzzy (bắn production 09/10/2026): HẾT câu để hỏi trước bản nháp → việc kế là MỘT: gửi bản nháp; chưa đủ điểm thì
