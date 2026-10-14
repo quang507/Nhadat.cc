@@ -4889,8 +4889,9 @@ sửa tay (cần chủ dự án đồng ý trước khi đổi dữ liệu thậ
 cùng khoá; (3) lượt AI soát khẳng định chạy cả khi lời bot chỉ có "Dạ" + một câu hỏi. Chỗ cùng lớp: lượt bóc tách và lượt đọc ý vẫn chạy song
 song cho mọi tin (chưa đổi — đổi là đổi cách đọc, cần đo riêng).
 
-**Quy tắc.** Gộp cụm mặc định 1,5 s (`app_config.gop_cum` vẫn chỉnh được, `tat` = 0, trần 8 s). Khoá bí mật nhớ 60 giây trong isolate
-(`_shared/claude.ts`, chỉ nhớ giá trị đọc được; `xoaNhoBiMat()` cho bài kiểm). `loiKhongCanSoat` (`van-tra-loi.ts`): lời không có chữ số, đúng
+**Quy tắc.** Gộp cụm mặc định 1,5 s (`app_config.gop_cum` vẫn chỉnh được, `tat` = 0, trần 8 s). Khoá bí mật nhớ theo từng client (mỗi request
+một client, tối đa 60 s — `_shared/claude.ts`, chỉ nhớ giá trị đọc được): bỏ ~8 lần gọi lặp trong một lượt, request sau đọc lại Vault nên xoá /
+xoay khoá có hiệu lực ngay (bản đầu nhớ chung isolate làm đỏ e2e webhook CK-4 — đổi khoá giữa các ca). `loiKhongCanSoat` (`van-tra-loi.ts`): lời không có chữ số, đúng
 một câu hỏi không chứa tên riêng, các câu còn lại chỉ là "dạ / vâng / em ghi rồi" → bỏ lượt AI soát; có số, tên riêng, khẳng định hay gợi ý giá
 trị thì vẫn soát.
 
