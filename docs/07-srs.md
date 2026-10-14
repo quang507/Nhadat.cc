@@ -4517,6 +4517,35 @@ không ghi hướng của tin trước), GOPCUM-02 đỏ (lượt vẫn ghi fact
 chờ (`dau_luot`) — sớm hơn cổng "đủ rồi" / trước gửi; TOIUU-07 +2 truy vấn (công tắc + tin lân cận). Thả cảm xúc không gộp (ZR-05 giữ). Cách nói mới chưa bắn: "Đường 156 An Dương Vương" ⏎ "Phường Phú Định" ⏎ "hẻm 5m".
 e2e thay giấc chờ bằng `globalThis.__nguGopCum`.
 
+**Đo trên production** (14/10/2026 00:12–00:14, ID thử `thu-gc-01`, đã dọn): hai tin cách 65 ms → một lượt thoát `dau_luot` sau 4,1 s, lượt
+kia trả một 🤖 mang cả hẻm 6m + xây dựng; lượt thường 13–19 s (doc_y_luot ~2,7 s, boc_rao 5–10 s, viết ~1 s, soát 1,5–3,4 s) cộng 3 s chờ.
+Giấc chờ KHÔNG nạp trước gì cả — lời đáp phụ thuộc bản gộp nên không soạn sớm được; cái có thể làm sau là đọc lịch sử / cấu hình song
+song với giấc chờ (tiết kiệm vài trăm ms), chưa làm.
+
+### SRS-5.1zzzzzzh · AI bóc tách trả rỗng mà từ điển nghề thấy dữ liệu → gọi lại model một lần kèm gợi ý (14/10/2026)
+
+**Nguồn.** Bắn production 14/10 00:13 (`thu-gc-01`, đất Q8, chủ dự án: "test lại những chỗ nghi ngờ bằng 1 lượt tin đi"): đang hỏi "mặt tiền
+đường bao nhiêu mét", khách "Đất có sổ đỏ chính chủ" → `boc_tach_bong` #812: model (Haiku) `so_can 0`, `truong []`, `de_xuat []`, chỉ
+`khong_can_hoi` loại / diện tích → 🤖 "Không trích xuất được gì từ tin này", `legal_status` trống, trong khi lời bot lại nói tiếp về giấy
+tờ ("Còn giấy tờ khác như giấy phép xây dựng…"). Đây là ca thật của điều chủ dự án nghi ("không bóc tách được gì còn ai bóc tách được"):
+không phải code trả lời trước AI, mà là AI bóc tách đọc hụt, và ở chế độ `ai` luật không được ghi thẳng ô thuộc `KHOA_FACT_AI_BIET`.
+
+**Lớp lỗi.** Model đọc một câu THUẦN CHỮ không trả lời câu đang hỏi là "tin không mang gì" — cùng lớp SRS-5.1zzzzzh (12/10, "sổ hồng riêng
+anh đứng tên" khi hỏi độ rộng đường) nhưng ví dụ hôm đó có số ("50m2, 3 lầu, giá 5 tỷ…"), câu không số vẫn hụt. Chỗ cùng lớp: mọi câu
+trả lời lạc câu hỏi chỉ có một ô chữ (pháp lý, hướng, hiện trạng, nội thất).
+
+**Quy tắc.** (1) Ví dụ mẫu mới (`vi-du-boc-rao.ts`): đang hỏi `do_rong_duong`, "Lô này sổ đỏ chính chủ nha em" → `phap_ly` "sổ đỏ",
+`co_tra_loi = false`; "chính chủ" cạnh sổ là giấy tờ, không phải vai. (2) Lưới đỡ ở `chat-reply` (chỉ chế độ `ai`): AI trả RỖNG TOÀN BỘ
+(`aiRongHoanToan`: không ô, không kiến thức, không trả lời, không hỏi ngược, không xác nhận, không sửa, ý / cảm xúc bình thường, không
+vai, không căn khác) mà `nhanDienNhieuFact` thấy cụm dữ liệu nguyên văn trong tin → gọi `bocRaoBangModel` lại MỘT lần với
+`nguCanh.goiY` (cụm + ô có thể là); câu lệnh nói rõ "không bắt buộc, không bịa, trích dẫn phải nằm trong tin". AI vẫn quyết, lớp kiểm
+bằng chứng không đổi, luật KHÔNG ghi thẳng (giữ bất biến "AI đọc, code kiểm" của SRS-5.1q; cùng khuôn `nangXacNhanChac` /
+`goiLaiChoDungO`). Lượt đầu vẫn tính tiền (`doTien`). Từ điển không thấy gì (câu xã giao) → không gọi lại.
+
+**Kiểm.** `bot/tests/vi-du-boc-rao.mjs` (ví dụ qua kiểm bằng chứng + có ví dụ thuần chữ "chính chủ"; trần bản chữ 15700); e2e GOIY-01 (AI
+rỗng → gọi lại đúng một lần, câu lệnh lượt hai mang gợi ý, pháp lý ghi, 🤖 có pháp lý), GOIY-02 (AI rỗng + từ điển không thấy → một lượt,
+không ghi). Tắt bản sửa: GOIY-01 đỏ (một lượt, không fact). Cách nói mới chưa bắn: "giấy tờ đầy đủ rồi anh ơi", "hướng Đông Nam nha".
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

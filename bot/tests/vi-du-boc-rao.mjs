@@ -32,6 +32,10 @@ for (const [i, v] of VI_DU_BOC_RAO.entries()) {
     /duong \/ ten_duong CHỈ khi tin có tên đường, hẻm hoặc số nhà/.test(luat) &&
       VI_DU_BOC_RAO.some((v) => /(?:^|\s)xã\s/i.test(v.tin) && /\d+x\d+/.test(v.tin) && !v.truong.some((t) => t.khoa === "duong" || t.khoa === "ten_duong")));
 }
+// SRS-5.1zzzzzzh (bắn production 14/10): câu chỉ nói giấy tờ kèm "chính chủ" khi đang hỏi câu khác → vẫn phap_ly. Xoá ví dụ là đỏ.
+ok("SRS-5.1zzzzzzh ví dụ: đang hỏi câu khác, câu thuần chữ 'sổ đỏ chính chủ' → truong phap_ly, không rỗng",
+  VI_DU_BOC_RAO.some((v) => v.cau_dang_hoi && v.cau_dang_hoi !== "phap_ly" && /chính chủ/.test(v.tin) && !/\d/.test(v.tin) &&
+    v.truong.some((t) => t.khoa === "phap_ly" && /sổ đỏ/.test(t.gia_tri))));
 const chu = viDuThanhChu();
 // 01/10/2026: nới 8000 → 8600 cho ví dụ 12 (lỗi thật của chế độ `ai`: lạc câu hỏi thì trả rỗng, "3 lầu" quên trệt). Khối
 // ví dụ nằm trong system có cache (tỉ lệ trúng cache Console ~92%), nên vài trăm ký tự thêm gần như không tốn thêm tiền.
@@ -47,7 +51,9 @@ const chu = viDuThanhChu();
 // 13/10/2026: nới 13000 → 14000 cho ví dụ "Diện tích đất 80m²" không phải ngang (SRS-5.1zzzzzx — luật chữ "số có m2 là dien_tich" có từ trước mà AI vẫn đọc ngang 80).
 // 13/10/2026: nới 14000 → 14700 cho ví dụ "tiền làm thêm không phải giá" + "ở đường X là địa chỉ" (SRS-5.1zzzzzy — luật chữ về tiền cọc / phí có từ trước mà AI vẫn đọc 1,2 tỷ hoàn thiện thành giá).
 // 13/10/2026 (tối): nới 14700 → 15200 cho ví dụ "sửa giá lúc duyệt" (SRS-5.1zzzzzza — luật chữ số 5 có từ trước mà AI vẫn trả rỗng).
-ok("bản chữ có đủ ví dụ và không dài quá 15200 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 15200, String(chu.length));
+// 14/10/2026: nới 15200 → 15700 cho ví dụ SRS-5.1zzzzzzh (câu thuần chữ "sổ đỏ chính chủ" lạc câu hỏi → model trả rỗng trên production).
+// Khối ví dụ nằm trong system có cache, vài trăm ký tự thêm gần như không tốn thêm tiền.
+ok("bản chữ có đủ ví dụ và không dài quá 15700 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 15700, String(chu.length));
 ok("bản chữ không chứa số điện thoại", !/\b0\d{9}\b/.test(chu));
 
 console.log(hong ? `\nVÍ DỤ MẪU: ${hong}/${tong} CA HỎNG` : `\nVÍ DỤ MẪU: ${tong}/${tong} CA ĐẠT`);

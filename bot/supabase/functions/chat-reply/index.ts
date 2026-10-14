@@ -4576,8 +4576,25 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           ];
         }
         // SRS-5.1zzzzq: lời chào đầu tin cắt khỏi chữ AI đọc ("chào em, chị muốn bán lô đất" → AI rỗng); trích dẫn vẫn kiểm trên tin gốc.
-        const r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, boLoiChaoDau(textTreo || textBongAi), pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi,
-          laCheDoAi ? { hoiThoai, cauConHoi, tinChuNha: tinChuNhaGoc(), canDangCo: dsMo.slice(0, 5).map(moTaCanDangCo) } : null);
+        const tinAiDoc = boLoiChaoDau(textTreo || textBongAi);
+        const nguCanhAi = laCheDoAi ? { hoiThoai, cauConHoi, tinChuNha: tinChuNhaGoc(), canDangCo: dsMo.slice(0, 5).map(moTaCanDangCo) } : null;
+        let r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, tinAiDoc, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi, nguCanhAi);
+        // SRS-5.1zzzzzzh (bắn production 14/10 thu-gc-01: đang hỏi mặt tiền đường, "Đất có sổ đỏ chính chủ" → AI trả RỖNG hoàn toàn, 🤖 "Không
+        // trích xuất được gì", pháp lý mất, lời bot lại nói tiếp về giấy tờ): AI bảo "tin không mang gì" trong khi từ điển nghề tiền định thấy
+        // cụm dữ liệu NGUYÊN VĂN trong tin → hai bên lệch → gọi lại model MỘT lần kèm gợi ý (AI vẫn quyết, code vẫn kiểm trích dẫn; luật
+        // KHÔNG ghi thẳng — cùng khuôn `nangXacNhanChac` / `goiLaiChoDungO`). Chỉ chế độ `ai`, chỉ khi AI rỗng TOÀN BỘ.
+        const aiRongHoanToan = (r: typeof r0) => !!r.ket && !r.truong.length && !r.kienThuc.length && !r.traLoi?.co_tra_loi && !r.hoiLai?.co_hoi &&
+          !r.xacNhan?.length && !r.capNhat?.length && (!r.yDinh?.loai || r.yDinh.loai === "binh_thuong") && (!r.camXuc?.muc || r.camXuc.muc === "binh_thuong") &&
+          (!r.vai?.la || r.vai.la === "khong_noi") && !r.canKhac;
+        if (laCheDoAi && nguCanhAi && aiRongHoanToan(r0)) {
+          const goiY = nhanDienNhieuFact(tinAiDoc).filter((f) => f.question !== "bo_sung" && f.answer.trim()).slice(0, 4)
+            .map((f) => `"${f.answer.slice(0, 60)}" (có thể là ${FACT_LABELS[f.question] ?? f.question})`);
+          if (goiY.length) {
+            console.log("chat-reply: AI bóc tách rỗng mà từ điển thấy dữ liệu → gọi lại một lần", goiY.join(" | "));
+            await doTien(client, r0.usage as Parameters<typeof doTien>[1]);
+            r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, tinAiDoc, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi, { ...nguCanhAi, goiY });
+          }
+        }
         // 01/10/2026 (lx-tt-08): viết tắt AI đánh dấu "không chắc" mà từ điển tiền định đọc ra CÙNG ô ("shr" → pháp lý) là chắc —
         // ghi thẳng, không để rơi ở nhánh không hỏi xác nhận (`nangXacNhanChac`).
         const xnChac = laCheDoAi ? nangXacNhanChac(r0.xacNhan, textTreo || textBongAi, nhanDienNhieuFact) : null;
