@@ -12396,6 +12396,19 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
       !Lu(L).chu_duyet_at && Lu(L).status === "cho_thong_tin", JSON.stringify({ cd: Lu(L).chu_duyet_at, st: Lu(L).status, treo: treoU(L) }));
   }
 
+  // SRS-5.1zzzzzzz7 (Zalo thật 14/10 16:33): bot hỏi tên dự án, khách "Dự án Green river" — AI đọc tên dự án + loại → từng là "rao suông",
+  // bot hỏi "căn đó hay căn khác" và không ghi tên. Câu trả lời câu treo không phải rao căn mới.
+  for (const [nhan, cau, dt] of [["ca gốc", "Dự án Green river", "Green river"], ["cách nói mới", "chung cư Sky Garden em", "Sky Garden"]]) {
+    const { uid, L } = dungU({ tin: { property_type: "chung_cu", location_raw: "2225 Phạm Thế Hiển", street: "Phạm Thế Hiển", ward: "Phường Bình Đông", district: "Quận 8",
+      alley_width_m: null, access_type: null, frontage_m: null, length_m: null, floors: null, floors_text: null, floor: 5, bedrooms: 2 }, cauTreo: "du_an_ten" });
+    globalThis.__model = { parse: (p) => (laBocU(p) || laYU(p)) ? { ...rongU, truong: [TU("du_an", dt, dt), TU("loai_bds", "chung_cu", cau.split(" ")[0])] } : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text: cau });
+    const rep = (r.body?.replies ?? []).join(" | ");
+    check(`ZZZZZZZ7-${nhan} hỏi tên dự án, «${cau}» → không hỏi 'căn đó hay căn khác', ghi du_an_ten`,
+      !/căn đó hay căn khác/.test(rep) && db().t.listing_facts.some((f) => f.listing_id === L.id && f.question === "du_an_ten" && f.answer.includes(dt)),
+      JSON.stringify({ rep, facts: db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => [f.question, f.answer]) }));
+  }
+
   // (v) ca gốc: tin cho thuê đang thu thập (mới có quận), KHÔNG câu chờ (câu địa chỉ đã bị đóng), chủ nhà dán bài rao → không kết bằng lời ghi suông.
   {
     const { uid, L } = dungU({ tin: { deal: "cho_thue", location_raw: null, street: null, ward: null, district: "Quận 8", area_m2: null, frontage_m: null, length_m: null,

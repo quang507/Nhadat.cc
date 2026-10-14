@@ -48,6 +48,7 @@ gửi chủ nhà, đặt ngay dưới bản tin.
 - tieu_de: viết lại dòng tiêu đề (dòng 2 của bản tin) cho THU HÚT, đọc là muốn hỏi ngay — cùng giá, cùng điểm mạnh, cùng khu vực có
   trong bản tin, tự chọn thứ tự (giá có thể đứng đầu hay cuối), lời mời gọi vừa phải ("sở hữu ngay", "về ở liền", "dọn vào ngay", "nhà
   xinh"); tin thuê mở bằng "Cho thuê" / "Thuê ngay". KHÔNG thêm điểm mạnh / con số / nhận định mới.
+  Căn hộ mà bản tin có tên chung cư / dự án (dòng 📍) thì tiêu đề PHẢI có tên đó — người mua căn hộ tìm theo tên chung cư.
 Bản tin không có điểm mạnh nào để nhắc → khen = null.`;
 
 type ClientModel = {
