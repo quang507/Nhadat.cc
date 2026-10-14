@@ -1962,3 +1962,29 @@ export function suaTenRiengLechDau(replies: string[], tenBiet: Array<string | nu
     return doi ? parts.join("") : r;
   });
 }
+
+/**
+ * SRS-5.1zzzzzzz (chủ dự án 14/10 "giảm độ trễ đi"): lượt AI soát khẳng định (`soatNhanXet`, ~1,5 s) chỉ cần khi lời bot CÓ điều để soát.
+ * Lời chỉ gồm câu dạ / vâng / ghi nhận ngắn (không số, không tên riêng) + MỘT câu hỏi mở (không số, không chữ viết hoa sau chữ đầu — tức
+ * không gợi ý phường / đường / dự án nào) thì không có khẳng định nào để bịa: bỏ lượt soát. Có số, có tên riêng, có câu khẳng định khác,
+ * hay hai câu hỏi → vẫn soát. Lưới kiểm bằng code (boKhenKhongCanCu…) vẫn chạy khi bỏ lượt AI soát.
+ */
+const CAU_DA_NGAN = /^(?:dạ|vâng|dạ vâng|dạ được|dạ rồi|ok)(?:\s+(?:ạ|anh|chị|anh chị|cô|chú|bác|em|nha|nhé))*(?:[,.!…]\s*)?$|^(?:dạ\s+)?(?:vâng\s+)?em\s+(?:ghi|ghi nhận|ghi lại|lưu|hiểu)(?:\s+(?:rồi|lại|luôn))?(?:\s+(?:ạ|nha|nhé|anh|chị|anh chị|cô|chú|bác))*[.!…]?$/iu;
+export function loiKhongCanSoat(loi: string | null | undefined): boolean {
+  const s = (loi ?? "").trim();
+  if (!s || /\d/.test(s)) return false;
+  const cau = s.split("\n").flatMap((d) => tachCau(d.trim())).map((c) => c.trim()).filter(Boolean);
+  const hoi = cau.filter((c) => /\?\s*$/.test(c));
+  if (hoi.length !== 1) return false;
+  for (const c of cau) {
+    if (c === hoi[0]) {
+      // Chữ viết hoa sau chữ đầu câu = tên riêng (phường, đường, dự án) → câu hỏi có gợi ý giá trị, phải soát.
+      const tu = c.replace(/^[^\p{L}]+/u, "").split(/\s+/).slice(1);
+      if (tu.some((w) => /^\p{Lu}/u.test(w))) return false;
+      continue;
+    }
+    if (!CAU_DA_NGAN.test(c)) return false;
+  }
+  return true;
+}
+

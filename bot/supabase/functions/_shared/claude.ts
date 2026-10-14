@@ -100,11 +100,32 @@ export function tomTatLuuLuong(dem: DemLuuLuong): Record<string, unknown> {
   return { so: dem.so, byte: dem.byte, top };
 }
 
+/**
+ * SRS-5.1zzzzzzz (chủ dự án 14/10 "giảm độ trễ đi"): mỗi lượt chat-reply gọi `get_secret` ~8 lần (sổ lưu lượng `_luu_luong`). Giá trị ĐỌC
+ * ĐƯỢC nhớ theo TỪNG client (mỗi request một client) tối đa 60 giây; null / lỗi KHÔNG nhớ (SEC-02, e2e "VAULT HỤT MỘT LẦN → đọc lại ngay").
+ * Nhớ theo client chứ không theo cả isolate: request sau đọc lại Vault, nên xoá / xoay khoá có hiệu lực ngay lượt kế (e2e webhook CK-4 đổi
+ * khoá giữa các ca và bắt được bản nhớ chung isolate đầu tiên).
+ */
+const NHO_BI_MAT_MS = 60_000;
+const nhoBiMat = new WeakMap<object, Map<string, { v: string; luc: number }>>();
+const layNho = (db: object, name: string): string | null => {
+  const n = nhoBiMat.get(db)?.get(name);
+  return n && Date.now() - n.luc < NHO_BI_MAT_MS ? n.v : null;
+};
+const datNho = (db: object, name: string, v: string) => {
+  let m = nhoBiMat.get(db);
+  if (!m) { m = new Map(); nhoBiMat.set(db, m); }
+  m.set(name, { v, luc: Date.now() });
+};
+
 /** Secret lấy từ env (supabase secrets) trước, không có thì đọc Vault. */
 export async function secretOf(db: SupabaseClient, name: string): Promise<string | null> {
   const fromEnv = Deno.env.get(name);
   if (fromEnv) return fromEnv;
+  const nho = layNho(db, name);
+  if (nho) return nho;
   const { data } = await db.rpc("get_secret", { secret_name: name });
+  if (typeof data === "string" && data) datNho(db, name, data);
   return (data as string) ?? null;
 }
 
@@ -122,8 +143,11 @@ export async function docBiMat(
 ): Promise<{ giaTri: string | null; loi: string | null }> {
   const fromEnv = Deno.env.get(name);
   if (fromEnv) return { giaTri: fromEnv, loi: null };
+  const nho = layNho(db, name);
+  if (nho) return { giaTri: nho, loi: null };
   const { data, error } = await db.rpc("get_secret", { secret_name: name });
   if (error) return { giaTri: null, loi: error.message };
+  if (typeof data === "string" && data) datNho(db, name, data);
   return { giaTri: (data as string) ?? null, loi: null };
 }
 

@@ -111,6 +111,8 @@ export type DongBaoLai = SpecRow & {
 export type FactBaoLai = {
   question: string; answer: string | null; created_at?: string | null; source?: string | null;
   goc?: ReadonlyArray<string | null | undefined> | null;
+  /** SRS-5.1zzzzzzx: tin này có nói ô đó nhưng giá trị tin đã mang từ trước — in kèm "(như cũ)". */
+  nhuCu?: boolean;
 };
 /** Ngữ cảnh in một mục: `tin` = chữ khách vừa nhắn (nơi tìm nguyên mẫu); `dong` = dòng tin (tên đường từ điển cho bộ in). */
 export type NguCanhIn = { tin?: string | null; dong?: DongBaoLai | null };
@@ -180,7 +182,7 @@ export function dongTrichXuat(nhan: string, tho: string | null | undefined, chua
 export function dongFact(f: FactBaoLai, nhan: Record<string, string>, ngu: NguCanhIn = {}, tienTo = ""): string {
   const v = (f.answer ?? "").replace(/\s+/g, " ").trim();
   const tho = timNguyenMau(ngu.tin, ...(f.goc ?? []), v);
-  return dongTrichXuat(`${tienTo}${nhanNgan(f.question, nhan)}`, tho, lamChuanFact(f.question, v, ngu.dong ?? null));
+  return dongTrichXuat(`${tienTo}${nhanNgan(f.question, nhan)}`, tho, lamChuanFact(f.question, v, ngu.dong ?? null)) + (f.nhuCu ? " (như cũ)" : "");
 }
 /** Ghép bong bóng từ các dòng — null khi không có dòng nào. */
 export const bongTrichXuat = (dong: string[]): string | null => dong.length ? `${BOC_DUOC}\n${dong.join("\n")}` : null;
@@ -390,6 +392,7 @@ const O_TIEN: ReadonlySet<string> = new Set(["gia", "tien_coc", "doanh_thu", "th
 export function dongVuaLuu(facts: FactBaoLai[], nhan: Record<string, string>, ngu: NguCanhIn = {}): string[] {
   const moiNhat = new Map<string, string>();
   const goc = new Map<string, FactBaoLai["goc"]>();
+  const nhuCu = new Map<string, boolean>();
   // SRS-5.1zzzzzw (Zalo thật 13/10 15:47, bài rao KDC Cầu Tràm: 🤖 in "thông tin bổ sung: … 'thông ra ĐT 835D chỉ 200 mét'" trong khi lượt
   // ghi nhiều ý): ghi chú `bo_sung` là NHIỀU dòng một lượt — mỗi khoá chỉ giữ một giá trị thì bong bóng chỉ còn ý đầu. Gộp đủ các ý " · ".
   // Mỗi ý một dòng (một dòng gộp 120 ký tự lại cắt mất ý sau), thứ tự như lúc ghi.
@@ -404,6 +407,7 @@ export function dongVuaLuu(facts: FactBaoLai[], nhan: Record<string, string>, ng
     if (moiNhat.has(f.question)) continue;
     moiNhat.set(f.question, a);
     goc.set(f.question, f.goc ?? null);
+    if (f.nhuCu) nhuCu.set(f.question, true);
   }
   const dongBoSung = boSung.reverse().map((y) => `• ${nhanNgan("bo_sung", nhan)}: "${gon(y, 170)}"`);
   if (!moiNhat.size && !dongBoSung.length) return [];
@@ -419,7 +423,7 @@ export function dongVuaLuu(facts: FactBaoLai[], nhan: Record<string, string>, ng
   // 23/09/2026 (chủ dự án: "ghi thật đầy đủ"): trần 12 khoá / 50 ký tự từng cắt mất fact và đuôi câu trả lời.
   // SRS-5.1zzzzh / 5.1zzzzj: phần LÀM CHUẨN đọc qua bộ in một nguồn (`lamChuanFact`: tiền `donViGiaDep`, địa chỉ `duongHienThi`,
   // phường + quận cũ, kích thước); fact trong DB giữ nguyên chữ. SRS-5.1zzzzn: phần NGUYÊN MẪU là cụm khách gõ (`dongFact`).
-  return [...[...moiNhat].reverse().slice(0, 40).map(([k, v]) => dongFact({ question: k, answer: v, goc: goc.get(k) }, nhan, ngu)), ...dongBoSung];
+  return [...[...moiNhat].reverse().slice(0, 40).map(([k, v]) => dongFact({ question: k, answer: v, goc: goc.get(k), nhuCu: nhuCu.get(k) }, nhan, ngu)), ...dongBoSung];
 }
 /** "🤖 Đã trích xuất:\n• giá: "9 ty 5" → làm chuẩn "9 tỷ 5"\n• pháp lý: "sổ hồng riêng"" — fact lượt này, null khi không có. */
 export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>, ngu: NguCanhIn = {}): string | null {

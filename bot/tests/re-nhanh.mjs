@@ -24,9 +24,11 @@ r = reNhanh({ loai: "dat", deal: "ban", facts: [f("_mo_ta", "Bán đất thổ c
 ok("đất thổ cư trong hẻm → KHÔNG hỏi 'xây tự do hay theo mẫu chủ đầu tư'", r.bo.has("xay_dung"), JSON.stringify([...r.bo]));
 r = reNhanh({ loai: "dat", deal: "ban", facts: [f("_mo_ta", "Bán nền dự án KDC Phú Mỹ")] }, []);
 ok("đất nền dự án → vẫn hỏi xây tự do hay theo mẫu", !r.bo.has("xay_dung"));
-ok("nhãn vị trí theo loại: đất vườn / kho không đòi số nhà, căn hộ hỏi dự án + toà",
+// SRS-5.1zzzzzzz3 (14/10/2026): căn hộ — tên chung cư / dự án là ô riêng `du_an_ten`; ô vị trí căn hộ hỏi đường, khu (không số nhà).
+ok("nhãn vị trí theo loại: đất vườn / kho không đòi số nhà, căn hộ: vị trí = đường/khu, tên chung cư ở ô du_an_ten",
   /không cần số nhà/.test(nhanTheoLoai("vi_tri", "dat_nong_nghiep")) && /không cần số nhà/.test(nhanTheoLoai("vi_tri", "kho_xuong")) &&
-  /dự án/.test(nhanTheoLoai("vi_tri", "chung_cu")) && nhanTheoLoai("vi_tri", "nha_pho") === FACT_LABELS.vi_tri);
+  /không cần số nhà/.test(nhanTheoLoai("vi_tri", "chung_cu")) && /chung cư/.test(nhanTheoLoai("du_an_ten", "chung_cu")) &&
+  /chung cư/.test(cauHoiMau("du_an_ten", "anh", CAU_HOI_MAU, "chung_cu")) && nhanTheoLoai("vi_tri", "nha_pho") === FACT_LABELS.vi_tri);
 ok("câu hỏi vị trí theo loại: kho xưởng hỏi khu công nghiệp, không hỏi số nhà",
   /khu công nghiệp/.test(cauHoiMau("vi_tri", "anh", CAU_HOI_MAU, "kho_xuong")) && !/số mấy|số nhà/.test(cauHoiMau("vi_tri", "anh", CAU_HOI_MAU, "kho_xuong")));
 // 24/09/2026 (bắn 10 tin): toà nhà CHDV "đang thu 250 triệu/tháng" — cho thuê từng phòng, không hỏi hạn hợp đồng thuê.

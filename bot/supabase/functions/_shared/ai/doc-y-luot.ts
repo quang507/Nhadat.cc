@@ -62,6 +62,9 @@ có GẬT với điều bot vừa nói không. Đọc theo NGHĨA, có viết t�
 - dong_y: "ừ", "ừa", "ok e", "oke", "đúng rồi", "chuẩn rồi", "phải", "được em", "vậy cũng được", "ổn áp", "chốt", "👍" — đồng ý với câu
   bot hỏi / gợi ý (phường, tên đường, nghĩa chữ viết tắt), với bản nháp tin, hoặc với lời hẹn của bot.
 - dong_y_dang: gật VÀ bảo đăng tin: "ok đăng đi", "cứ đăng như này trước", "triển luôn em", "lên tin luôn".
+  "Đăng giúp chị (theo) nội dung này / nội dung sau nhé" mà câu bot vừa nói KHÔNG phải bản nháp tin và tin này không kèm nội dung căn
+  (giá, diện tích, địa chỉ…) → KHÔNG phải dong_y_dang: chủ nhà sắp gửi nội dung → khong_noi + yeu_cau gui_noi_dung_sau. Bot vừa gửi
+  bản nháp tin thì "đăng theo nội dung này nhé" là dong_y_dang.
 - khong_dong_y: "không phải", "sai rồi", "không đúng", "chưa", "khoan đã".
 - khong_noi: tin chỉ đưa thông tin căn nhà, hỏi lại bot, kể chuyện khác, hoặc không rõ. Góp ý SỬA bản nháp / đưa TIÊU ĐỀ khác
   ("tiêu đề như vầy hay hơn: …", "đổi tít thành …") là khong_noi — chưa duyệt; câu tiêu đề vào tieu_de. Bảo SỬA / LÀM LẠI / nói

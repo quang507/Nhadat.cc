@@ -367,5 +367,16 @@ console.log(`\n${dat} đạt · ${hong} hỏng`);
   const b3 = soanTinNhap({ l: NHA_PHO.l, facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD, tienIch: Y.slice(0, 8), quyMo: [Y[8]], tienIchNoiBat: [{ goc: "Siêu thị Co.opmart", in: "Co.opmart" }] });
   la("TIENICH-CHON-3 (đối chứng) ý chọn không có trong ý thêm của tin → coi như không có danh sách, in đủ", Y.slice(0, 8).every((y) => b3.includes(y)) && !/Co\.opmart/.test(b3), b3);
 }
+// SRS-5.1zzzzzzz3 (Zalo thật 14/10/2026): căn hộ "2225 Phạm Thế Hiển" — tên chung cư (ô du_an_ten) phải in cạnh địa chỉ đường; tên đã nằm
+// trong địa chỉ (location_raw do trigger điền từ tên) thì không lặp.
+{
+  const l = { code: "BDS-CH-Q8-0009", property_type: "chung_cu", deal: "ban", location_raw: "2225 Phạm Thế Hiển", ward: "Phường Chánh Hưng", district: "Quận 8", area_m2: 70, price_raw: "3 tỷ", bedrooms: 2, floor: 12 };
+  const b = soanTinNhap({ l, facts: [{ question: "du_an_ten", answer: "Chung cư Sky Garden" }], diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
+  const dc = b.split("\n").find((x) => x.startsWith("📍")) ?? "";
+  la("CC-TEN-1 căn hộ có địa chỉ đường + tên chung cư → dòng 📍 in cả hai", /2225 Phạm Thế Hiển/.test(dc) && /Chung cư Sky Garden/.test(dc), dc);
+  const b2 = soanTinNhap({ l: { ...l, location_raw: "Chung cư Sky Garden" }, facts: [{ question: "du_an_ten", answer: "Chung cư Sky Garden" }], diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
+  const dc2 = b2.split("\n").find((x) => x.startsWith("📍")) ?? "";
+  la("CC-TEN-2 tên chung cư đã là địa chỉ → không in lặp", (dc2.match(/Sky Garden/g) ?? []).length === 1, dc2);
+}
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");
