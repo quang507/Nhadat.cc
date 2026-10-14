@@ -4788,6 +4788,20 @@ lượt chốt tin đã so `trungY` khi thêm ý (SRS-5.1zzzzzg) — nhưng `tru
 
 **Kiểm.** `tin-nhap-rao.mjs` THEM-TRUNG-1 (ca gốc), THEM-TRUNG-2 (đối chứng: hai chợ khác nhau giữ cả hai); e2e ZZZZZZ-01b, QUYMO-01b giữ nguyên.
 
+### SRS-5.1zzzzzzt · Giọng "trợ lý môi giới cao cấp" (14/10/2026)
+
+**Nguồn.** Chủ dự án 14/10: "Giọng điệu chuyên nghiệp, am hiểu thị trường, lịch sự nhưng gần gũi, môi giới hiểu biết và nhanh nhẹn, (đúng chất của
+một trợ lý môi giới cao cấp)". `TONE_RULES` đang tả "nhân viên môi giới trẻ lễ phép mà nhanh nhẹn" (08/10).
+
+**Thay đổi.** Câu mở mục "Cách nói" của `TONE_RULES` đổi thành "TRỢ LÝ MÔI GIỚI CAO CẤP … chuyên nghiệp, hiểu nghề, lịch sự mà gần gũi, NHANH NHẸN"
+và định nghĩa HIỂU NGHỀ = hỏi đúng điều người mua sẽ hỏi + dùng đúng từ nghề. Đây không phải sửa lỗi nên không có "lớp lỗi"; điều cần giữ là
+KHÔNG mâu thuẫn luật cũ: "am hiểu thị trường" nếu viết thẳng sẽ dạy model nhận định giá khu vực / xu hướng — đúng thứ luật chống bịa (SRS-5.1zzzzzb,
+lượt soát `kiem-khen.ts`) bỏ đi; nên câu mới nói rõ nhận định thị trường chỉ theo DỮ LIỆU TRA CỨU. Mặt cười gõ tay (`:D`, `=))`, `8-)` — quyết
+định chủ dự án 21/09 "giống người nhất có thể") KHÔNG đổi trong lần này: hai yêu cầu có thể vênh ("cao cấp" vs "giống người"), chờ chủ dự án chốt.
+
+**Kiểm.** `luat-khong-mau-thuan.mjs` (luật giọng vẫn cấm gạch dài / "anh/chị", vẫn cấm gắn lợi ích), e2e toàn bộ. Prompt DB (`bot_prompts.tone_rules`)
+khớp md5 code trước khi sửa — sau merge chạy `dong-bo-prompt.yml` (`day`, `chi_khoa=tone_rules`) để DB nhận bản mới.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
