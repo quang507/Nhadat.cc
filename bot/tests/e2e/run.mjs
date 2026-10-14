@@ -11770,11 +11770,12 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
       };
       const r = await send({ external_user_id: uid, text: "Tiêu đề: Chỉ 7,6 tỷ hẻm xe hơi Chợ Lớn" });
       const nhap = (r.body?.replies ?? []).find((x) => x.startsWith("📋")) ?? "";
-      const ti = nhap.split("\n").find((x) => x.startsWith("🏫")) ?? "";
+      // SRS-5.1zzzzzzj: tiện ích nằm đầu dòng 📝 Thêm (gộp), không còn dòng 🏫 riêng.
+      const ti = nhap.split("\n").find((x) => x.startsWith("📝 Thêm")) ?? "";
       const duDb = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "bo_sung").length === Y.length;
-      check(`ZZZZZZ-${ma} bài rao 8 ý tiện ích → dòng 🏫 ${mong ? "chỉ 4 ý AI chọn, chữ gọn, không UBND / Vinhomes" : "in đủ 8 ý như cũ"}; DB vẫn đủ 8 fact`,
-        duDb && (mong
-          ? ti.includes("ra ĐT 835D 200m") && ti.includes("KCN Cầu Tràm 10 phút") && ti.includes("cao tốc Bến Lức - Long Thành") && !/UBND|Vinhomes|Chợ Bình Chánh/.test(ti) && ti.split(" · ").length <= 5
+      check(`ZZZZZZ-${ma} bài rao 8 ý tiện ích → phần tiện ích dòng 📝 Thêm ${mong ? "chỉ 4 ý AI chọn, chữ gọn, không UBND / Vinhomes" : "in đủ 8 ý như cũ"}; DB vẫn đủ 8 fact; không dòng 🏫`,
+        duDb && !/🏫/u.test(nhap) && (mong
+          ? ti.includes("ra ĐT 835D 200m") && ti.includes("KCN Cầu Tràm 10 phút") && ti.includes("cao tốc Bến Lức - Long Thành") && !/UBND|Vinhomes|Chợ Bình Chánh/.test(ti) && ti.split(" · ").length <= 7
           : Y.every((y) => ti.includes(y))),
         JSON.stringify({ ti, duDb, nhap: nhap.slice(0, 500) }));
     }

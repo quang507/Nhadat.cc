@@ -92,11 +92,11 @@ export type ThamSoNhap = {
   khen?: string | null;
   /** SRS-5.1zzzzzn: ý thêm (`bo_sung`) AI xếp là QUY MÔ / không gian căn ("nhà bếp - phòng khách rộng", "sân rộng") — in ở dòng Quy mô. */
   quyMo?: string[];
-  /** SRS-5.1zzzzzo: ý thêm AI xếp là tiện ích / xung quanh (chỉ nhận ý có trong danh sách ý thêm) → dòng 🏫 Tiện ích. */
+  /** SRS-5.1zzzzzo: ý thêm AI xếp là tiện ích / xung quanh (chỉ nhận ý có trong danh sách ý thêm) → phần tiện ích đầu dòng 📝 Thêm (SRS-5.1zzzzzzj). */
   tienIch?: string[];
   /**
-   * SRS-5.1zzzzzz: tiện ích AI CHỌN LỌC (tối đa 4, đã qua `tienIchNoiBatHopLe`): `goc` = ý thêm gốc, `in` = chữ in gọn. Có danh sách này thì dòng
-   * 🏫 chỉ in các ý được chọn (thay cho toàn bộ ý thêm xếp tiện ích); không có (AI không chạy / dưới 4 ý) → in đủ như cũ. DB vẫn giữ đủ mọi ý.
+   * SRS-5.1zzzzzz: tiện ích AI CHỌN LỌC (tối đa 4, đã qua `tienIchNoiBatHopLe`): `goc` = ý thêm gốc, `in` = chữ in gọn. Có danh sách này thì phần
+   * tiện ích chỉ in các ý được chọn (thay cho toàn bộ ý thêm xếp tiện ích); không có (AI không chạy / dưới 4 ý) → in đủ như cũ. DB vẫn giữ đủ mọi ý.
    */
   tienIchNoiBat?: Array<{ goc: string; in: string }>;
   cauTD:(khoa: string, o?: Record<string, string | number | null | undefined>) => string;
@@ -448,7 +448,6 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string;
   const htSuDung0 = chuanHienTrang(fact("hien_trang_su_dung"));
   const htSuDung = htSuDung0 && !/^hiện\s*trạng/iu.test(htSuDung0) ? `hiện trạng ${htSuDung0.charAt(0).toLowerCase()}${htSuDung0.slice(1)}` : htSuDung0;
   const htNha = fact("hien_trang");
-  them("📝", "Thêm", [htNha, htSuDung0 && htNha && trungY(htSuDung0, htNha) ? null : htSuDung, ...boSungThem]);
   if (thue) {
     them("📝", "Điều kiện thuê", [
       // SRS-5.1zzzzzu (chủ dự án 13/10: "Điều kiện thuê là cọc 2 tháng chứ không phải là 2 tháng không"): ô cọc in kèm chữ "cọc" khi khách chỉ nói số.
@@ -472,7 +471,12 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string;
   // tiện ích chỉ in các ý được chọn, bằng chữ gọn; ý không chọn vẫn nằm trong DB (fact `bo_sung`), không lên dòng này. Không có → in đủ như cũ.
   const chonLoc = (tienIchNoiBat ?? []).filter((x) => boSungTienIch.some((b) => chuanY(b) === chuanY(x.goc)));
   const yThemIn = chonLoc.length ? chonLoc.map((x) => x.in) : boSungTienIch;
-  them("🏫", "Tiện ích", [matTien, ...tienIch, ...yThemIn.filter((x) => !tienIch.some((y) => chuanY(y) === chuanY(x)))]);
+  // SRS-5.1zzzzzzj (chủ dự án 14/10/2026: "để ô tiện ích và thêm gộp lại luôn"): MỘT dòng "📝 Thêm" — tiện ích đi trước (mặt tiền, tiện ích
+  // khách liệt kê, ý thêm xếp tiện ích / chọn lọc), rồi tình trạng nhà, hiện trạng sử dụng, ý thêm còn lại. Không còn dòng 🏫 riêng.
+  them("📝", "Thêm", [
+    matTien, ...tienIch, ...yThemIn.filter((x) => !tienIch.some((y) => chuanY(y) === chuanY(x))),
+    htNha, htSuDung0 && htNha && trungY(htSuDung0, htNha) ? null : htSuDung, ...boSungThem,
+  ]);
   // FR-211: nhãn tìm kiếm — khách mua lọc được ("yên tĩnh", "gần chợ"…).
   // 25/09/2026: nhãn mà các dòng trên đã nói ("sân thượng" trong kết cấu) không in lặp.
   them("🏷", "Nhãn", [l.nhan?.length ? tenNhanKhongTrung(l.nhan, dong.join("\n")) || null : null]);
