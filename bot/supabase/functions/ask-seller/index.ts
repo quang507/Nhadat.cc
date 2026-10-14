@@ -18,7 +18,7 @@ import {
   serviceClient,
 } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
-import { cauHoiMau, dienTen, dsHoiBu, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
+import { cauHoiMau, dienTen, dsHoiBu, KHO_TEN_TRO_LY, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
 import { loaiDoc } from "../_shared/tin-nhap.ts";
 import { boGachCheo, doiTuXung, giuCauDungTen } from "../_shared/extraction/van-tra-loi.ts";
 import { cachGoiKhach, hocXungHoTuLichSu, suyTuXungHo } from "../_shared/extraction/khop-cau-tra-loi.ts";
@@ -184,7 +184,8 @@ Deno.serve(async (req) => {
   }
   // FR-181: cùng một tên trợ lý với chat-reply — cột `ten_tro_ly` nếu đã có,
   // không thì băm từ Zalo ID (cùng hàm, cùng kết quả).
-  const tenBot = seller?.ten_tro_ly ?? (seller?.zalo_user_id ? tenTroLy(seller.zalo_user_id) : "T•ai");
+  // SRS-5.1zzzzzzz9: tên tính lại từ Zalo ID (kho tên có thể đổi); cột lưu chỉ là bản sao cho CRM.
+  const tenBot = seller?.zalo_user_id ? tenTroLy(seller.zalo_user_id) : seller?.ten_tro_ly ?? KHO_TEN_TRO_LY[0];
 
   const instruction = drip
     ? (isFirst

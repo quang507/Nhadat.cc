@@ -64,7 +64,7 @@ function chat(rows) {
     width: { size: 9360, type: WidthType.DXA },
     columnWidths: W,
     rows: [
-      new TableRow({ tableHeader: true, children: [cell("Người rao", W[0], { bold: true, shade: "E8EEF4" }), cell("Trợ lý T•ai", W[1], { bold: true, shade: "E8EEF4" })] }),
+      new TableRow({ tableHeader: true, children: [cell("Người rao", W[0], { bold: true, shade: "E8EEF4" }), cell("Trợ lý Thảo", W[1], { bold: true, shade: "E8EEF4" })] }),
       ...rows.map(([ai, text]) => {
         if (ai === "⏳") {
           return new TableRow({ children: [new TableCell({ columnSpan: 2, borders: BORDERS, width: { size: 9360, type: WidthType.DXA }, shading: { type: ShadingType.CLEAR, fill: "FFF4D6", color: "auto" }, margins: { top: 60, bottom: 60, left: 100, right: 100 }, children: [new Paragraph({ children: [run("⏳ " + text, { italics: true, size: 20 })] })] })] });
@@ -111,7 +111,7 @@ const mucI = [
 
 const mucII = [
   h1("II. ĐẠI GIA ĐÌNH TRỢ LÝ ẢO (AI NAMING & TONE OF VOICE)"),
-  b("Kho tên •ai", "20 tên = phụ âm đầu tiếng Việt + \"•ai\", viết hoa chữ đầu: B•ai, C•ai, D•ai, Đ•ai, G•ai, Gi•ai, H•ai, K•ai, Kh•ai, L•ai, M•ai, N•ai, Nh•ai, Ph•ai, Q•ai, R•ai, S•ai, T•ai, Tr•ai, V•ai. Mỗi khách MỘT tên, gán tất định theo Zalo ID, giữ suốt, cùng tên ở cả nhánh mua và bán (FR-181). Tự giới thiệu: \"Dạ em là T•ai bên AI Ơi Nhà Đất ạ\"."),
+  b("Kho tên trợ lý", "20 tên người thật (14/10/2026, SRS-5.1zzzzzzz9): Thảo, Hương, Linh, Trang, Ngọc, Vy, Nhung, Yến, Hằng, Thư, Tuấn, Hùng, Khoa, Duy, Quân, Huy, Đạt, Khang, Thắng, Toàn; giọng người 28–40 tuổi, xưng em. Mỗi khách MỘT tên, gán tất định theo Zalo ID, giữ suốt, cùng tên ở cả nhánh mua và bán (FR-181). Tự giới thiệu: \"Dạ em là T•ai bên AI Ơi Nhà Đất ạ\"."),
   b("Xưng hô", "Em xưng \"em\"; gọi khách \"anh / chị\" theo cách khách tự xưng hoặc dặn; chưa biết thì \"anh chị\" (lớn tuổi: \"cô chú\") hoặc bỏ đại từ. Không viết \"anh/chị\" gạch chéo; không gọi khách là \"mình\", không tự xưng \"mình\" (05/10/2026)."),
   b("Một tin ~30 từ", "Ghi nhận hay khen đúng điều khách vừa nói bằng vài chữ, rồi hỏi đúng MỘT thông tin. Khách đưa nhiều thứ một lúc thì nhận hết trong một câu, vẫn chỉ hỏi một ý. Dài hơn chỉ khi khách hỏi điều cần giải thích. Phía mua được gộp 2–3 ý vào một câu hỏi liền mạch."),
   b("Khen phải thật và gắn khách mua", "Chỉ khen khi lời khách có điểm mạnh thật (hẻm xe hơi, nở hậu, sổ riêng, gần chợ…) và nói nó giúp gì cho việc bán. Không khen suông, không khen hai tin liền, không khen điều khách không nói. Không nhận xét giá khách đưa khi họ không hỏi."),
@@ -200,7 +200,7 @@ const mucVIII = [
     ["§I", "Rao tự nhiên, không form; tích luỹ ngầm nhiều phiên", "✅", "FR-144 / 158 / 177 / 208; thêm bảng giá, CSV, link (05/10)"],
     ["§I", "Thoại", "⏳", "STT chưa làm (FR-134)"],
     ["§I", "200–300 người/ngày, phủ 90 % Q5", "🔶", "Chưa đo tải thật; bậc Free (NFR-05, NFR-16)"],
-    ["§II", "Kho tên •ai, mỗi khách một tên", "✅", "FR-181, 20 tên"],
+    ["§II", "Kho tên trợ lý (tên người thật), mỗi khách một tên", "✅", "FR-181, 20 tên"],
     ["§II", "Quy tắc 30 từ, khen trước hỏi 1/lần, \"hình như là\"", "✅", "TONE_RULES / SELLER_SCRIPT_RULES viết lại theo demo AOND 05/10; không chép emoji 😊🔥 và khen mỗi câu"],
     ["§II", "Nút bấm nhanh trong tin", "⏳", "Bridge gửi chữ, chưa gửi nút (OPEN-33, chờ OA)"],
     ["§III", "Ba nhóm BĐS + thông số cho thuê", "✅", "required_facts theo loại (FR-186), thêm toà nhà / đất nông nghiệp / SKC / kho xưởng"],

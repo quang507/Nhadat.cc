@@ -3978,11 +3978,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         else sellerRow.nhom_tuoi = nhomMoi;
       }
     }
-    // FR-181: ghi tên trợ lý vào hồ sơ người bán MỘT lần (lượt đầu) — CRM và
-    // `so.nguoi_ban` đọc cột này để biết "T•ai" đang chăm ai.
-    if (!sellerRow.ten_tro_ly) {
+    // FR-181: ghi tên trợ lý vào hồ sơ người bán — CRM và `so.nguoi_ban` đọc cột này để biết ai đang chăm khách.
+    // SRS-5.1zzzzzzz9: kho tên đổi (14/10/2026) thì cột lưu tên cũ — ghi lại khi khác tên đang dùng, không chỉ khi trống.
+    if (sellerRow.ten_tro_ly !== tenBot) {
       const { error: tenErr } = await client.from("sellers")
-        .update({ ten_tro_ly: tenBot }).eq("id", sellerRow.id).is("ten_tro_ly", null);
+        .update({ ten_tro_ly: tenBot }).eq("id", sellerRow.id);
       if (tenErr) await ghiLoi(client, "chat-reply sellers.ten_tro_ly", tenErr.message);
       else sellerRow.ten_tro_ly = tenBot;
     }
@@ -11154,7 +11154,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   }
   // FR-181: tên trợ lý của khách mua nằm trong hồ sơ (`preferences.ten_tro_ly`),
   // ghi một lần, đi chung RPC gộp hồ sơ — không thêm vòng DB nào.
-  if (!prefs.ten_tro_ly) delta.ten_tro_ly = tenBot;
+  if (prefs.ten_tro_ly !== tenBot) delta.ten_tro_ly = tenBot; // SRS-5.1zzzzzzz9: kho tên đổi thì ghi lại
   if (xhMuaMoi && xhMuaMoi !== prefs.xung_ho) delta.xung_ho = xhMuaMoi;
   if (nhanMuon.length) delta.nhan = nhanLoc;
   // ─── HẬU KỲ: mọi việc ghi sổ sau khi đã có câu trả lời trong tay chạy SONG
