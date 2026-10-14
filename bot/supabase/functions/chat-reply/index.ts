@@ -3072,6 +3072,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         nhanXetAiXong = true;
         await doTien(client, usage as Parameters<typeof doTien>[1]);
         for (const n of nhanXet) if (n.noi_trang_thai_tin === true && n.cau?.trim() && !/\?/.test(n.cau)) aiNoiTrangThai.push(n.cau.trim());
+        for (const n of nhanXet) if (n.noi_chua_len_ke === true && n.cau?.trim() && !/\?/.test(n.cau)) aiNoiChuaLenKe.push(n.cau.trim());
         const nguon = `${bangChung}\n${daGhi}\n${tra}\n${FEES}`;
         const bo = nhanXetKhongCanCu(nhanXet, nguon, vuaGhi);
         const boHoi = cauHoiGoiYKhongNguon(nhanXet, nguon);
@@ -3319,6 +3320,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // cho lưới trạng thái ở đường ra (`traLoiSeller`) đối chiếu đúng tin, đúng câu.
     let tinTrongLuot: string | null = null;
     const aiNoiTrangThai: string[] = [];
+    const aiNoiChuaLenKe: string[] = []; // SRS-5.1zzzzzzz16: câu nói tin SẼ / CHƯA lên kệ — sai khi tin đang lên kệ
     let ackSua: string | null = null;
     /** SRS-5.1zzzzzzc: ô vừa SỬA theo lời sửa FR-164 trong lượt (để 🤖 in dòng yêu cầu `BOC_YEU_CAU` của bao_lai.ts). */
     let suaLuotKhoa: string[] = [];
@@ -3680,7 +3682,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // sai khi câu sai là cả lời). Nay: câu nói trạng thái (AI soát chỉ ra — `aiNoiTrangThai`; luật `coMenhDeDaDang` đỡ khi AI không
       // chạy) → đọc trạng thái THẬT: tin đang nói trong lượt (hay tin đang hoạt động) chưa lên kệ, hoặc không tin nào lên kệ → câu sai, bỏ.
       const aiTT = aiNoiTrangThai.filter((c) => sach.some((r) => boDau(r).includes(boDau(c).replace(/[.!…\s]+$/u, ""))));
-      if (coMenhDeDaDang(sach) || aiTT.length) {
+      const aiCLK = aiNoiChuaLenKe.filter((c) => sach.some((r) => boDau(r).includes(boDau(c).replace(/[.!…\s]+$/u, ""))));
+      if (coMenhDeDaDang(sach) || aiTT.length || aiCLK.length) {
         const { data: tinTT, error: tmErr } = await client.from("listings").select("id, status").eq("seller_id", sellerRow.id).limit(50);
         if (tmErr) await ghiLoi(client, "chat-reply doc trang thai tin", tmErr.message);
         else {
@@ -3688,6 +3691,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           const ds = (tinTT ?? []) as Array<{ id: string; status: string | null }>;
           const tieuDiem = ds.find((t) => t.id === (tinTrongLuot ?? sellerRow.active_listing_id));
           const dung = tieuDiem ? LEN_KE.includes(tieuDiem.status ?? "") : ds.some((t) => LEN_KE.includes(t.status ?? ""));
+          // SRS-5.1zzzzzzz16: chiều ngược — tin ĐANG lên kệ mà câu nói "sẽ lên kệ / chưa đăng / chờ duyệt" → bỏ câu đó.
+          if (dung && aiCLK.length) {
+            sach = sach.map((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) ? r : boCauNhanXet(r, aiCLK) ?? "").filter((r) => r.trim());
+            if (!sach.length) sach = ["Dạ em ghi nhận rồi ạ."];
+            mocVan("boNoiChuaLenKe(trang_thai_that)");
+          }
           if (!dung) {
             sach = boHuaDaDang(sach);
             if (aiTT.length) sach = sach.map((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) ? r : boCauNhanXet(r, aiTT) ?? "").filter((r) => r.trim());

@@ -27,6 +27,9 @@ const NhanXet = z.object({
   noi_co_hang: z.boolean().nullish().describe("true khi câu nói bên em CÓ / còn / đang có căn, đã tìm thấy căn, hay đang lọc / tìm căn cho khách (\"dạ có anh\", \"em đang lọc căn 2 lầu cho anh\", \"em tìm thấy mấy căn\"). Không thì false."),
   // SRS-5.1zzzzk: câu nói TRẠNG THÁI TIN — chủ là lưới trạng thái ở đường ra (đối chiếu DB), không phải lưới nhận xét.
   noi_trang_thai_tin: z.boolean().nullish().describe("true khi câu KHẲNG ĐỊNH tin / bài của chủ nhà đã đăng, đang rao, đã lên web / kệ / sóng, đã duyệt, đang có khách xem tin (\"em vừa đăng tin rồi ạ\", \"tin mình lên sóng rồi\", \"bài đang chạy rồi anh\"). Lời hứa có điều kiện (\"có giá là em đăng liền\") và câu hỏi → false."),
+  // SRS-5.1zzzzzzz16 (Zalo thật 14/10 10:30: tin ĐÃ lên kệ mà bot nói "Tin sẽ lên kệ trong hôm nay"): chiều ngược của ô trên — cùng chủ là
+  // lưới trạng thái ở đường ra, đối chiếu DB: tin đang lên kệ thì câu này sai.
+  noi_chua_len_ke: z.boolean().nullish().describe("true khi câu KHẲNG ĐỊNH tin / bài của chủ nhà CHƯA đăng, SẼ lên kệ / lên web sau, đang chờ duyệt (\"tin sẽ lên kệ trong hôm nay\", \"em chờ duyệt xong mới đăng\", \"tin chưa lên đâu anh\"). Câu hỏi → false."),
   // SRS-5.1zzzzzb: câu HỎI đưa sẵn một giá trị chủ nhà chưa nói ("nhà bác ở phường Thạnh Lộc đúng không?") là khẳng định trá hình.
   goi_y: z.boolean().nullish().describe("true khi câu là CÂU HỎI mà đưa sẵn một giá trị cụ thể (tên phường / đường / quận, con số, loại nhà…) để chủ nhà gật (\"nhà bác ở phường Thạnh Lộc đúng không?\", \"giá 5 tỷ phải không anh?\"). Câu hỏi mở (\"phường nào ạ?\") → false."),
   // SRS-5.1zzzzzc (khách mô phỏng lần năm: "anh cứ bận, tối em gọi lại nha" — bot không gọi điện được).
@@ -54,7 +57,8 @@ xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "kh�
 - LIỆT KÊ lời hứa bot KHÔNG tự làm được (gọi điện, "tối em gọi lại", đi xem nhà, gặp mặt, kiểm tra quy hoạch / sổ / giá giao dịch rồi báo)
   với hua_khong_lam = true, can_cu = null.
 - LIỆT KÊ cả câu nói TRẠNG THÁI TIN ("em vừa đăng tin rồi ạ", "tin mình lên sóng rồi", "bài đang chạy") với noi_trang_thai_tin = true,
-  can_cu = null — code đối chiếu trạng thái thật của tin.
+  và câu nói tin CHƯA đăng / SẼ lên kệ / đang chờ duyệt ("tin sẽ lên kệ trong hôm nay") với noi_chua_len_ke = true; can_cu = null — code
+  đối chiếu trạng thái thật của tin.
 - can_cu: cụm chép NGUYÊN VĂN từ LỜI CHỦ NHÀ, THÔNG TIN ĐÃ GHI, DỮ LIỆU TRA CỨU hoặc CHÍNH SÁCH CỦA BÊN EM nói ĐÚNG điều được khẳng định — gần giống thì không tính
   ("hxh" là hẻm xe hơi, KHÔNG phải "hẻm sâu"; "4x15" không phải "nở hậu"). Không có thì null.
 - danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ ("khu Hà Huy Giáp đất vàng", "khu đó bán được lắm", "giá

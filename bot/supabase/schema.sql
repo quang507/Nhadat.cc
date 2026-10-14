@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-14 16:26 (giờ VN)
+-- Sinh lúc: 2026-10-14 18:40 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -3265,7 +3265,10 @@ begin
     if (f ? 'tien_coc') or (f ? 'thoi_han_thue') or (f ? 'phap_ly') or l.legal_status is not null or l.property_type = 'phong_tro' then d_pl := 10;
     else thieu := array_append(thieu, 'điều kiện thuê (cọc, thời hạn)'); end if;
   elsif l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
-  else thieu := array_append(thieu, 'pháp lý (loại sổ, hoàn công)'); end if;
+  -- 20261014d: căn hộ không có hoàn công, đất không có hoàn công — chữ thiếu theo loại.
+  else thieu := array_append(thieu, case when l.property_type = 'chung_cu' then 'pháp lý (sổ hồng riêng hay chung)'
+                                         when la_dat then 'pháp lý (loại sổ)'
+                                         else 'pháp lý (loại sổ, hoàn công)' end); end if;
 
   if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
 
