@@ -5275,10 +5275,11 @@ trọng số → `ap_fact_du_an_vao_kho` (cùng luật ghi của `duyet_fact_du_
 sách — mỗi ý tự chốt khi đủ người, không chọi nhau. Không duyệt tay; admin vẫn bấm được.
 
 **Kiểm (đỏ khi tắt).** `bot/tests/tin-nhap-rao.mjs` DA-TD-1 (ca gốc) … DA-TD-4, CC-TEN-4 đổi theo hành vi mới. `bot/tests/phap-ly-can-ho.mjs`
-PLCH-01 (ca gốc) … 03. **SQL thật** `bash bot/tests/sql/chay.sh` (dựng PostgreSQL tạm, nạp phần đồng thuận + view của `20261014e`): DT-01 … DT-10
-— 4 người chưa chốt, người thứ 5 chốt vào kho, một người nói lại không thêm phiếu, tranh chấp theo trọng số, đổi ý chuyển phiếu, tiện ích
-không chọi nhau, pháp lý dự án, view không đòi pháp lý căn hộ dự án đã có pháp lý. Tắt trọng số (mỗi phiếu 1) → DT-09 đỏ. Mock e2e
-(`listing_missing_facts`, `diem_tin`) theo cùng luật; e2e 1426/1426.
+PLCH-01 (ca gốc) … 03. **SQL thật** `bot/tests/sql/du-an-dong-thuan.sql` trong `bun run test:sql` (Postgres tạm nạp `schema.sql` + `20261014e`):
+DT-01 … DT-10 — 4 người chưa chốt, người thứ 5 chốt vào kho, một người nói lại không thêm phiếu, tranh chấp theo trọng số, đổi ý chuyển
+phiếu, tiện ích không chọi nhau, uy tín đổi kết quả, pháp lý dự án, view + `diem_tin` không đòi pháp lý căn hộ dự án đã có pháp lý. Tắt trọng
+số (mỗi phiếu 1) → DT-07 đỏ; bỏ điều kiện pháp lý dự án trong view → DT-09 đỏ. Bộ này bắt được một lỗi thật trước khi đẩy (thân `diem_tin`
+trong migration thiếu dòng `CREATE`). Mock e2e (`listing_missing_facts`, `diem_tin`) theo cùng luật; e2e 1426/1426.
 
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 

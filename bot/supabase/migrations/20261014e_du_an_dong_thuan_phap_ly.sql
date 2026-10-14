@@ -47,6 +47,7 @@ create or replace view public.listing_missing_facts as
   ORDER BY l.id, rf.priority, rf.fact_key;
 
 -- ─── (3) diem_tin: thân hàm 20261014d, chỉ đổi khối pháp lý ─────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.diem_tin(l listings)
  RETURNS jsonb
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
