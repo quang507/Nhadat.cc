@@ -60,10 +60,10 @@ import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat, suaGiaTrongLoi } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docKhongBiet, docNgungHangLoat, khongBietCua, giaTriKhongDoi, vaiTuCau, laChiGat, laCauHoiXacNhan } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, khoaTraLoiCau, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb, boSungDiaChiTuKienThuc } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, khoaTraLoiCau, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, KHOA_Y_CUOC_RAO, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb, boSungDiaChiTuKienThuc } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu, phuongCot, tenPhuongCot, viTriGhiDuoc } from "../_shared/extraction/khop-phuong.ts";
-import { bocQuan, boVeChiDuong, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
+import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauChonPhuongQuan, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauTraPhuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, phuongQuanCuaDuong, tachTienToPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
@@ -9088,7 +9088,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // "chưa rõ quận", bot hỏi lại quận khách đã nói). Người đã có tin với em mà câu này rao căn THÊM: quận CHUNG khách nói ở tin
           // trước là của cả lô — AI được trích quận từ đó (code vẫn kiểm cụm có thật trong lời khách); loại / giá / địa chỉ thì không.
           const raoCanThem = !laTinRongDangDien && (tinCuaNguoi ?? []).length >= 1;
-          const datAi = boSungDiaChiTuKienThuc(laTinRongDangDien ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n")).dat
+          // SRS-5.1zzzzzzz14: quận AI trích từ tin trước ("có mấy căn quận 5 cần đăng" rồi tin rỗng nhận câu rao) cũng là ý của cả cuộc rao — AI
+          // quyết (trích dẫn có thật trong lời khách); trước đây luật đọc quận cả câu lấp chỗ này.
+          const datAi = boSungDiaChiTuKienThuc(laTinRongDangDien ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n"), {}, [...KHOA_Y_CUOC_RAO, "quan"]).dat
             : raoCanThem ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n"), {}, ["quan"]).dat : kdAi.dat, kqAi.kienThuc, textBongAi); // SRS-5.1zzzzzy
           // SRS-5.1zb: chế độ `ai` không đưa loại giao dịch đoán bằng từ khoá vào — "Chào bạn, mình cho thuê…" ("bạn" → "bán")
           // từng làm khoảng giá thành khoảng giá BÁN, giá thuê của AI bị bỏ vì ngoài khoảng.
@@ -9222,14 +9224,14 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // 03/10/2026 (bắn thử thu-x04-r, SRS-5.1zu): AI bóc tách hỏng lượt đó → luật đọc quận ĐẦU TIÊN của cả câu "bán căn hộ q7 … để
       // mua nhà Bình Thạnh" → tin bán mang Bình Thạnh. Câu nhắc NHIỀU quận thì luật không đoán: bỏ vế MUA AI lượt nhỏ đọc ra (nếu
       // có) rồi đọc lại; còn đúng một quận thì dùng, còn nhiều thì để trống (bot hỏi).
-      // SRS-5.1zzzzzzz14: luật đọc quận ĐẦU TIÊN cả câu từng lấy "vào quận 5 khoảng 20 phút" làm địa chỉ (khi AI không đưa quận / quận của AI bị
-      // lớp kiểm bỏ vì là câu chỉ đường) — luật đọc trên câu đã bỏ các vế chỉ đường.
-      const textQ = boVeChiDuong(text), tKDQ = textQ === text ? tKD : boDau(textQ);
-      const quanLuat = await (async () => {
-        const ds = cacQuanTrong(textQ, boDau);
-        if (ds.length <= 1) return bocQuan(tKDQ, textQ);
+      // SRS-5.1zzzzzzz14 (chủ dự án 14/10: "xoá code đi để AI đọc schematic thôi"): quận là ý theo NGHĨA (nơi căn nằm hay nơi đi tới — "vào quận 5
+      // khoản 20 phút" là tiện ích). AI đã đọc câu rao (chế độ `ai`) thì AI quyết, không đưa quận = chưa biết quận (bot hỏi); luật đọc quận ĐẦU
+      // TIÊN cả câu chỉ đỡ khi AI không chạy.
+      const quanLuat = aiRao && laCheDoAi ? null : await (async () => {
+        const ds = cacQuanTrong(text, boDau);
+        if (ds.length <= 1) return bocQuan(tKD, text);
         const mk = yLuotAi && laCheDoAi ? docMuaKem((await yLuotAi)?.muaKem, text) : null;
-        const con = mk ? cacQuanTrong(textQ.replace(mk.trich, " "), boDau) : ds;
+        const con = mk ? cacQuanTrong(text.replace(mk.trich, " "), boDau) : ds;
         return con.length === 1 ? con[0] : null;
       })();
       // SRS-5.1zzzzzzz12 (Zalo thật 14/10 09:54: căn hộ Conic Boulevard — kho ghi Huyện Bình Chánh — mà bài rao "vào quận 5 khoảng 20 phút"

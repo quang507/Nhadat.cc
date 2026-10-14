@@ -3456,6 +3456,7 @@ fresh(seedKho);
       globalThis.__model.parse = imAi;
       await send({ external_user_id: "lq-1", text: "Bán nhà hẻm xe hơi quận 5, 4x15, 3 tầng, giá 12 tỷ" });
       const Lq = db().t.listings.at(-1);
+      if (!Lq.district || Lq.boc_tach?.quan_mac_dinh) { Lq.district = "Quận 5"; Lq.boc_tach = { ...(Lq.boc_tach ?? {}), quan_mac_dinh: false, quan: "Quận 5" }; } // SRS-5.1zzzzzzz14: AI giả ở đây im; AI thật đọc ra quận khách nói — luật không còn lấp khi AI đã chạy
       hoiPhuong(Lq.id);
       globalThis.__model.parse = aiPhuong("Phường Tây Thạnh", "tay thnh");
       const rq1 = await send({ external_user_id: "lq-1", text: "tay thnh" });
@@ -3478,6 +3479,7 @@ fresh(seedKho);
       globalThis.__model.parse = imAi;
       await send({ external_user_id: "lq-5", text: "Bán nhà hẻm xe hơi quận 5, 4x15, trệt 2 lầu, giá 12 tỷ" });
       const L5q = db().t.listings.at(-1);
+      if (!L5q.district || L5q.boc_tach?.quan_mac_dinh) { L5q.district = "Quận 5"; L5q.boc_tach = { ...(L5q.boc_tach ?? {}), quan_mac_dinh: false, quan: "Quận 5" }; } // SRS-5.1zzzzzzz14: như trên
       hoiPhuong(L5q.id);
       const r5a = await send({ external_user_id: "lq-5", text: "tay thnh" });
       const L5a = db().t.listings.at(-1);
@@ -3496,6 +3498,7 @@ fresh(seedKho);
       globalThis.__model.parse = imAi;
       await send({ external_user_id: "lq-7", text: "Cần bán nhà hẻm xe hơi quận Bình Thạnh 50m2 3 tầng giá 16 tỷ" });
       const L7q = db().t.listings.at(-1);
+      if (!L7q.district || L7q.boc_tach?.quan_mac_dinh) { L7q.district = "Quận Bình Thạnh"; L7q.boc_tach = { ...(L7q.boc_tach ?? {}), quan_mac_dinh: false, quan: "Quận Bình Thạnh" }; } // SRS-5.1zzzzzzz14: như trên
       hoiPhuong(L7q.id);
       globalThis.__model.parse = aiPhuong("Phường An Khánh", "thảo điền");
       await send({ external_user_id: "lq-7", text: "phường thảo điền" });
@@ -3812,6 +3815,7 @@ fresh(seedKho);
       globalThis.__model.parse = aiZH();
       await send({ external_user_id: uid, text: rao });
       const L = db().t.listings.at(-1);
+      if (!L.district || L.boc_tach?.quan_mac_dinh) { L.district = "Quận 3"; L.boc_tach = { ...(L.boc_tach ?? {}), quan_mac_dinh: false, quan: "Quận 3" }; } // SRS-5.1zzzzzzz14: AI giả im; AI thật đọc ra "quan 3" — luật không còn lấp khi AI đã chạy
       db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
       db().insert("info_requests", { listing_id: L.id, question: cau, status: "pending" });
       return L;
@@ -12474,12 +12478,11 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
     check("TTC-01 (ca gốc 14/10 09:54) căn hộ dự án kho Huyện Bình Chánh, AI trích «vào quận 5» → quận của dự án, không Quận 5",
       ds.length === 1 && ds[0].district === "Huyện Bình Chánh", JSON.stringify(ds.map((x) => ({ q: x.district, w: x.ward, pj: x.project_id }))));
   }
-  // SRS-5.1zzzzzzz14 (chủ dự án: "nó lấy luôn cái tiện ích làm địa chỉ… Nó là thông tin bổ sung"): địa danh trong câu chỉ đường không phải địa chỉ
-  // căn, kể cả nhà phố không có dự án kho. (a) AI trích "quận 1" từ "ra quận 1 chỉ 5 phút" → bỏ khỏi quận, cụm vào ô tiện ích; (b) AI không đưa
-  // quận → luật đọc quận đầu tiên cả câu không được chen vào ("đi Bình Thạnh tầm 10 phút").
+  // SRS-5.1zzzzzzz14 (chủ dự án: "nó lấy luôn cái tiện ích làm địa chỉ… xoá code đi để AI đọc schematic thôi"): quận là ý theo NGHĨA, AI quyết.
+  // AI đọc câu rao mà không đưa quận (câu chỉ có nơi ĐI TỚI) → luật đọc quận đầu tiên cả câu KHÔNG được chen vào.
   for (const [nhan, cau, truongQ, khongQ] of [
-    ["ca gốc (nhà phố)", "Bán nhà hẻm 4m Lê Văn Sỹ, ra quận 1 chỉ 5 phút, giá 6 tỷ, 4x15", [TU("quan", "Quận 1", "quận 1")], "Quận 1"],
-    ["cách nói mới (AI không đưa quận)", "Bán nhà hẻm 4m đường Nơ Trang Long, đi Bình Thạnh tầm 10 phút, giá 6 tỷ, 4x15", [], "Quận Bình Thạnh"],
+    ["ca gốc (nhà phố)", "Bán nhà hẻm 4m Lê Văn Sỹ, ra quận 1 chỉ 5 phút, giá 6 tỷ, 4x15", [TU("tien_ich_gan", "ra quận 1 chỉ 5 phút", "ra quận 1 chỉ 5 phút")], "Quận 1"],
+    ["cách nói mới", "Bán nhà hẻm 4m đường Nơ Trang Long, đi Bình Thạnh tầm 10 phút, giá 6 tỷ, 4x15", [], "Quận Bình Thạnh"],
   ]) {
     const { uid, s } = dungU({ tin: { property_type: "nha_pho", location_raw: null, street: null, ward: null, district: null, area_m2: null, frontage_m: null,
       length_m: null, floors: null, floors_text: null, bedrooms: null, legal_status: null, price_raw: null, price_vnd: null, alley_width_m: null, access_type: null } });
@@ -12488,7 +12491,7 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
     await send({ external_user_id: uid, text: cau });
     const ds = db().t.listings.filter((x) => x.seller_id === s.id);
     const tienIch = db().t.listing_facts.filter((f) => ds.some((x) => x.id === f.listing_id) && f.question === "tien_ich_gan").map((f) => f.answer);
-    check(`TTE-${nhan} «${cau.slice(0, 45)}…» → quận KHÔNG là ${khongQ} (câu chỉ đường)${truongQ.length ? ", cụm vào ô tiện ích" : ""}`,
+    check(`TTE-${nhan} «${cau.slice(0, 45)}…» AI không đưa quận → quận KHÔNG là ${khongQ} (luật không chen vào)${truongQ.length ? ", tiện ích AI đọc được ghi" : ""}`,
       ds.length === 1 && ds[0].district !== khongQ && (!truongQ.length || tienIch.some((t) => /quận 1 chỉ 5 phút/.test(t))),
       JSON.stringify({ q: ds.map((x) => x.district), tienIch }));
   }

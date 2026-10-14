@@ -59,9 +59,10 @@ const chu = viDuThanhChu();
 // 13/10/2026: nới 13000 → 14000 cho ví dụ "Diện tích đất 80m²" không phải ngang (SRS-5.1zzzzzx — luật chữ "số có m2 là dien_tich" có từ trước mà AI vẫn đọc ngang 80).
 // 13/10/2026: nới 14000 → 14700 cho ví dụ "tiền làm thêm không phải giá" + "ở đường X là địa chỉ" (SRS-5.1zzzzzy — luật chữ về tiền cọc / phí có từ trước mà AI vẫn đọc 1,2 tỷ hoàn thiện thành giá).
 // 13/10/2026 (tối): nới 14700 → 15200 cho ví dụ "sửa giá lúc duyệt" (SRS-5.1zzzzzza — luật chữ số 5 có từ trước mà AI vẫn trả rỗng).
+// 14/10/2026 (SRS-5.1zzzzzzz10/14): nới 15700 → 16300 cho hai ví dụ "câu chỉ đường là tiện ích" và "sửa địa chỉ lúc duyệt" — thay cho luật regex đã gỡ.
 // 14/10/2026: nới 15200 → 15700 cho ví dụ SRS-5.1zzzzzzh (câu thuần chữ "sổ đỏ chính chủ" lạc câu hỏi → model trả rỗng trên production).
 // Khối ví dụ nằm trong system có cache, vài trăm ký tự thêm gần như không tốn thêm tiền.
-ok("bản chữ có đủ ví dụ và không dài quá 15700 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 15700, String(chu.length));
+ok("bản chữ có đủ ví dụ và không dài quá 16300 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 16300, String(chu.length));
 ok("bản chữ không chứa số điện thoại", !/\b0\d{9}\b/.test(chu));
 
 console.log(hong ? `\nVÍ DỤ MẪU: ${hong}/${tong} CA HỎNG` : `\nVÍ DỤ MẪU: ${tong}/${tong} CA ĐẠT`);

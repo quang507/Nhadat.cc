@@ -742,25 +742,6 @@ export function nangXacNhanChac(
 }
 
 /** Kiểm cả loạt đề xuất của model cho MỘT tin khách. */
-/**
- * SRS-5.1zzzzzzz14 (Zalo thật 14/10 09:54, chủ dự án: "nó lấy luôn cái tiện ích làm địa chỉ… Nó là thông tin bổ sung mà"): bài rao "vào quận 5
- * khoản 20 phút, qua Phú Mỹ Hưng Q7 cũng 20 phút" → AI ghi quận 5 làm địa chỉ căn. Địa danh mà NGAY SAU là thời gian / quãng đường đi tới
- * ("20 phút", "5km", "10 cây số") là nơi đi tới — tiện ích, không phải chỗ căn nằm. Trả cụm nguyên văn "địa danh + thời gian" (để vào ô tiện
- * ích), không phải câu chỉ đường thì null. Chỉ đọc chữ ĐỨNG SAU trích dẫn trong tin — không đoán nghĩa cả câu.
- */
-const SAU_CHI_DUONG = /^\s*(?:(?:chi|cung|mat|co|het|khoang|khoan|tam|chung|di|chay|xe|la)\s+){0,3}\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?\s*(?:phut|km|cay so|cay|gio|tieng)(?![a-z])/;
-const KHOA_DIA_DANH: ReadonlySet<string> = new Set(["quan", "phuong", "duong", "ten_duong"]);
-export function cumChiDuong(tin: string, trich: string): string | null {
-  const t = (trich ?? "").trim();
-  if (t.length < 2) return null;
-  const i = (tin ?? "").toLowerCase().indexOf(t.toLowerCase());
-  if (i < 0) return null;
-  const sau = [...tin.slice(i + t.length, i + t.length + 48)];
-  const kd = sau.map((c) => c.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().slice(0, 1) || " ").join("");
-  const m = SAU_CHI_DUONG.exec(kd);
-  return m ? `${tin.slice(i, i + t.length)}${sau.slice(0, [...m[0]].length).join("")}`.trim() : null;
-}
-
 export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {}): { dat: DeXuat[]; bo: Bo[] } {
   const kdTin = chuanSo(tin);
   const dat: DeXuat[] = [];
@@ -778,16 +759,6 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {})
       if (mo) { viTri = mo.viTri; kdDung = mo.cum; }
     }
     if (viTri < 0) { bo.push({ ...d, ly_do: "trich_dan_khong_co_trong_tin" }); continue; }
-    // SRS-5.1zzzzzzz14: địa danh trong câu chỉ đường ("vào quận 5 khoản 20 phút") không phải địa chỉ căn → bỏ khỏi ô địa chỉ, cụm nguyên văn vào
-    // ô tiện ích (thông tin bổ sung) nếu AI chưa đưa tiện ích nào.
-    if (KHOA_DIA_DANH.has(d.khoa)) {
-      const cd = cumChiDuong(tin, d.trich_dan);
-      if (cd) {
-        bo.push({ ...d, ly_do: "cau_chi_duong" });
-        if (!dat.some((x) => x.khoa === "tien_ich_gan") && !(deXuat ?? []).some((x) => x?.khoa === "tien_ich_gan")) dat.push({ ...d, khoa: "tien_ich_gan", gia_tri: cd, trich_dan: cd });
-        continue;
-      }
-    }
     // SRS-5.1zzzzzl (test Zalo 13/10, bài rao dán sẵn: "Mặt tiền 6m" → AI cach_mat_tien 6; "Ngõ rộng 6m" → AI do_rong_duong 6, bị bỏ → bot hỏi
     // lại hẻm dù bài rao đã nói). Số đo AI đặt nhầm ô mà cụm trích nói RÕ một chuyện khác (cùng bộ phân loại `chuDeSoDo` đang chặn ở dưới)
     // → chuyển sang đúng ô đó thay vì bỏ mất, khi ô đó chưa có đề xuất khác.
