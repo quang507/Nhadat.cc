@@ -71,5 +71,25 @@ const cauNhieu = cauNhieuNoiPhuong("anh", "Trần Bình Trọng", ["Quận 5", "
 ok("câu nhiều nơi: kể tối đa 4 quận + '…', hỏi phường + quận, không khẳng định phường nào",
   cauNhieu === "Đường Trần Bình Trọng có ở nhiều nơi (Quận 5, Quận 10, Bình Thạnh, Gò Vấp…), nhà mình thuộc phường nào, quận nào vậy anh?", cauNhieu);
 
+// ── SRS-5.1zzzzzzm (14/10/2026): phường theo đường từ bảng `duong`, CHƯA CẦN biết quận; câu chọn kể kèm quận khi nhiều quận ──
+{
+  const { phuongQuanCuaDuong, cauChonPhuongQuan } = await import("../supabase/functions/_shared/extraction/tra-phuong.ts");
+  const HCM = new Set(["Quận 7", "Huyện Nhà Bè", "Quận 5"]);
+  const dong = [
+    { phuong: "Phường Phú Thuận", quan_cu: "Quận 7" }, { phuong: "Phường Tân Mỹ", quan_cu: "Quận 7" }, { phuong: "Phường Tân Thuận", quan_cu: "Quận 7" },
+    { phuong: "Phường Tân Thuận", quan_cu: "Quận 7" }, { phuong: "Xã Nhà Bè", quan_cu: "Huyện Nhà Bè" }, { phuong: "Phường Biên Hòa", quan_cu: "Đồng Nai" }, { phuong: "", quan_cu: null },
+  ];
+  const hopLe = (_p, q) => HCM.has(q);
+  const cac = phuongQuanCuaDuong(dong, null, hopLe);
+  ok("phuongQuanCuaDuong chưa biết quận → 4 cặp khác nhau, bỏ trùng, bỏ ngoài TP.HCM, bỏ dòng trống", cac.length === 4 && cac.every((x) => HCM.has(x.quan)), JSON.stringify(cac));
+  const q7 = phuongQuanCuaDuong(dong, "Quận 7", hopLe);
+  ok("phuongQuanCuaDuong biết Quận 7 → 3 phường Quận 7", q7.length === 3 && q7.every((x) => x.quan === "Quận 7"), JSON.stringify(q7));
+  const cau = cauChonPhuongQuan("cô", "Huỳnh Tấn Phát", cac);
+  ok("cauChonPhuongQuan nhiều quận → kể từng cụm kèm quận cũ",
+    cau === "Đường Huỳnh Tấn Phát đoạn nhà mình thuộc Phường Phú Thuận, Phường Tân Mỹ hay Phường Tân Thuận (Quận 7 cũ), hay Xã Nhà Bè (Huyện Nhà Bè cũ) vậy cô?", cau);
+  const cau1 = cauChonPhuongQuan("anh", "Trần Hưng Đạo", q7.slice(0, 2));
+  ok("cauChonPhuongQuan một quận → câu chọn như cũ (không kèm quận)", cau1 === "Đường Trần Hưng Đạo đoạn nhà mình thuộc Phường Phú Thuận hay Phường Tân Mỹ vậy anh?", cau1);
+}
+
 console.log(`TRA PHƯỜNG (FR-209): ${dat}/${dat + hong} CA ĐẠT`);
 if (hong) process.exit(1);
