@@ -12474,6 +12474,24 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
     check("TTC-01 (ca gốc 14/10 09:54) căn hộ dự án kho Huyện Bình Chánh, AI trích «vào quận 5» → quận của dự án, không Quận 5",
       ds.length === 1 && ds[0].district === "Huyện Bình Chánh", JSON.stringify(ds.map((x) => ({ q: x.district, w: x.ward, pj: x.project_id }))));
   }
+  // SRS-5.1zzzzzzz14 (chủ dự án: "nó lấy luôn cái tiện ích làm địa chỉ… Nó là thông tin bổ sung"): địa danh trong câu chỉ đường không phải địa chỉ
+  // căn, kể cả nhà phố không có dự án kho. (a) AI trích "quận 1" từ "ra quận 1 chỉ 5 phút" → bỏ khỏi quận, cụm vào ô tiện ích; (b) AI không đưa
+  // quận → luật đọc quận đầu tiên cả câu không được chen vào ("đi Bình Thạnh tầm 10 phút").
+  for (const [nhan, cau, truongQ, khongQ] of [
+    ["ca gốc (nhà phố)", "Bán nhà hẻm 4m Lê Văn Sỹ, ra quận 1 chỉ 5 phút, giá 6 tỷ, 4x15", [TU("quan", "Quận 1", "quận 1")], "Quận 1"],
+    ["cách nói mới (AI không đưa quận)", "Bán nhà hẻm 4m đường Nơ Trang Long, đi Bình Thạnh tầm 10 phút, giá 6 tỷ, 4x15", [], "Quận Bình Thạnh"],
+  ]) {
+    const { uid, s } = dungU({ tin: { property_type: "nha_pho", location_raw: null, street: null, ward: null, district: null, area_m2: null, frontage_m: null,
+      length_m: null, floors: null, floors_text: null, bedrooms: null, legal_status: null, price_raw: null, price_vnd: null, alley_width_m: null, access_type: null } });
+    globalThis.__model = { parse: (p) => laBocU(p) ? { ...rongU, so_can: 1, truong: [TU("loai_giao_dich", "ban", "Bán nhà"), TU("loai_bds", "nha_pho", "Bán nhà"),
+      TU("gia", "6 tỷ", "giá 6 tỷ"), TU("dien_tich", "4x15", "4x15"), ...truongQ] } : laYU(p) ? rongU : OUT(), create: () => "Dạ vâng ạ." };
+    await send({ external_user_id: uid, text: cau });
+    const ds = db().t.listings.filter((x) => x.seller_id === s.id);
+    const tienIch = db().t.listing_facts.filter((f) => ds.some((x) => x.id === f.listing_id) && f.question === "tien_ich_gan").map((f) => f.answer);
+    check(`TTE-${nhan} «${cau.slice(0, 45)}…» → quận KHÔNG là ${khongQ} (câu chỉ đường)${truongQ.length ? ", cụm vào ô tiện ích" : ""}`,
+      ds.length === 1 && ds[0].district !== khongQ && (!truongQ.length || tienIch.some((t) => /quận 1 chỉ 5 phút/.test(t))),
+      JSON.stringify({ q: ds.map((x) => x.district), tienIch }));
+  }
   // SRS-5.1zzzzzzz13 (Zalo thật 14/10 10:00): căn hộ đã gắn dự án kho, không có ô du_an_ten → bản tin không có tên chung cư. Nay tên dự án kho
   // vào tiêu đề / 📍 (mã HTML trong tên kho được giải).
   for (const [nhan, tenKho, tenIn] of [["ca gốc", "Conic Boulevard", "Conic Boulevard"], ["cách nói mới", "Chung Cư CONIC &#8211; Đông Nam Á", "Đông Nam Á"]]) {

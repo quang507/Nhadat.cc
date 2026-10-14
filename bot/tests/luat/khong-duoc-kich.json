@@ -468,6 +468,42 @@
         "123 Lê Lợi phường Bến Thành",
         "Phường Bến Thành, 12 Lê Lợi"
       ]
+    },
+    "cumChiDuong": {
+      "hau_qua": "quận / phường / đường AI đọc ra bị bỏ khỏi ô địa chỉ (chuyển sang ô tiện ích) — khớp nhầm là mất địa chỉ thật của căn",
+      "phai_kich": [
+        [
+          "Bán chung cư Conic Boulevard, vào quận 5 khoản 20 phút|vào quận 5",
+          "vào quận 5 khoản 20 phút"
+        ],
+        [
+          "qua Phú Mỹ Hưng Q7 cũng 20 phút|Q7",
+          "Q7 cũng 20 phút"
+        ],
+        [
+          "nhà ra quận 1 chỉ 5 phút|quận 1",
+          "quận 1 chỉ 5 phút"
+        ],
+        [
+          "cách quận 3 khoảng 2km|quận 3",
+          "quận 3 khoảng 2km"
+        ],
+        [
+          "đi Bình Thạnh tầm 10 phút|Bình Thạnh",
+          "Bình Thạnh tầm 10 phút"
+        ]
+      ],
+      "khong_duoc_kich": [
+        "nhà quận 5, 15 phút ra chợ Bến Thành|quận 5 (dấu phẩy: phút thuộc vế sau)",
+        "nhà quận 7 5 tầng|quận 7",
+        "căn hộ quận 2 giá 5 tỷ|quận 2",
+        "hẻm 45 Nguyễn Trãi quận 5|quận 5",
+        "phường 7 quận 8 nhé|phường 7",
+        "quận 10 diện tích 60m2|quận 10",
+        "nhà ở quận 1 2 phòng ngủ|quận 1",
+        "đất Bình Chánh 100m2|Bình Chánh",
+        "đường Lê Lợi 3 lầu|đường Lê Lợi"
+      ]
     }
   }
 }

@@ -5100,6 +5100,27 @@ Tạo + Tân Nhựt, dòng Tân Tạo ghi `toan_bo = true`) — dữ liệu cầ
 **Kiểm (đỏ khi tắt).** e2e `TTD-ca gốc` ("Conic Boulevard"), `TTD-cách nói mới` (tên kho "Chung Cư CONIC &#8211; Đông Nam Á" → in "CONIC, Đông Nam
 Á"). Cả bộ e2e chat-reply 1417/1417 đạt; tắt năm bản sửa thì 9 ca mới đỏ.
 
+### SRS-5.1zzzzzzz14 · Địa danh trong câu chỉ đường là tiện ích, không phải địa chỉ (14/10/2026)
+
+**Ca gốc.** Zalo thật 14/10 09:54, bài rao Conic Boulevard "…vào quận 5 khoản 20 phút, qua Phú Mỹ Hưng Q7 cũng 20 phút…" → 🤖 "địa chỉ: làm chuẩn
+Phường Tân Tạo, Quận 5". Chủ dự án: "nó lấy luôn cái tiện ích làm địa chỉ luôn rồi. Nó là thông tin bổ sung mà" — chọn "chặn đúng chỗ" (giữ bóc
+tách, chặn câu chỉ đường thành địa chỉ).
+
+**Lớp lỗi.** Ô địa chỉ (quận / phường / đường) nhận MỌI địa danh trong tin mà không xét địa danh đó là nơi căn NẰM hay nơi ĐI TỚI. Hai đường cùng
+lớp: (a) AI trích "vào quận 5" vào ô quận (prompt đã cấm, model vẫn làm); (b) luật đỡ `bocQuan` đọc quận ĐẦU TIÊN cả câu khi AI không đưa quận.
+
+**Chỗ cùng lớp.** `kiemDeXuat` là cửa chung của mọi lượt AI bóc tách (câu rao, câu trả lời, chốt tin) → một luật ở đó phủ hết; `capNhatQuan` đã
+AI-trước (chỉ đọc quận AI qua kiểm). Luật quận câu rao (`quanLuat`) giờ đọc trên câu đã bỏ vế chỉ đường. Phường / đường AI trích từ câu chỉ đường
+cũng bị chặn cùng luật.
+
+**Sửa.** (1) `cumChiDuong` (`kiem-bang-chung.ts`): địa danh trích dẫn mà NGAY SAU trong tin là thời gian / quãng đường ("20 phút", "5km", "10 cây
+số", cho phép "chỉ / cũng / khoảng / tầm" xen giữa, không qua dấu phẩy) → bỏ khỏi ô địa chỉ (`cau_chi_duong`), cụm nguyên văn vào ô `tien_ich_gan`
+khi AI chưa đưa tiện ích. Luật nằm trong bảng `khong-duoc-kich.json` (5 câu phải kích, 9 câu không được kích). (2) `boVeChiDuong` (`dia_ban.ts`):
+bỏ vế câu có thời gian / quãng đường trước khi luật đọc quận.
+
+**Kiểm (đỏ khi tắt).** e2e `TTE-ca gốc (nhà phố)` ("ra quận 1 chỉ 5 phút" → không Quận 1, cụm vào tiện ích), `TTE-cách nói mới` (AI không đưa
+quận, "đi Bình Thạnh tầm 10 phút" → không Quận Bình Thạnh); `luat-pha-du-lieu.mjs` bảng `cumChiDuong`. e2e 1419/1419 đạt.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -63,7 +63,7 @@ import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
 import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, khoaTraLoiCau, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb, boSungDiaChiTuKienThuc } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu, phuongCot, tenPhuongCot, viTriGhiDuoc } from "../_shared/extraction/khop-phuong.ts";
-import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
+import { bocQuan, boVeChiDuong, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauChonPhuongQuan, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauTraPhuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, phuongQuanCuaDuong, tachTienToPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
@@ -9222,11 +9222,14 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // 03/10/2026 (bắn thử thu-x04-r, SRS-5.1zu): AI bóc tách hỏng lượt đó → luật đọc quận ĐẦU TIÊN của cả câu "bán căn hộ q7 … để
       // mua nhà Bình Thạnh" → tin bán mang Bình Thạnh. Câu nhắc NHIỀU quận thì luật không đoán: bỏ vế MUA AI lượt nhỏ đọc ra (nếu
       // có) rồi đọc lại; còn đúng một quận thì dùng, còn nhiều thì để trống (bot hỏi).
+      // SRS-5.1zzzzzzz14: luật đọc quận ĐẦU TIÊN cả câu từng lấy "vào quận 5 khoảng 20 phút" làm địa chỉ (khi AI không đưa quận / quận của AI bị
+      // lớp kiểm bỏ vì là câu chỉ đường) — luật đọc trên câu đã bỏ các vế chỉ đường.
+      const textQ = boVeChiDuong(text), tKDQ = textQ === text ? tKD : boDau(textQ);
       const quanLuat = await (async () => {
-        const ds = cacQuanTrong(text, boDau);
-        if (ds.length <= 1) return bocQuan(tKD, text);
+        const ds = cacQuanTrong(textQ, boDau);
+        if (ds.length <= 1) return bocQuan(tKDQ, textQ);
         const mk = yLuotAi && laCheDoAi ? docMuaKem((await yLuotAi)?.muaKem, text) : null;
-        const con = mk ? cacQuanTrong(text.replace(mk.trich, " "), boDau) : ds;
+        const con = mk ? cacQuanTrong(textQ.replace(mk.trich, " "), boDau) : ds;
         return con.length === 1 ? con[0] : null;
       })();
       // SRS-5.1zzzzzzz12 (Zalo thật 14/10 09:54: căn hộ Conic Boulevard — kho ghi Huyện Bình Chánh — mà bài rao "vào quận 5 khoảng 20 phút"

@@ -101,6 +101,16 @@ const CUM_TEN_PHUONG = /(?:^|[^a-z])(?:phuong|xa|p|x)\.?\s+(?!\d)[a-z]+(?:\s+(?!
  * quận ĐẦU TIÊN khớp (tên quận đứng trước quận số), nên "bán căn hộ q7 … để mua nhà Bình Thạnh" ra Bình Thạnh. Nơi gọi dùng
  * hàm này để biết câu có NHIỀU quận — khi đó luật không được đoán quận cho một căn (AI quyết, hoặc hỏi lại).
  */
+/**
+ * SRS-5.1zzzzzzz14 (Zalo thật 14/10: "vào quận 5 khoản 20 phút, qua Phú Mỹ Hưng Q7 cũng 20 phút" → luật đọc quận đầu tiên ra Quận 5 làm địa chỉ):
+ * vế câu có thời gian / quãng đường đi tới ("20 phút", "5km", "10 cây số") là câu chỉ đường — địa danh trong đó là nơi đi tới, không phải chỗ
+ * căn nằm. Bỏ các vế đó trước khi luật đọc quận (lưới đỡ khi AI không đưa quận). Vế tách theo dấu câu như `cacQuanTrong`.
+ */
+export function boVeChiDuong(tho: string): string {
+  const ve = (tho ?? "").split(/[,.;!?\n|]/u);
+  const giu = ve.filter((v) => !/\d+(?:[.,]\d+)?\s*(?:phút|phut|km|cây số|cay so|tiếng|tieng)(?![\p{L}])/iu.test(v));
+  return giu.length === ve.length ? tho : giu.join(", ");
+}
 export function cacQuanTrong(tho: string, boDau: (s: string) => string): string[] {
   const ve = (tho ?? "").split(/[,.;!?\n|]|\s(?:để|de|và|va|còn|con|rồi|roi|nhưng|nhung|với|voi|xong|sau đó|sau do)\s/iu);
   const ra: string[] = [];
