@@ -6873,7 +6873,8 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     r = await send({ external_user_id: "z-nhap-rut", text: "để ở hoặc cho thuê đều được" });
     check("NHAPRUT-01 lượt soạn bản nháp mà tin mới hơn đã vào → nhường lượt, KHÔNG ghi 📋, câu chờ duyet_tin vừa mở bị đóng (trạng thái khớp điều khách thấy)",
       r.body.superseded === true && r.body.superseded_luc === "truoc_gui" && r.body.nhap_rut === true && !db().t.messages.some((m) => m.sender === "bot" && /📋/.test(m.body ?? "")) &&
-        !pend("duyet_tin", tinR.id) && db().t.info_requests.some((q) => q.listing_id === tinR.id && q.question === "duyet_tin" && q.status === "expired"),
+        // SRS-5.1zzzzzzy: câu rút chưa từng tới khách → xoá dòng (không để lại `expired` = "khách đã né").
+        !db().t.info_requests.some((q) => q.listing_id === tinR.id && q.question === "duyet_tin"),
       JSON.stringify({ body: r.body, ir: db().t.info_requests.filter((q) => q.listing_id === tinR.id).map((q) => [q.question, q.status]) }));
     // Lượt kế (tin mới hơn được xử lý): hết câu hỏi → gửi bản nháp THẬT, không nói "Bản nháp ở trên" khi chưa có bản nháp.
     r = await send({ external_user_id: "z-nhap-rut", text: "xây được 6 tầng" });
@@ -12239,8 +12240,11 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
     const a = await goiP(uid, "đang để trống em", { tra_loi: { co_tra_loi: true, gia_tri: "đang để trống", trich_dan: "đang để trống" } });
     globalThis.__afterInsertMsgSeller = null;
     const moi = db().t.info_requests.filter((q) => !truoc.has(q.id) && q.listing_id === L.id);
-    check("ZZZZZZP-01 (ca gốc 14/10 09:59) lượt mở câu kế rồi nhường trước khi gửi → câu vừa mở bị rút (expired), không còn câu chờ nào khách chưa từng thấy",
-      a.r.body.superseded === true && a.r.body.superseded_luc === "truoc_gui" && moi.length >= 1 && moi.every((q) => q.status !== "pending"),
+    // SRS-5.1zzzzzzy (người test thật 14/10 07:57): câu rút KHÔNG được thành `expired` — expired nghĩa là khách đã né, vòng hỏi bỏ qua mãi
+    // (câu số phòng ngủ căn hộ Phạm Thế Hiển không bao giờ được hỏi). Rút = xoá dòng chưa từng tới khách.
+    const daXoa = db().log.some((x) => x.table === "info_requests" && x.op === "delete") || moi.length === 0;
+    check("ZZZZZZP-01 (ca gốc 14/10 09:59 + 07:57) lượt mở câu kế rồi nhường trước khi gửi → câu vừa mở bị rút: không còn câu chờ khách chưa thấy, KHÔNG để lại dòng 'đã né' (expired)",
+      a.r.body.superseded === true && a.r.body.superseded_luc === "truoc_gui" && daXoa && !moi.some((q) => q.status === "pending" || q.status === "expired"),
       JSON.stringify({ body: a.r.body, moi: moi.map((q) => [q.question, q.status]), treo: treoP(L) }));
   }
 

@@ -2158,12 +2158,18 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (!error && typeof row.listing_id === "string" && typeof row.question === "string") cauMoLuot.push({ listing_id: row.listing_id, question: row.question });
       return { error };
     };
-    /** Nhường lượt: rút mọi câu chờ lượt này mở (xem `cauMoLuot`). Trả `true` nếu có rút câu duyệt bản nháp. */
+    /**
+     * Nhường lượt: rút mọi câu chờ lượt này mở (xem `cauMoLuot`). Trả `true` nếu có rút câu duyệt bản nháp.
+     * SRS-5.1zzzzzzy (người test thật 14/10 07:57, căn hộ Phạm Thế Hiển): bản đầu đặt câu rút thành `expired` — mà `expired` nghĩa là "khách
+     * đã NÉ câu này", vòng hỏi trong lượt bỏ qua mọi câu expired (`hetHanSet`, `tiepSauGhi`) và nhắc giữ kết nối coi là đã né. Câu số phòng
+     * ngủ bị rút khi khách nhắn giật cục nên bot không bao giờ hỏi nữa. Câu bị rút CHƯA từng tới khách — không phải dữ liệu của khách, không
+     * phải lần né: xoá đúng dòng đó, trạng thái về như chưa mở.
+     */
     const rutCauMoLuot = async (): Promise<boolean> => {
       let nhapRut = false;
       if (!lucTinChu) return false;
       for (const c of cauMoLuot) {
-        const { error: rutErr } = await client.from("info_requests").update({ status: "expired" })
+        const { error: rutErr } = await client.from("info_requests").delete()
           .eq("listing_id", c.listing_id).eq("question", c.question).eq("status", "pending").gte("created_at", lucTinChu);
         if (rutErr) await ghiLoi(client, "chat-reply rut cau cho (nhuong luot)", rutErr.message);
         else if (c.question === "duyet_tin") nhapRut = true;

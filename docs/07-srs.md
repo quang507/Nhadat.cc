@@ -4863,6 +4863,23 @@ không đổi thì phải mang "(như cũ)".
 
 **Kiểm.** e2e ZZZZZZX-01 (bài rao gửi lại: giá / phòng ngủ "(như cũ)", WC mới không có dấu), bất biến KHÔNG ĐỔI trên mọi lượt.
 
+### SRS-5.1zzzzzzy · Câu bị rút khi nhường lượt không phải "khách đã né" (14/10/2026)
+
+**Nguồn.** Người test thật 14/10 07:57 (căn hộ 2225 Phạm Thế Hiển, Q8): khách nhắn "địa chỉ 2225 Phạm Thế Hiển" rồi 16 giây sau "căn mình 60m2".
+Lượt tin đầu mở câu số phòng ngủ rồi nhường lượt; SRS-5.1zzzzzzp rút câu đó bằng cách đặt `expired`. Bot hỏi tầng, giá, pháp lý — không bao giờ
+hỏi số phòng ngủ của căn hộ.
+
+**Lớp lỗi.** Một trạng thái mang hai nghĩa: `expired` là "khách đã NÉ câu này" (vòng hỏi trong lượt bỏ qua — `hetHanSet`, `tiepSauGhi`; nhắc giữ
+kết nối coi là đã né), mà lần rút câu chưa từng gửi lại dùng cùng trạng thái. Chỗ cùng lớp: mọi nơi đặt `expired` — câu bị né (đúng nghĩa), câu
+đóng khi khách nói "đủ rồi" (đúng: không hỏi nữa), cron 48 giờ (đúng: khách không trả lời), rút khi nhường lượt (SAI — sửa lần này).
+
+**Quy tắc.** Rút khi nhường lượt (`rutCauMoLuot`) XOÁ đúng dòng câu chờ lượt đó mở (cùng tin + câu + `pending` + tạo sau mốc tin chủ nhà): câu chưa
+từng tới khách không phải dữ liệu của khách, cũng không phải lần né — trạng thái về như chưa mở. Dữ liệu tin (fact, cột) không đụng.
+
+**Kiểm (đỏ khi tắt).** e2e ZZZZZZP-01 (ca gốc 09:59 + 07:57: không còn dòng `pending` lẫn `expired` của câu bị rút), NHAPRUT-01 (cách nói khác:
+câu duyệt bản nháp bị rút không để lại dòng nào). Dữ liệu tin BDS-CH-Q8-0001 trên production còn một dòng `expired` sai cho câu phòng ngủ — chưa
+sửa tay (cần chủ dự án đồng ý trước khi đổi dữ liệu thật).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
