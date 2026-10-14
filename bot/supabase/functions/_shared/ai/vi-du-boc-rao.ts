@@ -266,6 +266,16 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     kien_thuc: [],
     luu_y: "Lạc câu đang hỏi: dữ liệu vẫn vào truong, tra_loi.co_tra_loi = false. Mỗi cụm một ô (đứng tên tách khỏi pháp lý). 3 lầu = 4.",
   },
+  // SRS-5.1zzzzzzh (bắn production 14/10/2026 thu-gc-01, đất Q8): đang hỏi mặt tiền đường, "Đất có sổ đỏ chính chủ" → model trả RỖNG hoàn toàn
+  // (không số, chỉ chữ; "chính chủ" đứng cạnh sổ) → pháp lý mất. Cách nói khác ca gốc.
+  {
+    cau_dang_hoi: "do_rong_duong",
+    tin: "Lô này sổ đỏ chính chủ nha em",
+    so_can: 0,
+    truong: [t("phap_ly", "sổ đỏ", "sổ đỏ")],
+    kien_thuc: [],
+    luu_y: "Câu chỉ nói GIẤY TỜ, không trả lời câu đường → vẫn truong phap_ly, tra_loi.co_tra_loi = false, không trả rỗng. \"chính chủ\" ở đây nói về sổ (giấy tờ của chủ), không phải vai.",
+  },
 ];
 
 /** Bản chữ để dán vào system prompt (sau LUAT, cùng khối cache). */

@@ -6913,6 +6913,40 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
       JSON.stringify({ bong: r.body.replies, facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id && f.created_at >= lucGui4).map((f) => [f.question, f.answer]) }));
     globalThis.__cauHinh = cuCHg;
   }
+  // SRS-5.1zzzzzzh (bắn production 14/10 thu-gc-01: đang hỏi mặt tiền, "Đất có sổ đỏ chính chủ" → AI trả RỖNG, 🤖 "Không trích xuất được
+  // gì", pháp lý mất): AI rỗng toàn bộ mà từ điển nghề thấy cụm dữ liệu → gọi lại model MỘT lần kèm gợi ý; AI vẫn quyết.
+  {
+    const laLuotBocRaoGY = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+    const noiDungUser = (p) => (p?.messages ?? []).map((m) => typeof m.content === "string" ? m.content : JSON.stringify(m.content)).join("\n");
+    const AI_RONG = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+      hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null } };
+    const AI_PHAP_LY = { ...AI_RONG, truong: [{ khoa: "phap_ly", gia_tri: "sổ đỏ", trich_dan: "sổ đỏ", can: null }] };
+    const soGoiBocRao = () => globalThis.__calls.filter((c) => laLuotBocRaoGY(c.params)).length;
+    fresh(seedKho);
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    sC.active_listing_id = tin.id;
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: tin.id, question: "do_rong_duong", status: "pending" });
+    const cuCHh = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    // (1) Lượt đầu AI rỗng; lượt gọi lại (câu lệnh mang gợi ý từ điển) AI đọc ra pháp lý → fact ghi, 🤖 có pháp lý.
+    globalThis.__model.parse = (p) => laLuotBocRaoGY(p) ? (/Từ điển nghề của hệ thống thấy/.test(noiDungUser(p)) ? AI_PHAP_LY : AI_RONG) : OUT();
+    const nGoi1 = soGoiBocRao();
+    r = await send({ external_user_id: "z-ccrb", text: "Lô này sổ đỏ chính chủ nha em" });
+    check("GOIY-01 AI bóc tách rỗng toàn bộ mà từ điển thấy 'sổ đỏ' → gọi lại model MỘT lần kèm gợi ý; lượt hai đọc ra pháp lý → fact ghi, 🤖 có pháp lý, không 'Không trích xuất'",
+      soGoiBocRao() - nGoi1 === 2 && db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "phap_ly" && /sổ đỏ/.test(f.answer)) &&
+        r.body.replies.some((x) => x.startsWith("🤖") && /pháp lý/.test(x)) && !r.body.replies.some((x) => /Không trích xuất được gì/.test(x)),
+      JSON.stringify({ goi: soGoiBocRao() - nGoi1, facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+    // (2) AI rỗng mà từ điển cũng không thấy gì (câu xã giao) → KHÔNG gọi lại, không ghi.
+    globalThis.__model.parse = (p) => laLuotBocRaoGY(p) ? AI_RONG : OUT();
+    const nGoi2 = soGoiBocRao(), nFactGY = db().t.listing_facts.length;
+    r = await send({ external_user_id: "z-ccrb", text: "hihi cảm ơn em nhiều nha" });
+    check("GOIY-02 AI rỗng + từ điển không thấy dữ liệu → chỉ MỘT lượt bóc tách, không ghi fact", soGoiBocRao() - nGoi2 === 1 && db().t.listing_facts.length === nFactGY,
+      JSON.stringify({ goi: soGoiBocRao() - nGoi2, rep: r.body.replies }));
+    globalThis.__cauHinh = cuCHh;
+    globalThis.__model.parse = () => OUT();
+  }
   // SRS-5.1zzzzzzd (chủ dự án 13/10: "tin đợt trước nó đọc đủ thông tin rồi mà không ra tin nháp mà ra cái bảng nhỏ nhỏ là vì sao"):
   // câu rao ĐỦ ĐIỂM (≥ 70, giá đọc ra số) → bản nháp NGAY ở lượt câu rao, không hỏi câu cơ bản còn thiếu; công tắc `nhap_som = tat` về đường cũ.
   {

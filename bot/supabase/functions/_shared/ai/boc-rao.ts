@@ -355,7 +355,8 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   /** SRS-5.1zzzg: `canDangCo` — các căn người này đang có ("mã: loại, nơi, giá"), để AI biết tin nói về căn nào. */
-  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[]; canDangCo?: string[] } | null = null,
+  /** SRS-5.1zzzzzzh: `goiY` — cụm từ điển tiền định thấy trong tin khi lượt trước AI trả RỖNG (lượt gọi lại); AI vẫn quyết, code vẫn kiểm trích dẫn. */
+  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[]; canDangCo?: string[]; goiY?: string[] } | null = null,
   /** SRS-5.1zzzd: lượt CHỐT TIN — `text` là toàn bộ tin chủ nhà về căn (mỗi dòng một tin), thêm khối LUAT_CHOT. */
   cheDoChot = false,
 ): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
@@ -370,6 +371,12 @@ export async function bocRaoBangModel(
   const hoiThoai = (nguCanh?.hoiThoai ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-4);
   const cauConHoi = (nguCanh?.cauConHoi ?? []).filter((x) => typeof x === "string" && x.trim()).slice(0, 20);
   const canDangCo = (nguCanh?.canDangCo ?? []).filter((x) => typeof x === "string" && x.trim()).slice(0, 5);
+  const goiY = (nguCanh?.goiY ?? []).filter((x) => typeof x === "string" && x.trim()).slice(0, 4);
+  // SRS-5.1zzzzzzh: lượt gọi lại — lượt trước model nói tin không mang gì, trong khi từ điển nghề thấy cụm dữ liệu NGUYÊN VĂN trong tin.
+  // Chỉ là gợi ý để đọc lại theo nghĩa, không bắt buộc, trích dẫn vẫn phải nằm trong tin (lớp kiểm bằng chứng không đổi).
+  const khoiGoiY = goiY.length
+    ? `\n\nLượt đọc trước em trả rỗng. Từ điển nghề của hệ thống thấy trong tin các cụm có thể là dữ liệu căn: ${goiY.join("; ")}. Đọc lại theo NGHĨA: cụm nào đúng là thông tin căn thì đưa vào truong (trich_dan nguyên văn trong tin), cụm nào không phải thì bỏ — không bắt buộc, không bịa.`
+    : "";
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
   const r = await ai.messages.parse({
     model,
@@ -383,7 +390,7 @@ export async function bocRaoBangModel(
     ],
     messages: [{
       role: "user",
-      content: `${canDangCo.length ? `Căn chủ nhà đang có với em (để biết tin nói về căn nào — không trích từ đây):\n${canDangCo.map((c) => `- ${c}`).join("\n")}\n` : ""}${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
+      content: `${canDangCo.length ? `Căn chủ nhà đang có với em (để biết tin nói về căn nào — không trích từ đây):\n${canDangCo.map((c) => `- ${c}`).join("\n")}\n` : ""}${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}${khoiGoiY}`,
     }],
   });
   const ket = docLong(DeXuatRaoDoc, r.parsed_output);
