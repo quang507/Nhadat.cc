@@ -4546,6 +4546,42 @@ bằng chứng không đổi, luật KHÔNG ghi thẳng (giữ bất biến "AI 
 rỗng → gọi lại đúng một lần, câu lệnh lượt hai mang gợi ý, pháp lý ghi, 🤖 có pháp lý), GOIY-02 (AI rỗng + từ điển không thấy → một lượt,
 không ghi). Tắt bản sửa: GOIY-01 đỏ (một lượt, không fact). Cách nói mới chưa bắn: "giấy tờ đầy đủ rồi anh ơi", "hướng Đông Nam nha".
 
+### SRS-5.1zzzzzzi · Hoãn lúc chờ duyệt có hẹn giờ; câu duyệt do lượt anh em vừa mở không phải câu treo; "sổ đỏ chính chủ" là pháp lý (14/10/2026)
+
+**Nguồn.** Chủ dự án test Zalo thật 14/10 08:37–08:41 (hội thoại `…f0e0`, ngay sau khi gộp cụm lên production). Ba lỗi trong một lượt:
+(1) "có sổ đỏ chính chủ nha" → model (Haiku, `boc_tach_bong` #821) trả `nguoi_dung_ten = "chính chủ"` (trích "sổ đỏ chính chủ") thay
+`phap_ly`; 🤖 in "người đứng tên: … 'sổ đỏ chính chủ'". (2) Lượt anh em đang soạn bản nháp cho tin đó đã MỞ câu `duyet_tin` lúc 01:39:34.9Z
+nhưng chưa gửi 📋; tin "giờ anh bận, mai nói tiếp 8 giờ 45 sáng" tới 01:39:36.6Z → lượt này đọc câu duyệt đó, đáp "Dạ em nghe rồi ạ. Bản nháp
+ở trên anh thấy được thì nhắn ok…" trong khi khách chưa thấy bản nháp nào; rồi lượt anh em nhường lượt (`truoc_gui`, `nhap_rut`) và thu
+hồi câu duyệt. (3) AI đọc đúng `y_dinh = hoan` kèm giờ, nhưng nhánh chờ duyệt không có đường hoãn: không câu chờ, không hẹn nhắc, còn ép
+"nhắn ok".
+
+**Lớp lỗi.** (1) Model gán vai cho một cụm nói về GIẤY TỜ — luật VAI đã nói "sổ hồng chính chủ nói về giấy tờ" nhưng luật ô `nguoi_dung_ten`
+chưa nói; cùng lớp SRS-5.1zzzzk (`vaiTuCau` bỏ "sổ hồng chính chủ" trước khi xét vai). (2) Câu treo đọc từ DB không phân biệt "đã hỏi
+khách" với "lượt khác vừa mở, chưa gửi" — cùng lớp nhường lượt SRS-5.1zzzzzzb (lượt anh em thu hồi câu của chính nó) nhưng ở phía người ĐỌC:
+bản nháp được nhắc tới phải là bản nháp khách ĐÃ THẤY (📋 trong lịch sử). Chỗ cùng lớp: `nhapDaGui` (SRS-5.1zzzzzc, hỏi về tin) đã kiểm 📋;
+các câu "Bản nháp ở trên" trong nhánh duyệt chỉ đúng khi câu duyệt là câu thật — nay được bảo đảm từ lúc chọn `pendingReq`. (3) "Hoãn là hoãn
+ở mọi nhánh" (16/09) nhưng nhánh chờ duyệt bị bỏ sót; hẹn giờ trong lời hoãn chưa bao giờ thành nhắc (FR-133 chỉ đặt nhắc cho LỜI HỨA gửi
+ảnh / thông tin — `PROMISE_RE` cần động từ gửi / chụp / báo); `mapDue` bỏ phút ("8 giờ 45" → 8:00).
+
+**Quy tắc.** (1) `boc-rao.ts` luật ô `nguoi_dung_ten`: chỉ khi khách nói AI đứng tên; "sổ đỏ / sổ hồng / giấy tờ chính chủ" là `phap_ly`,
+không phải ô đứng tên — `vi-du-boc-rao.mjs` soi câu luật, ví dụ mẫu SRS-5.1zzzzzzh vẫn dạy cùng ý. (2) `chat-reply` `nhapDangBay(p)`: câu
+`duyet_tin` mở ≤ 2 phút, lịch sử (40 tin) KHÔNG có 📋 của bot từ lúc mở (trừ 60 s), và có tin chủ nhà trước tin này còn chưa được bot trả
+lời (mới hơn lời bot cuối, không muộn hơn lúc mở câu) → câu của một lượt đang bay: bỏ khỏi `dsDung`, lượt đi như không có câu treo (lượt kia
+tự thu hồi hoặc tự gửi nháp). Không có tin chưa trả lời → vẫn là câu treo (không đụng các ca cũ chỉ chèn câu duyệt). (3) Nhánh chờ duyệt
+thêm đường HOÃN đứng trước lời sửa / gật: AI `y_dinh = hoan` (từ lượt bóc tách, không treo theo lượt gật), luật `laHoanLai` chỉ đỡ, không
+phải bảo đăng → một câu chờ, câu duyệt vẫn treo, không ép "nhắn ok là em đăng liền". (4) `datHenHoan(goi)` MỘT chủ cho mọi nhánh hoãn (câu
+treo thường, không câu treo, chờ duyệt): lời hoãn có chữ chỉ giờ / buổi / ngày (`henTuLoiHoan`) → nhắc `promise` theo `mapDue` (nay đọc
+phút: "8 giờ 45", "8h30", "rưỡi") + câu nói lại mốc "Mai 8h45 em nhắn lại anh nha"; không có giờ → hoãn trơn như cũ; lượt có lời hứa gửi
+ảnh đã có nhắc riêng thì không đặt hai lần. Chủ nhà nhắn lại trước giờ hẹn → nhắc tự huỷ ở đầu lượt (đường cũ của FR-133). Meta `hen_nhac`.
+
+**Kiểm.** e2e HOANDUYET-01/01b (câu duyệt thật + hoãn kèm giờ → `loai_cau = hoan`, "mai 8h45", nhắc `promise` 01:45Z với phút đúng, câu
+duyệt treo, không 📋 lại), 02 (câu duyệt do lượt anh em vừa mở, chưa 📋, tin trước chưa trả lời → bỏ qua, hoãn thường, không "Bản nháp ở
+trên"), 03 (đối chứng: câu duyệt mới không 📋 nhưng không tin nào chưa trả lời → vẫn câu treo), 04 (hoãn kèm giờ ở câu treo thường → "mai
+15h", nhắc 08:00Z); `vi-du-boc-rao.mjs` câu luật. Tắt bản sửa: 01, 01b, 02, 04 đỏ (đo trước khi sửa: 01 / 02 rơi về câu meta "Bản nháp ở
+trên", không nhắc). Cách nói mới chưa bắn: "để tối anh coi rồi trả lời", "chủ nhật này nói tiếp em nha", "sổ hồng chính chủ không thế chấp".
+Còn lại ngoài phạm vi: 🤖 cho câu lệnh "tiếp đi em" vẫn in "Không trích xuất được gì" (lượt đó bản nháp vẫn gửi đúng).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

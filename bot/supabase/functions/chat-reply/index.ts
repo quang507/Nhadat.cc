@@ -377,9 +377,12 @@ function mapDue(when: string): string {
   if (wd) day = ((parseInt(wd[1], 10) - 1) - vn.getUTCDay() + 7) % 7;
   else if (/chu nhat|\bcn\b/.test(t)) day = (7 - vn.getUTCDay()) % 7;
   let hour = 15;
-  const hm = /(\d{1,2})\s*(?:h|gio)/.exec(t);
+  let minute = 0;
+  // SRS-5.1zzzzzzi: "8 giờ 45", "8h30", "8:45", "8 giờ rưỡi" — phút đi theo giờ (bản trước bỏ phút).
+  const hm = /(\d{1,2})\s*(?:h|gio|:)\s*(\d{1,2})?(?:\s*(ruoi))?/.exec(t);
   if (hm) {
     hour = Math.min(23, Math.max(0, parseInt(hm[1], 10)));
+    minute = hm[2] ? Math.min(59, parseInt(hm[2], 10)) : hm[3] ? 30 : 0;
     // "3h chiều", "8h tối" — giờ kèm buổi thì cộng 12, kẻo thành 3h/8h SÁNG
     if (hour < 12 && /chieu|toi|dem/.test(t)) hour += 12;
   } else if (/sang/.test(t)) hour = 9;
@@ -387,9 +390,26 @@ function mapDue(when: string): string {
   else if (/chieu/.test(t)) hour = 15;
   else if (/toi|dem/.test(t)) hour = 19;
   else if (/cuoi tuan/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
-  let due = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + day, hour - 7);
+  let due = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + day, hour - 7, minute);
   if (due <= now) due = now + 2 * 3600e3; // đã qua giờ đó → nhắc sau 2 tiếng
   return new Date(due).toISOString();
+}
+/**
+ * SRS-5.1zzzzzzi (Zalo thật 14/10 08:39: "giờ anh bận, mai nói tiếp 8 giờ 45 sáng" → bot chỉ "Dạ em nghe rồi ạ", không hẹn, không
+ * nhắc): lời HOÃN có HẸN GIỜ → mốc nhắc (`mapDue`, FR-133) + cách nói lại mốc đó cho khách ("mai 8h45"). Không có chữ chỉ giờ / buổi /
+ * ngày → null (hoãn trơn, không hẹn). Bỏ dấu nên "tối" lẫn "tôi" — chỉ lệch GIỜ nhắc, cùng bẫy đã ghi ở `mapDue`.
+ */
+const HEN_GIO_RE = /(?:^|[^a-z])(?:mai|hom sau|sang|chieu|toi|trua|cuoi tuan|thu\s*[2-7]|chu nhat|cn|\d{1,2}\s*(?:h|gio|:\d{1,2}))(?![a-z])/;
+function henTuLoiHoan(text: string): { due: string; moTa: string } | null {
+  if (!HEN_GIO_RE.test(boDau(text))) return null;
+  const due = mapDue(text);
+  const d = new Date(Date.parse(due) + 7 * 3600e3);
+  const nay = new Date(Date.now() + 7 * 3600e3);
+  const ngayCua = (x: Date) => Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate());
+  const lech = Math.round((ngayCua(d) - ngayCua(nay)) / 86400e3);
+  const ngay = lech === 0 ? "hôm nay" : lech === 1 ? "mai" : `ngày ${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+  const gio = `${d.getUTCHours()}h${d.getUTCMinutes() ? String(d.getUTCMinutes()).padStart(2, "0") : ""}`;
+  return { due, moTa: `${ngay} ${gio}` };
 }
 // Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc).
 // Hai bản có-dấu / không-dấu, chọn theo tin (FR-161).
@@ -4259,13 +4279,45 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const { error: bdErr } = await client.from("info_requests").update({ status: "expired" }).in("id", boDiem.map((p) => p.id));
       if (bdErr) await ghiLoi(client, "chat-reply thoi cau danh_gia", bdErr.message);
     }
-    const dsDung = ds.filter((p) => !boDiem.some((b) => b.id === p.id));
+    // SRS-5.1zzzzzzi (Zalo thật 14/10 08:39, cùng hội thoại của gộp cụm): lượt anh em (tin "có sổ đỏ chính chủ nha") đang soạn bản
+    // nháp đã MỞ câu `duyet_tin` nhưng chưa gửi 📋; tin "giờ anh bận…" tới sau → lượt này đọc câu đó, đáp "Bản nháp ở trên anh thấy
+    // được thì nhắn ok" trong khi khách chưa thấy bản nháp nào — rồi lượt anh em nhường lượt (`nhap_rut`) và câu đó bị thu hồi. Câu
+    // duyệt mới mở (≤ 2 phút), lịch sử KHÔNG có 📋 từ lúc mở, và có tin chủ nhà trước tin này còn chưa được bot trả lời → đó là câu của
+    // một lượt đang bay: bỏ qua, như chưa có câu treo (lượt kia sẽ tự thu hồi hoặc tự gửi nháp). Bản nháp được nhắc tới phải là bản
+    // nháp khách ĐÃ THẤY — "ở trên" chỉ nói khi 📋 có trong lịch sử.
+    const nhapDangBay = (p: PendRow): boolean => {
+      if (p.question !== "duyet_tin" || !p.created_at) return false;
+      const moc = Date.parse(p.created_at);
+      if (Date.now() - moc > 120_000) return false;
+      const coNhap = lichSuDai.some((m) => !laTinNguoi(m.sender) && /📋/u.test(m.body ?? "") && !!m.created_at && Date.parse(m.created_at) >= moc - 60_000);
+      if (coNhap) return false;
+      const lucBotCuoi = Math.max(0, ...lichSuDai.filter((m) => !laTinNguoi(m.sender) && !!m.created_at).map((m) => Date.parse(m.created_at!)));
+      const lucTinNay = lucTinChu ? Date.parse(lucTinChu) : Date.now();
+      return lichSuDai.some((m) => laTinNguoi(m.sender) && !!m.created_at && Date.parse(m.created_at) < lucTinNay &&
+        Date.parse(m.created_at) > lucBotCuoi && Date.parse(m.created_at) <= moc);
+    };
+    const dsDung = ds.filter((p) => !boDiem.some((b) => b.id === p.id) && !nhapDangBay(p));
     const pendingReq: PendRow | null =
       (codeInText ? dsDung.find((p) => p.listings?.code?.toUpperCase() === codeInText) : null) ??
       (sellerRow.active_listing_id
         ? dsDung.find((p) => p.listing_id === sellerRow.active_listing_id)
         : null) ??
       dsDung[0] ?? null;
+    /**
+     * SRS-5.1zzzzzzi: hoãn có HẸN GIỜ ("mai 8 giờ 45 sáng") → đặt nhắc `promise` (FR-133; `nudge` tới hẹn nhắn một tin, chủ nhà nhắn lại
+     * trước đó thì nhắc tự huỷ ở đầu lượt) và trả câu nói lại mốc để nối vào lời chờ. MỘT chủ cho mọi nhánh hoãn (câu treo, không câu
+     * treo, lúc chờ duyệt) — thêm nhánh hoãn mới thì gọi hàm này, đừng chép câu. Không có giờ → "" (hoãn trơn như cũ).
+     */
+    const datHenHoan = async (goi: string): Promise<string> => {
+      const hen = henTuLoiHoan(text);
+      if (!hen) return "";
+      const { error: henErr } = await client.from("reminders").insert({
+        kind: "promise", seller_id: sellerRow.id, due_at: hen.due,
+        note: `hẹn nói tiếp về tin rao (chủ nhà bận): "${text.slice(0, 160)}"`,
+      });
+      if (henErr) { await ghiLoi(client, "chat-reply hen hoan", henErr.message); return ""; }
+      return ` ${hen.moTa.charAt(0).toUpperCase()}${hen.moTa.slice(1)} em nhắn lại ${goi} nha.`;
+    };
 
     // 02/10/2026 (test Zalo, ảnh chủ dự án): "[khách thả cảm xúc /-strong]" ngay sau tin rao bị lấy làm câu trả lời câu
     // "loại nhà" → bot hỏi lại lần ba. Thả cảm xúc chỉ là GẬT (FR-142): có nghĩa với câu xin đồng ý; câu cần NỘI DUNG thì im.
@@ -6977,6 +7029,17 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // SRS-5.1zf: AI đọc tin → AI quyết duyệt: gật mà không kèm dữ liệu (kèm dữ liệu là lời sửa), hoặc ý định "đủ rồi".
         const tgDuyet = await gatTach(dapAn);
         const ydDuyet = tgDuyet !== undefined ? await yDinhAi() : undefined;
+        // SRS-5.1zzzzzzi: HOÃN lúc chờ duyệt ("giờ anh bận, mai nói tiếp 8 giờ 45 sáng") — bản trước rơi xuống câu meta "Dạ em nghe
+        // rồi ạ. Bản nháp ở trên… nhắn ok" (ép duyệt khi khách vừa nói bận) và không hẹn gì. Hoãn là hoãn ở mọi nhánh (16/09): một câu
+        // chờ, có giờ thì đặt nhắc (FR-133) và nói lại mốc, câu duyệt vẫn treo. AI quyết (`y_dinh = hoan`), luật `laHoanLai` chỉ đỡ.
+        const ydHoanDuyet = await yDinhAi(); // không treo theo lượt gật (`gatTach`) — ý định hoãn đọc từ lượt bóc tách
+        if (!chiSua && (ydHoanDuyet !== undefined ? ydHoanDuyet?.loai === "hoan" : laHoanLai(dapAn)) && !(await baoDangLuot(() => laBaoDang(dapAn)))) {
+          const hen = await datHenHoan(cachGoi);
+          return await traLoiSeller(
+            [`Dạ ${cachGoi} cứ lo việc nha.${hen} Bản nháp ở trên lúc nào rảnh ${cachGoi} xem lại rồi nhắn "ok" là em đăng ạ.`],
+            { reask: "duyet_tin", hoan: true, loai_cau: "hoan", ...(hen ? { hen_nhac: true } : {}) },
+          );
+        }
         // SRS-5.1zzzzzv (Zalo thật 13/10 14:52: "sửa lại theo nội dung này giúp mình" → gật → tin lên kệ; "Sửa lại giúp mình nhé!" → ghi chú
         // "📝 Thêm"): lời VỀ BẢN NHÁP do AI đọc (`xin_sua` / `gui_noi_dung_sau`, trích dẫn đã kiểm) — không bao giờ là gật; không kèm dữ
         // liệu thì không ghi gì, không gửi lại nháp, câu duyệt vẫn treo. Kèm dữ liệu ("sửa lại, giá 9 tỷ") thì đi đường ghi như lời sửa.
@@ -7638,12 +7701,13 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
             { hoan: true, loai_cau: "hoan", dang_luon: true, thieu_dang: thieuN, ...(hua ? { hua: true } : {}) },
           );
         }
+        const henTreo = hua ? "" : await datHenHoan(goi); // SRS-5.1zzzzzzi: lời hứa đã có nhắc riêng (4713) — không đặt hai lần
         const cauHoan = hua
           ? `Dạ em chờ ${goi} nha, lúc nào ${goi} rảnh gửi em là em cập nhật liền ạ.`
           : phien
-          ? `Dạ em xin lỗi, em hỏi dồn quá. Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
-          : `Dạ ${goi} cứ thong thả nha. Có gì ${goi} nhắn em là em làm tiếp liền.`;
-        return await traLoiSeller([cauHoan], { hoan: true, loai_cau: "hoan", ...(hua ? { hua: true } : {}) });
+          ? `Dạ em xin lỗi, em hỏi dồn quá.${henTreo} Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
+          : `Dạ ${goi} cứ thong thả nha.${henTreo} Có gì ${goi} nhắn em là em làm tiếp liền.`;
+        return await traLoiSeller([cauHoan], { hoan: true, loai_cau: "hoan", ...(hua ? { hua: true } : {}), ...(henTreo ? { hen_nhac: true } : {}) });
       }
       if (!boQuaCauTreo && kq.loai !== "khop" && HOI_MOT_LAN.has(pendingReq.question)) {
         const { error: mlErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
@@ -7751,10 +7815,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         if (kq.loai === "hoan" && !humanActive) {
           const goi = cachGoiKhach(goiNguoi ?? kq.xungHo, sellerRow.nhom_tuoi);
           const phien = camAi?.muc === "buc" || /bận|mệt|hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/i.test(text);
+          const henTreo2 = await datHenHoan(goi); // SRS-5.1zzzzzzi
           const cauHoan = phien
-            ? `Dạ em xin lỗi, em hỏi dồn quá. Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
-            : `Dạ ${goi} cứ thong thả nha. Có gì ${goi} nhắn em là em làm tiếp liền.`;
-          return await traLoiSeller([cauHoan], { hoan: true, loai_cau: "hoan" });
+            ? `Dạ em xin lỗi, em hỏi dồn quá.${henTreo2} Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
+            : `Dạ ${goi} cứ thong thả nha.${henTreo2} Có gì ${goi} nhắn em là em làm tiếp liền.`;
+          return await traLoiSeller([cauHoan], { hoan: true, loai_cau: "hoan", ...(henTreo2 ? { hen_nhac: true } : {}) });
         }
         // 11/09/2026 (42 ca): một con số trần kèm mét ("4m") khi đang hỏi ĐỊA CHỈ /
         // PHƯỜNG — không biết là hẻm hay ngang. Bản trước ghi "4m" vào thông tin bổ
@@ -8717,11 +8782,12 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const thanHoi = (camXucLuot as ReturnType<typeof docCamXuc>)?.muc === "buc" || /hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/i.test(text);
       const ttTin = ((tinCuaNguoi ?? []) as Array<{ id: string; status?: string | null }>).find((t) => t.id === sellerRow.active_listing_id)?.status ?? null;
       const dangRao = !!ttTin && ttTin !== "cho_thong_tin" && ttTin !== "an" && ttTin !== "da_chot";
+      const henTu = khop(PROMISE_RE, PROMISE_RE_KD) ? "" : await datHenHoan(goi); // SRS-5.1zzzzzzi: hoãn có hẹn giờ → nhắc + nói lại mốc
       return await traLoiSeller([thanHoi
-        ? `Dạ em xin lỗi, em hỏi dồn quá. Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
+        ? `Dạ em xin lỗi, em hỏi dồn quá.${henTu} Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
         : dangRao
-        ? `Dạ ${goi} cứ lo việc nha. Tin mình vẫn đang rao, có khách quan tâm là em báo ${goi} liền ạ.`
-        : `Dạ ${goi} cứ thong thả nha. Có gì ${goi} nhắn em là em làm tiếp liền.`], { hoan: true, loai_cau: "hoan" });
+        ? `Dạ ${goi} cứ lo việc nha.${henTu} Tin mình vẫn đang rao, có khách quan tâm là em báo ${goi} liền ạ.`
+        : `Dạ ${goi} cứ thong thả nha.${henTu} Có gì ${goi} nhắn em là em làm tiếp liền.`], { hoan: true, loai_cau: "hoan", ...(henTu ? { hen_nhac: true } : {}) });
     }
     // SRS-5.1zzt (06/10/2026, bắn thử thu-ai-0610): người vừa GẬT câu hỏi vai ("đúng rồi") rồi tả căn — "nhà anh ở hẻm 137
     // Nguyễn Trãi, P. Nguyễn Cư Trinh, Q1", "4x16, 1 trệt 2 lầu", "5 tỷ 2, shr" — không có chữ "bán"/"rao" nên `wantsSell`

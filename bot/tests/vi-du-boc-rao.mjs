@@ -36,6 +36,14 @@ for (const [i, v] of VI_DU_BOC_RAO.entries()) {
 ok("SRS-5.1zzzzzzh ví dụ: đang hỏi câu khác, câu thuần chữ 'sổ đỏ chính chủ' → truong phap_ly, không rỗng",
   VI_DU_BOC_RAO.some((v) => v.cau_dang_hoi && v.cau_dang_hoi !== "phap_ly" && /chính chủ/.test(v.tin) && !/\d/.test(v.tin) &&
     v.truong.some((t) => t.khoa === "phap_ly" && /sổ đỏ/.test(t.gia_tri))));
+// SRS-5.1zzzzzzi (Zalo thật 14/10 08:39: "có sổ đỏ chính chủ nha" → model ghi nguoi_dung_ten "chính chủ"): luật phải nói thẳng
+// "sổ đỏ / sổ hồng chính chủ" là phap_ly, KHÔNG phải ô đứng tên. Xoá câu luật là đỏ.
+{
+  const { readFileSync } = await import("node:fs");
+  const luat = readFileSync(new URL("../supabase/functions/_shared/ai/boc-rao.ts", import.meta.url), "utf8");
+  ok("SRS-5.1zzzzzzi luật: 'sổ đỏ chính chủ' / 'sổ hồng chính chủ' là PHÁP LÝ, KHÔNG phải nguoi_dung_ten",
+    /"sổ đỏ chính\s+chủ" \/ "sổ hồng chính chủ"[^]{0,80}là PHÁP LÝ \(phap_ly[^]{0,60}KHÔNG phải nguoi_dung_ten/.test(luat));
+}
 const chu = viDuThanhChu();
 // 01/10/2026: nới 8000 → 8600 cho ví dụ 12 (lỗi thật của chế độ `ai`: lạc câu hỏi thì trả rỗng, "3 lầu" quên trệt). Khối
 // ví dụ nằm trong system có cache (tỉ lệ trúng cache Console ~92%), nên vài trăm ký tự thêm gần như không tốn thêm tiền.
