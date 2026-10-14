@@ -1370,6 +1370,14 @@ export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | n
   // (đã phục hồi dấu theo luật prompt) — luật `catDapAn` từng ghi cả câu "nhà của anh ở hem 4m Pham
   // The Hien, P.4" làm địa chỉ. Hẻm / phường đi ô riêng, không ghép vào.
   if (cauHoi === "vi_tri") return viTriTuDuong(mot.find((x) => x.khoa === "duong"));
+  // SRS-5.1zzzzzzz7 (Zalo thật 14/10 16:33, "Dự án Green river" khi bot hỏi tên dự án): khoá AI `du_an` không có trong `KHOA_GHI` (chỉ
+  // `docAiChinh` biết nó là ô `du_an_ten`), nên câu treo du_an_ten từng trả null — tên dự án khách vừa nói không được ghi. Cùng một
+  // ánh xạ với `docAiChinh` / `khoaTraLoiCau`: nguyên văn cụm khách gõ.
+  if (cauHoi === "du_an_ten") {
+    const d = mot.find((x) => x.khoa === "du_an");
+    const v = d ? (giaTriNguyenVan("du_an_ten", d) ?? String(d.gia_tri ?? "")).trim() : "";
+    return v.length >= 2 && v.length <= 80 ? v : null;
+  }
   const khoaAi = new Set([...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
   const loc = mot.filter((d) => khoaAi.has(d.khoa));
   if (!loc.length) {
@@ -1966,6 +1974,17 @@ export type AiChinh = {
  * lõi. KHÔNG so với DB (AI thắng luật ở lượt này; `ghi_fact_listing` chỉ ghi thêm, trigger lấy bản
  * mới nhất). Không có gì → mọi ô null, `ghi` rỗng — nơi gọi rơi về luật.
  */
+/**
+ * SRS-5.1zzzzzzz7 (Zalo thật 14/10/2026 16:33: bot hỏi "Dự án mình tên gì", khách "Dự án Green river" → bot hỏi "căn đó hay căn khác"):
+ * khoá AI `khoa` có phải câu trả lời cho câu treo `cau` không. Một chỗ cho mọi nơi cần biết "tin này trả lời câu đang hỏi".
+ */
+export function khoaTraLoiCau(khoa: string, cau: string): boolean {
+  if ((KHOA_GHI[khoa] ?? khoa) === cau) return true;
+  if (cau === "du_an_ten") return khoa === "du_an";
+  if (cau === "vi_tri") return khoa === "duong" || khoa === "ten_duong" || khoa === "du_an";
+  return false;
+}
+
 export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   let mot = dat.filter((d) => !(d.can != null && d.can > 1));
   // SRS-5.1zr (03/10/2026, bộ đo R02): căn hộ "76m2 2pn tầng 12" → AI ghi `dien_tich_san` (sàn / sử dụng) → cột phụ

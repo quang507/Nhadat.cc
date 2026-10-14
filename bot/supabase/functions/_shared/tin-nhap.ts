@@ -266,6 +266,19 @@ export function tieuDeTinLe(l: TinNhapRow, fact: (k: string) => string | null): 
   return dau.slice(0, 117 - duoi.length).replace(/[\s,]+\S*$/, "") + "…" + duoi;
 }
 
+/**
+ * SRS-5.1zzzzzzz8 (chủ dự án test Zalo 14/10/2026 16:38: "lấy tên chung cư bỏ lên trên tiêu đề đi em … thường đăng chung cư thì phải có đi kèm
+ * tên chung cư á"): tiêu đề căn hộ có tên chung cư (ô `du_an_ten`). Một chỗ chèn cho cả tiêu đề code ghép lẫn tiêu đề AI viết; tên đã có
+ * trong tiêu đề thì giữ nguyên. Bỏ chữ dẫn "dự án / chung cư" khách gõ kèm để không thành "căn hộ chung cư dự án …".
+ */
+export function themTenChungCu(tieuDe: string, l: Pick<TinNhapRow, "property_type">, fact: (k: string) => string | null): string {
+  if (l.property_type !== "chung_cu") return tieuDe;
+  const ten = (fact("du_an_ten") ?? "").replace(/^\s*(?:dự án|du an|chung cư|chung cu|khu căn hộ|cc)\s+/iu, "").replace(/\s+/g, " ").trim();
+  if (!ten || boDau(tieuDe).includes(boDau(ten))) return tieuDe;
+  if (/căn hộ|chung cư/iu.test(tieuDe)) return tieuDe.replace(/căn hộ|chung cư/iu, (m) => `${m} ${ten}`);
+  return `Căn hộ ${ten}, ${tieuDe.charAt(0).toLocaleLowerCase("vi")}${tieuDe.slice(1)}`;
+}
+
 /** Bản nháp đầy đủ — một chuỗi, mỗi dòng một ý (giống một tin rao thật). */
 export function soanTinNhap(t: ThamSoNhap): string {
   const { than, duoi, hoi } = soanTinNhapHaiBong(t);
@@ -305,7 +318,10 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string;
   };
 
   dong.push(tieuDeDau?.trim() ? tieuDeDau.trim() : cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de", { loai: loaiDoc(l.property_type) }));
-  dong.push(tieuDeTin(l, fact, facts, (tieuDeKhach ?? "").trim() || tieuDeAi || null));
+  const tdKhach = (tieuDeKhach ?? "").trim();
+  const td = tieuDeTin(l, fact, facts, tdKhach || tieuDeAi || null);
+  // Tiêu đề khách tự đặt giữ nguyên chữ khách; tiêu đề máy / AI viết thì căn hộ phải mang tên chung cư (SRS-5.1zzzzzzz8).
+  dong.push(tdKhach ? td : themTenChungCu(td, l, fact));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.
   const dc = diaChiHienThi(l);

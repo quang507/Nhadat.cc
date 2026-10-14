@@ -60,7 +60,7 @@ import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat, suaGiaTrongLoi } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docKhongBiet, docNgungHangLoat, khongBietCua, giaTriKhongDoi, vaiTuCau, laChiGat, laCauHoiXacNhan } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb, boSungDiaChiTuKienThuc } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, khoaTraLoiCau, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb, boSungDiaChiTuKienThuc } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu, phuongCot, tenPhuongCot, viTriGhiDuoc } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -5581,8 +5581,14 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // SRS-5.1zzv (e2e RN-07e): bot đang hỏi LOẠI nhà, khách đáp "nhà phố" → AI đọc ra loai_bds → từng thành "câu rao suông" và bot
     // hỏi "căn đó hay căn khác". Câu treo là loại mà tin KHÔNG có ý rao (bán / cho thuê / có căn / rao) thì tên loại là CÂU TRẢ
     // LỜI, không phải rao căn mới; "chú có căn nhà cần bán" (CHU-6) vẫn là rao suông như cũ.
-    const traLoiLoai = pendingReq?.question === "loai_bds" && !/\b(?:ban|cho thue|rao|co (?:mot |1 )?can|can ban|muon ban|sang nhuong|nhuong lai)\b/.test(tKD);
-    const raoSuong = !traLoiLoai && (aiRao !== undefined ? aiRao : coYDinhRao && coLoaiRo /* lưới đỡ */) && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
+    const coChuRao = /\b(?:ban|cho thue|rao|co (?:mot |1 )?can|can ban|muon ban|sang nhuong|nhuong lai)\b/.test(tKD);
+    const traLoiLoai = pendingReq?.question === "loai_bds" && !coChuRao;
+    // SRS-5.1zzzzzzz7 (Zalo thật 14/10 16:33): bot hỏi tên dự án, khách "Dự án Green river" → AI đọc loại / tên dự án nên `aiRao` = có,
+    // tin không số → "rao suông" → bot hỏi "căn đó hay căn khác", không ghi tên dự án. Lớp lỗi: câu TRẢ LỜI câu treo bị đọc là RAO CĂN MỚI
+    // vì cổng chỉ miễn cho câu loại BĐS. Nay AI đọc ra ô của chính câu treo (hoặc nói có trả lời) và tin không có chữ rao → không phải rao.
+    const traLoiTreoAi = !!pendingReq && !coChuRao && laCheDoAi && !!bongAi && await bongAi.then((k) =>
+      !!k?.ket && (!!k.traLoi?.co_tra_loi || k.truong.some((t) => khoaTraLoiCau(t.khoa, pendingReq.question)))).catch(() => false);
+    const raoSuong = !traLoiLoai && !traLoiTreoAi && (aiRao !== undefined ? aiRao : coYDinhRao && coLoaiRo /* lưới đỡ */) && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
       nhanDienNhieuFact(text).every((f) => f.question === "gap" || f.question === "phuong");
     if (!sellerMoi && (raoSuong || (dangHoiCanCuMoi && (laCanDo || laCanKhac)))) {
       type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; district: string | null; property_type: string | null; price_raw: string | null; area_m2?: number | null; boc_tach?: unknown };

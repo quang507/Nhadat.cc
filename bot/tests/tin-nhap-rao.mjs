@@ -5,7 +5,7 @@
 //
 // Ba mẫu dưới đây là ba hình dạng hay gặp nhất của rổ hàng: nhà phố hẻm xe hơi
 // (đủ thông số), căn hộ CHO THUÊ (điều kiện thuê), và đất (chỉ có vài dòng).
-import { soanTinNhap, soanTinNhapHaiBong, tieuDeTin, tieuDeTinLe } from "../supabase/functions/_shared/tin-nhap.ts";
+import { soanTinNhap, soanTinNhapHaiBong, tieuDeTin, tieuDeTinLe, themTenChungCu } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 
 const cachGoi = "anh";
@@ -377,6 +377,18 @@ console.log(`\n${dat} đạt · ${hong} hỏng`);
   const b2 = soanTinNhap({ l: { ...l, location_raw: "Chung cư Sky Garden" }, facts: [{ question: "du_an_ten", answer: "Chung cư Sky Garden" }], diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
   const dc2 = b2.split("\n").find((x) => x.startsWith("📍")) ?? "";
   la("CC-TEN-2 tên chung cư đã là địa chỉ → không in lặp", (dc2.match(/Sky Garden/g) ?? []).length === 1, dc2);
+}
+// SRS-5.1zzzzzzz8 (chủ dự án test Zalo 14/10 16:38: "lấy tên chung cư bỏ lên trên tiêu đề"): tiêu đề căn hộ mang tên chung cư.
+{
+  const l = { code: "BDS-CH-Q8-0001", property_type: "chung_cu", deal: "ban", location_raw: "2225 Phạm Thế Hiển", ward: "Phường Bình Đông", district: "Quận 8", area_m2: 60, price_raw: "2,850 tỷ", floor: 5 };
+  const f = [{ question: "du_an_ten", answer: "Green river" }];
+  const t2 = (o) => soanTinNhap({ l, facts: f, diem: 78, thieu: [], soAnh: 0, lai: false, cauTD, ...o }).split("\n")[1];
+  la("CC-TEN-3 (ca gốc) tiêu đề code ghép → có tên chung cư sau chữ căn hộ", /căn hộ Green river/.test(t2({})), t2({}));
+  la("CC-TEN-4 (cách khác) tiêu đề AI không có chữ căn hộ → mở bằng 'Căn hộ Green river'", /^Căn hộ Green river, /.test(t2({ tieuDeAi: "View sông, nội thất đủ, chỉ 2,85 tỷ" })), t2({ tieuDeAi: "View sông, nội thất đủ, chỉ 2,85 tỷ" }));
+  la("CC-TEN-5 tiêu đề đã có tên → không lặp", (t2({ tieuDeAi: "Căn hộ Green River 60m² chỉ 2,85 tỷ" }).match(/green river/gi) ?? []).length === 1, t2({ tieuDeAi: "Căn hộ Green River 60m² chỉ 2,85 tỷ" }));
+  la("CC-TEN-6 tiêu đề khách tự đặt → giữ nguyên chữ khách", t2({ tieuDeKhach: "Bán gấp căn 60m2 Q8" }) === "Bán gấp căn 60m2 Q8", t2({ tieuDeKhach: "Bán gấp căn 60m2 Q8" }));
+  la("CC-TEN-7 khách gõ 'Dự án Green river' → tiêu đề không thành 'căn hộ Dự án …'", themTenChungCu("Chỉ 2 tỷ căn hộ tại Q8", l, () => "Dự án Green river") === "Chỉ 2 tỷ căn hộ Green river tại Q8");
+  la("CC-TEN-8 đối chứng nhà phố → không chèn", themTenChungCu("Chỉ 5 tỷ nhà phố", { property_type: "nha_pho" }, () => "Green river") === "Chỉ 5 tỷ nhà phố");
 }
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");

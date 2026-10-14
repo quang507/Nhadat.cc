@@ -4974,6 +4974,38 @@ Sau merge đẩy `tone_rules` lên `bot_prompts`.
 
 **Kiểm.** Lời model không kiểm tất định được; đo bằng khách mô phỏng (`mo-phong.yml`) khi chủ dự án cho chạy.
 
+### SRS-5.1zzzzzzz7 · Trả lời câu hỏi tên dự án không phải rao căn mới (14/10/2026)
+
+**Nguồn.** Người test thật 14/10 16:33 (Zalo …4980, căn hộ 2225 Phạm Thế Hiển): bot hỏi "Dự án mình tên gì", khách "Dự án Green river" → bot
+"trước đó anh chị có căn 2225 Phạm Thế Hiển… căn anh chị vừa nhắc là căn đó hay căn khác ạ?", tên dự án không được ghi lượt đó.
+
+**Lớp lỗi.** Câu TRẢ LỜI câu treo bị đọc là RAO CĂN MỚI: cổng "rao suông" (`raoSuong`) coi tin có ý rao khi AI đọc ra loại BĐS / loại giao dịch
+(chữ "Dự án" → căn hộ) và tin không có số; chỉ câu trả lời câu LOẠI BĐS được miễn. Thêm nữa, câu treo `du_an_ten` không đọc được khoá AI `du_an`
+(`giaTriChoCauTreo` chỉ tra `KHOA_GHI`, nơi `du_an` không có — chỉ `docAiChinh` biết `du_an` là ô `du_an_ten`). Chỗ cùng lớp: câu treo `vi_tri`
+đọc khoá `duong` riêng (đúng); mọi câu treo khác đi qua `KHOA_GHI` (đúng).
+
+**Quy tắc.** `khoaTraLoiCau(khoa, cau)` (`kiem-bang-chung.ts`) là MỘT chỗ nói khoá AI nào trả lời câu treo nào. Tin không có chữ rao (bán / cho
+thuê / có căn…) mà AI đọc ra ô của chính câu treo (hoặc nói có trả lời) → không phải rao suông. `giaTriChoCauTreo` đọc `du_an` cho câu treo
+`du_an_ten` (nguyên văn cụm khách gõ, như `docAiChinh`).
+
+**Kiểm (đỏ khi tắt).** e2e ZZZZZZZ7 (ca gốc "Dự án Green river", cách nói mới "chung cư Sky Garden em"): không hỏi "căn đó hay căn khác", ghi
+`du_an_ten`; gỡ chốt chặn trong `raoSuong` là cả hai đỏ (đã thử).
+
+### SRS-5.1zzzzzzz8 · Tiêu đề căn hộ mang tên chung cư (14/10/2026)
+
+**Nguồn.** Chủ dự án test Zalo 14/10 16:38–16:39: "lấy tên chung cư bỏ lên trên tiêu đề đi em … thường đăng chung cư thì phải có đi kèm tên chung
+cư á, làm sao cho nó nhận dạng được tên để đưa lên tiêu đề". Bản nháp: "Chỉ 2,850 tỷ căn hộ tại Bình Đông, Q.8" dù tên "Green river" đã có ở 📍.
+
+**Lớp lỗi.** Tiêu đề có hai nguồn (code ghép `tieuDeTin` / AI viết ở lượt khen) và không nguồn nào biết ô `du_an_ten`. Chỗ cùng lớp: web hiển thị
+tiêu đề riêng (chưa soát lần này).
+
+**Quy tắc.** `themTenChungCu` (`tin-nhap.ts`) chèn tên chung cư vào tiêu đề máy / AI viết của căn hộ ("căn hộ Green river"); tên đã có thì giữ;
+bỏ chữ dẫn "dự án / chung cư" khách gõ kèm; tiêu đề khách tự đặt giữ nguyên. Prompt lượt khen (`khen-nhap.ts`) thêm luật căn hộ có tên chung cư
+thì tiêu đề phải có tên đó.
+
+**Kiểm (đỏ khi tắt).** `bun bot/tests/tin-nhap-rao.mjs` CC-TEN-3…8 (code ghép, AI không chữ căn hộ, đã có tên, tiêu đề khách, chữ dẫn "Dự án",
+đối chứng nhà phố).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
