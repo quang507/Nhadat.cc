@@ -4486,6 +4486,37 @@ hỏng (`nenDoiSang`: quá hạn, 429/529/5xx, hết tiền) thì Gemini đọc.
 **Kiểm.** `bot/tests/thu-tu-model.mjs` ANH-01…05 (base64 → image_url; Groq bị bỏ qua không sổ lỗi; chỉ Groq → ném; PDF → ném; ảnh URL →
 tải về thành data URL). Tắt bản sửa thì ANH-01 đỏ.
 
+### SRS-5.1zzzzzzg · Khách nhắn giật cục → gộp cụm thành một lượt (13/10/2026)
+
+**Nguồn.** Chủ dự án 13/10 tối: "nếu khách nhắn giật cục đó thì sửa làm sao" → đề xuất gộp cụm → "gật". Zalo thật 13/10 17:20–17:23 (đất Q8):
+"Đường 156 An Dương Vương" rồi 11 giây sau "Phường Phú Định"; "xây được 6 tầng" / "Đất có sổ đỏ chính chủ" / ảnh cách nhau 8–10 giây —
+3 ngày chỉ có 4 cặp tin cách nhau dưới 30 giây, đều ở chat này.
+
+**Lớp lỗi.** Mỗi tin là một lượt độc lập: lượt trước ghi fact rồi IM (nhường lượt SRS-5.1zzzzzq), lượt cuối trả lời. Hai lỗ: (1) fact
+của lượt im không được bong bóng 🤖 nào báo — mốc 🤖 là giờ tin cuối (SRS-5.1zzzzzr), fact lượt trước ghi trước mốc; (2) lượt cuối đọc câu
+kế trên DB lúc nó chạy, lượt trước ghi xong SAU đó → câu kế có thể hỏi lại thứ vừa ghi. Chỗ cùng lớp: gộp album ảnh (01/10, chờ 8 s rồi
+soi tin mới hơn) đã làm đúng việc này cho ẢNH; chữ thì chưa.
+
+**Quy tắc** (`chat-reply`, ngay sau khi ghi tin chủ nhà vào `messages`, chỉ tin CHỮ, không áp cho lượt chạy lại `soAttempts > 1`):
+1. **Chờ rồi thoát sạch.** Chờ `app_config.gop_cum` giây (mặc định 3, trần 8; `tat` = không chờ), soi tin KHÁCH mới hơn trong hội thoại:
+   có tin CHỮ mới hơn → `hoanTat(superseded_luc = "dau_luot")` — chưa ghi gì ngoài dòng `messages`, không gọi model. Tin mới hơn là ẢNH /
+   FILE / LINK thì KHÔNG thoát (lượt ảnh không gộp chữ, thoát là mất tin).
+2. **Cụm.** Lượt đi tiếp đọc các tin chủ nhà LIỀN TRƯỚC (không lời bot chen, cách nhau ≤ 90 s; tin ảnh giữa hai câu chữ không cắt cụm).
+   Mốc 🤖 = tin đầu cụm (`lucDauCum`), fact các lượt im trong cụm vào bong bóng này; fact lượt anh em ghi trước tin lượt này được giữ dù
+   lượt này ghi lại cùng giá trị (`luotAnhEm`, không bị luật `doi = false` của SRS-5.1zzzzo bỏ).
+3. **Gộp văn bản** chỉ những tin mà lượt của nó CHẮC đã thoát ở cổng 1: tin kế tới trong lúc nó còn chờ (cách < `gop_cum` − 0,5 s); vùng
+   mập mờ tới `gop_cum` + 1 s tra `inbound_ledger` (completed + `dau_luot`). Tin có lượt đang chạy / đã trả lời KHÔNG gộp — đọc hai lần
+   là tạo tin trùng — nhưng vẫn là mốc 🤖. Chuỗi gộp dừng ở tin đầu không gộp được. Tin đã gộp bỏ khỏi lịch sử đưa model (`seqGop`) và
+   khỏi "bộ nhớ" (`tinChuNhaGoc` so với `textTinNay`, không so bản gộp). `text`, `textBoc`, `tKD` thành `let`, gán lại sau gộp; cổng phân
+   vai / luật `wantsSell` ở trên đọc tin ĐƠN như cũ — câu rao nằm trong tin gộp do AI đọc (`raoNgam`, `can_khac`), đúng hướng SRS-5.1q.
+
+**Kiểm.** e2e GOPCUM-01 (hai tin 2 s / 1 s trước + fact lượt anh em → model nhận một tin ba dòng, không còn dòng "CHỦ NHÀ:" riêng, 🤖 có
+phòng ngủ của lượt anh em), GOPCUM-02 (tin chữ mới hơn trong lúc chờ → `dau_luot`, không fact, không gọi model, không lời bot), GOPCUM-03
+(tin mới hơn là ảnh → không thoát, fact vẫn ghi), GOPCUM-04 (tin cách 20 s → không gộp, vẫn mốc 🤖). Tắt bản sửa: GOPCUM-01 đỏ (lượt
+không ghi hướng của tin trước), GOPCUM-02 đỏ (lượt vẫn ghi fact + gọi model). DAM-S2 / DAM-S3 (tin 2 vào ngay sau tin 1) nay thoát ở cổng
+chờ (`dau_luot`) — sớm hơn cổng "đủ rồi" / trước gửi; TOIUU-07 +2 truy vấn (công tắc + tin lân cận). Thả cảm xúc không gộp (ZR-05 giữ). Cách nói mới chưa bắn: "Đường 156 An Dương Vương" ⏎ "Phường Phú Định" ⏎ "hẻm 5m".
+e2e thay giấc chờ bằng `globalThis.__nguGopCum`.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
