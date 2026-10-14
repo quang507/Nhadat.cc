@@ -12196,6 +12196,98 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzzzp/q/r (14/10/2026, tự soát hai hội thoại thật hôm nay): (p) lượt bị nhường trước khi gửi rút MỌI câu chờ nó vừa mở;
+// (q) "bỏ cái hướng Đông Nam ra" → bỏ thật ô không bắt buộc, nhớ giá trị đã bỏ; (r) gật bản nháp kèm câu hỏi về tin → đăng VÀ trả lời.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocP = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laYP = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const rongP = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null } };
+  const TIN_P = { deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", can_chu_duyet: true, location_raw: "105/12 Trần Bình Trọng",
+    street: "Trần Bình Trọng", ward: "Phường Chợ Quán", district: "Quận 5", alley_width_m: 5, access_type: "hem_xe_hoi", area_m2: 64, frontage_m: 4,
+    length_m: 16, floors: 4, floors_text: "trệt + 3 lầu", bedrooms: 4, legal_status: "so_hong_rieng", price_raw: "7 tỷ 5", price_vnd: 7.5e9, direction: "Đông Nam" };
+  let n = 0;
+  const dungP = ({ tin = {}, cauTreo = null, facts = [] } = {}) => {
+    fresh(seedKho);
+    const uid = `thu-zp-${++n}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb" }).data;
+    const L = db().insert("listings", { code: `BDS-NP-Q5-08${n}`, seller_id: s.id, ...TIN_P, ...tin }).data;
+    s.active_listing_id = L.id;
+    for (const [question, answer, source] of facts) db().insert("listing_facts", { listing_id: L.id, question, answer, source: source ?? "seller_chat" });
+    if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+    return { uid, s, L };
+  };
+  const goiP = async (uid, text, ai = {}, loi = "Dạ vâng ạ.") => {
+    globalThis.__model = { parse: (p) => (laBocP(p) || laYP(p)) ? { ...rongP, ...ai } : OUT(), create: () => loi };
+    const r = await send({ external_user_id: uid, text });
+    const reps = r.body?.replies ?? [];
+    return { r, reps, rep: reps.join(" | ") };
+  };
+  const fqP = (L, q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q).map((f) => f.answer);
+  const treoP = (L) => db().t.info_requests.filter((q) => q.listing_id === L.id && q.status === "pending").map((q) => q.question);
+  const Lnay = (L) => db().t.listings.find((x) => x.id === L.id);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+
+  // (p) ca gốc: khách trả lời câu hiện trạng, tin ẢNH tới giữa lượt → lượt nhường; câu chờ lượt này vừa mở (câu kế) không được treo.
+  {
+    const { uid, L } = dungP({ tin: { bedrooms: null, direction: null }, cauTreo: "hien_trang_su_dung", facts: [["huong", "Đông Nam", "ai_kiem"]] });
+    const truoc = new Set(db().t.info_requests.map((q) => q.id));
+    globalThis.__afterInsertMsgSeller = (d, m) => d.insert("messages", { conversation_id: m.conversation_id, sender: "seller", body: "[khách gửi ảnh] [ảnh: https://x/p1.jpg]", zalo_msg_id: `zp-${Date.now()}` });
+    const a = await goiP(uid, "đang để trống em", { tra_loi: { co_tra_loi: true, gia_tri: "đang để trống", trich_dan: "đang để trống" } });
+    globalThis.__afterInsertMsgSeller = null;
+    const moi = db().t.info_requests.filter((q) => !truoc.has(q.id) && q.listing_id === L.id);
+    check("ZZZZZZP-01 (ca gốc 14/10 09:59) lượt mở câu kế rồi nhường trước khi gửi → câu vừa mở bị rút (expired), không còn câu chờ nào khách chưa từng thấy",
+      a.r.body.superseded === true && a.r.body.superseded_luc === "truoc_gui" && moi.length >= 1 && moi.every((q) => q.status !== "pending"),
+      JSON.stringify({ body: a.r.body, moi: moi.map((q) => [q.question, q.status]), treo: treoP(L) }));
+  }
+
+  // (q) ca gốc: chờ duyệt, "bỏ cái hướng Đông Nam ra" → hướng bỏ khỏi cột + fact, bản nháp gửi lại không còn dòng hướng, câu duyệt vẫn treo.
+  {
+    const { uid, L } = dungP({ cauTreo: "duyet_tin", facts: [["huong", "Đông Nam", "ai_kiem"]] });
+    const cau = "bỏ cái hướng Đông Nam ra";
+    const a = await goiP(uid, cau, { yeu_cau: "xin_bo_o", yeu_cau_trich: cau, yeu_cau_o: "huong" });
+    const nhap = a.reps.find((x) => /📋/u.test(x)) ?? "";
+    check("ZZZZZZQ-01 (ca gốc 14/10 10:05) 'bỏ cái hướng Đông Nam ra' lúc chờ duyệt → cột hướng trống, fact hướng đổi thành huong_da_bo (không xoá dòng), báo đã bỏ, bản nháp gửi lại không có dòng Hướng, câu duyệt còn",
+      Lnay(L).direction == null && fqP(L, "huong").length === 0 && fqP(L, "huong_da_bo").includes("Đông Nam") && /bỏ hướng Đông Nam khỏi tin/.test(a.rep) && /📋/u.test(nhap) && !/Hướng/.test(nhap) &&
+        treoP(L).includes("duyet_tin") && !/nhắn hướng đúng/.test(a.rep) && Lnay(L).boc_tach?.o_da_bo?.huong === "hướng Đông Nam",
+      JSON.stringify({ dir: Lnay(L).direction, f: fqP(L, "huong"), rep: a.rep, treo: treoP(L), bt: Lnay(L).boc_tach }));
+  }
+  // (q) cách nói mới, không chờ duyệt: "xoá giùm số phòng ngủ đi em" → bỏ, hỏi lại câu đang treo.
+  {
+    const { uid, L } = dungP({ cauTreo: "tiem_nang", facts: [["so_phong_ngu", "4", "seller_chat"]] });
+    const cau = "xoá giùm số phòng ngủ đi em";
+    const a = await goiP(uid, cau, { yeu_cau: "xin_bo_o", yeu_cau_trich: cau, yeu_cau_o: "so_phong_ngu" });
+    check("ZZZZZZQ-02 (cách nói mới) 'xoá giùm số phòng ngủ đi em' → bedrooms trống, fact phòng ngủ xoá, báo đã bỏ, câu đang treo còn nguyên",
+      Lnay(L).bedrooms == null && fqP(L, "so_phong_ngu").length === 0 && /bỏ 4 phòng ngủ khỏi tin/.test(a.rep) && treoP(L).includes("tiem_nang"),
+      JSON.stringify({ bed: Lnay(L).bedrooms, rep: a.rep, treo: treoP(L) }));
+  }
+  // (q) ô lõi giữ đường cũ: "bỏ giá đi" → không xoá giá, xin giá đúng.
+  {
+    const { uid, L } = dungP({ cauTreo: "duyet_tin" });
+    const a = await goiP(uid, "bỏ cái giá đi", { yeu_cau: "xin_bo_o", yeu_cau_trich: "bỏ cái giá đi", yeu_cau_o: "gia" });
+    check("ZZZZZZQ-03 ô lõi (giá) → KHÔNG xoá, nói giá đang ghi và xin giá đúng (tin không có giá thì không đăng được)",
+      Lnay(L).price_vnd === 7.5e9 && /đang ghi giá/.test(a.rep), JSON.stringify({ p: Lnay(L).price_vnd, rep: a.rep }));
+  }
+
+  // (r) ca gốc: chờ duyệt, "hồi nãy anh nói giá bao nhiêu ok đăng đi" → đóng dấu duyệt VÀ có câu trả lời giá.
+  {
+    const { uid, L } = dungP({ cauTreo: "duyet_tin" });
+    const cau = "hồi nãy anh nói giá bao nhiêu ok đăng đi";
+    const a = await goiP(uid, cau, { dong_y: "dong_y_dang", dong_y_trich: "ok đăng đi", yeu_cau: "hoi_gia", yeu_cau_trich: "hồi nãy anh nói giá bao nhiêu" });
+    check("ZZZZZZR-01 (ca gốc 14/10 10:08) gật + hỏi giá lúc chờ duyệt → tin được duyệt (chu_duyet_at) VÀ lượt đăng có câu trả lời giá 7 tỷ 5",
+      !!Lnay(L).chu_duyet_at && /7 tỷ 5/.test(a.rep) && a.r.body.duyet === true, JSON.stringify({ cd: Lnay(L).chu_duyet_at, rep: a.rep, body: a.r.body }));
+  }
+  // (r) đối chứng: chỉ hỏi giá (không gật) → trả lời giá, KHÔNG duyệt.
+  {
+    const { uid, L } = dungP({ cauTreo: "duyet_tin" });
+    const a = await goiP(uid, "tin ghi giá bao nhiêu vậy em", { yeu_cau: "hoi_gia", yeu_cau_trich: "tin ghi giá bao nhiêu" });
+    check("ZZZZZZR-02 (cách nói mới, đối chứng) chỉ hỏi giá lúc chờ duyệt → trả lời giá, tin CHƯA duyệt, câu duyệt còn treo",
+      !Lnay(L).chu_duyet_at && /7 tỷ 5/.test(a.rep) && treoP(L).includes("duyet_tin"), JSON.stringify({ cd: Lnay(L).chu_duyet_at, rep: a.rep, treo: treoP(L) }));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 check(`BẤT BIẾN-PHƯỜNG: không lượt ghi nào đưa chữ lạ tới cột / fact phường (${BB.phuong.length} vi phạm)`, BB.phuong.length === 0, BB.phuong.slice(0, 12).join("\n       "));
 check(`BẤT BIẾN-ĐỊA CHỈ: lời gửi khách không chép location_raw thô khi bản in chuẩn khác (${BB.diaChi.length} vi phạm)`, BB.diaChi.length === 0, BB.diaChi.slice(0, 12).join("\n       "));
 check(`BẤT BIẾN-GIỌNG: không "anh/chị" gạch chéo, không gạch dài trong lời gửi khách (${BB.giong.length} vi phạm)`, BB.giong.length === 0, BB.giong.slice(0, 12).join("\n       "));

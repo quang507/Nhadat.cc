@@ -97,8 +97,10 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
   được", "phần Thêm chỉ giữ 'gần chợ' thôi") → cũng là xin_bo_o, yeu_cau_o = bo_sung, bo_y = các ý KHÁC đang in trên dòng đó trong
   bản nháp ở "Câu BOT vừa nói" (chép nguyên văn từ bản nháp, ví dụ "rộng rãi, nhiều phòng thích hợp cho gia đình đông thành viên hay
   cho thuê lại"); không thấy bản nháp thì bo_y = null.
-- khong: tin đưa THÔNG TIN căn nhà (kể cả kèm hỏi "giá 4 tỷ 3 được không?"), gật, chào, hỏi về PHÍ / cách bên em làm việc, kể
+- khong: tin đưa THÔNG TIN căn nhà (kể cả kèm hỏi "giá 4 tỷ 3 được không?"), CHỈ gật / chào, hỏi về PHÍ / cách bên em làm việc, kể
   chuyện khác.
+Gật / bảo đăng KÈM câu hỏi lại về tin ("hồi nãy anh nói giá bao nhiêu ok đăng đi", "ok em, tin ghi mấy m2 vậy") → ghi CẢ HAI: dong_y
+(hay dong_y_dang) VÀ yeu_cau = hoi_gia / hoi_dien_tich…; mỗi ô trích đúng cụm của nó.
 yeu_cau_trich phải chép NGUYÊN VĂN từ TIN chủ nhà.
 
 LUẬT KHÔNG BIẾT (khong_biet) — bot vừa hỏi một điều, chủ nhà nói không biết / không nhớ / không rõ điều đó: "ko biết cụ thể đường,

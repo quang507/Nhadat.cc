@@ -473,10 +473,21 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string;
   const yThemIn = chonLoc.length ? chonLoc.map((x) => x.in) : boSungTienIch;
   // SRS-5.1zzzzzzj (chủ dự án 14/10/2026: "để ô tiện ích và thêm gộp lại luôn"): MỘT dòng "📝 Thêm" — tiện ích đi trước (mặt tiền, tiện ích
   // khách liệt kê, ý thêm xếp tiện ích / chọn lọc), rồi tình trạng nhà, hiện trạng sử dụng, ý thêm còn lại. Không còn dòng 🏫 riêng.
-  them("📝", "Thêm", [
-    matTien, ...tienIch, ...yThemIn.filter((x) => !tienIch.some((y) => chuanY(y) === chuanY(x))),
+  // SRS-5.1zzzzzzs (Zalo thật 14/10 11:47, tin Cao Lỗ): khách gửi bài rao HAI lần (lần đầu thiếu chữ "tỷ") → hai ý gần như một
+  // ("Vị trí gần kề các trường Đại Học Lớn: …" / "Gần kề các trường Đại Học Lớn: …") cùng nằm trên dòng này. Một ý in một lần, ý đầu thắng.
+  // So CHẶT (`gioiTrung`: ý ngắn nằm trọn trong ý dài và dài ≥ 80% ý dài) — `trungY` lỏng hơn, gộp nhầm "chợ" với "gần chợ Bình Tây".
+  const gioiTrung = (a: string, b: string) => {
+    const x = chuanY(a), y = chuanY(b);
+    if (x === y) return true;
+    const [ngan, dai] = x.length <= y.length ? [x, y] : [y, x];
+    return ngan.length >= 12 && dai.includes(ngan) && ngan.length / dai.length >= 0.8;
+  };
+  const yDong: string[] = [];
+  for (const y of [
+    matTien, ...tienIch, ...yThemIn.filter((x) => !tienIch.some((t) => chuanY(t) === chuanY(x))),
     htNha, htSuDung0 && htNha && trungY(htSuDung0, htNha) ? null : htSuDung, ...boSungThem,
-  ]);
+  ]) if (y && !yDong.some((d) => gioiTrung(d, y))) yDong.push(y);
+  them("📝", "Thêm", yDong);
   // FR-211: nhãn tìm kiếm — khách mua lọc được ("yên tĩnh", "gần chợ"…).
   // 25/09/2026: nhãn mà các dòng trên đã nói ("sân thượng" trong kết cấu) không in lặp.
   them("🏷", "Nhãn", [l.nhan?.length ? tenNhanKhongTrung(l.nhan, dong.join("\n")) || null : null]);
