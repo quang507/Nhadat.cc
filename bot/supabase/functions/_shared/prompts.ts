@@ -160,7 +160,7 @@ export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói [lượt
 - "Hẻm 4m, ô tô vào tới nơi" [vừa ghi: độ rộng hẻm · diện tích] → "Dạ vâng anh. Diện tích trên sổ ngang dài bao nhiêu vậy ạ?"
 - "3 phòng ngủ" [vừa ghi: số phòng ngủ · số toilet] → "Vâng ạ. Nhà mình mấy toilet vậy chị?"
 - Khách đưa nhiều thông tin một lần: "bán nhà hẻm 5m Phạm Văn Chí P7 Q6, 4.2x12 nở hậu 4.5, trệt lửng 2 lầu 3PN 3WC, SHR, 6.9 tỷ TL" [ảnh] → "Dạ vâng anh. Anh chụp giúp em vài tấm mặt tiền và sổ nha?"
-- "Phí bên em sao?" [không ghi gì mới · pháp lý] (chưa biết anh là chủ nhà hay môi giới) → "Dạ phí chỉ thu khi bán xong thôi anh, mức tuỳ chủ nhà hay môi giới. Còn sổ nhà mình riêng hay chung vậy anh?"
+- "Phí bên em sao?" [không ghi gì mới · pháp lý] (chưa biết anh là chủ nhà hay môi giới) → "Dạ phí chỉ thu khi bán xong thôi anh, mức tuỳ chủ nhà hay môi giới. Còn giấy tờ nhà mình thế nào vậy anh?"
 - "anh là chính chủ" [không ghi gì mới · pháp lý] (bong bóng trước đã báo phí theo vai) → "Dạ vâng. Pháp lý giấy tờ thế nào anh?"
 - "để em coi lại sổ rồi báo" → "Dạ vâng, anh coi rồi nhắn em nha, em chờ ạ."
 - "có khách nào hỏi căn của anh chưa em" (chưa có khách) → "Dạ chưa có khách hỏi anh ơi, tin mới lên em đang rao. Có khách quan tâm là em báo anh liền."
@@ -305,6 +305,10 @@ export const FACT_LABELS: Record<string, string> = {
   loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
   // 13/10/2026 (chủ dự án: "cái hỏi có sổ hồng riêng ko sửa thành pháp lý"): hỏi chung về pháp lý, khách tự nói loại giấy tờ.
   phap_ly: "pháp lý (giấy tờ)",
+  // SRS-5.1zzzzzzz19 (Zalo thật 14/10 10:15, căn hộ Bình Chánh: "Căn … mình có sổ hồng riêng hay chung vậy chị?"; chủ dự án "sao câu pháp lý
+  // nãy test nó cứ hỏi về sổ hồng riêng"): CẦN HỎI chỉ ghi "pháp lý (giấy tờ)" cho mọi loại, ví dụ mẫu dạy "pháp lý → sổ riêng hay chung", nên
+  // model hỏi căn hộ bằng câu của nhà phố. Căn hộ: đã ra sổ hồng hay còn hợp đồng mua bán.
+  "phap_ly@chung_cu": "pháp lý căn hộ (đã ra sổ hồng hay còn hợp đồng mua bán, KHÔNG hỏi sổ riêng hay chung)",
   dien_tich_dat: "diện tích đất",
   dien_tich: "diện tích",
   // SRS-5.1zzzzt (bắn production 10/10, thu-thuong16: căn hộ Sunrise City bị hỏi "Căn mình ngang dài bao nhiêu"): ví dụ mẫu chỉ có nhà

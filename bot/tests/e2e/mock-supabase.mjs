@@ -118,6 +118,8 @@ export class FakeDB {
       // 20260925e: loại đường vào đã rõ (hẻm xe hơi / xe máy / mặt tiền) = câu hẻm đã có câu trả lời.
       if (l.alley_width_m || l.access_type) { have.add("do_rong_hem"); have.add("do_rong_duong"); } if (l.floors) have.add("ket_cau"); if (/lửng|sân thượng|hầm|áp mái/.test(l.floors_text ?? "")) have.add("tang_phu");
       if (l.legal_status) have.add("phap_ly"); if (l.direction) have.add("huong"); if (l.floor) have.add("tang");
+      // 20261014e: căn hộ thuộc dự án mà dự án có pháp lý (legal_status / specs phap_ly / so_huu) → không hỏi pháp lý.
+      if (l.property_type === "chung_cu" && duAnCoPhapLyMock(this.t, l.project_id)) have.add("phap_ly");
       if (l.planning_status) have.add("quy_hoach"); if (l.year_built) have.add("nam_xay"); if (l.furnishing) have.add("noi_that"); if (l.frontage_m) have.add("mat_tien");
       // Ảnh trong kho (listing_media) = đã có ảnh, như view thật (FR-185).
       if (this.t.listing_media.some((m) => m.listing_id === l.id)) have.add("hinh_anh");
@@ -155,9 +157,9 @@ export class FakeDB {
     // 20261013c (SRS-5.1zzzzzu): tin cho thuê (không phải đất) → điều kiện thuê thay cho sổ; tin bán → "pháp lý (loại sổ, hoàn công)".
     const laThueDiem = l.deal === "cho_thue" && !/^dat/.test(l.property_type ?? "");
     if (laThueDiem) { if (has("tien_coc") || has("thoi_han_thue") || has("phap_ly") || l.legal_status || l.property_type === "phong_tro") pl = 10; else thieu.push("điều kiện thuê (cọc, thời hạn)"); }
-    else if (l.legal_status || has("phap_ly") || l.property_type === "phong_tro") pl = 10;
-    // 20261014d: chữ thiếu pháp lý theo loại (căn hộ / đất không có hoàn công).
-    else thieu.push(l.property_type === "chung_cu" ? "pháp lý (sổ hồng riêng hay chung)" : ["dat", "dat_nong_nghiep", "dat_kinh_doanh"].includes(l.property_type) ? "pháp lý (loại sổ)" : "pháp lý (loại sổ, hoàn công)");
+    else if (l.legal_status || has("phap_ly") || l.property_type === "phong_tro" || (l.property_type === "chung_cu" && duAnCoPhapLyMock(this.t, l.project_id))) pl = 10;
+    // 20261014d: chữ thiếu pháp lý theo loại (căn hộ / đất không có hoàn công). 20261014e: căn hộ "đã ra sổ hồng hay còn HĐMB".
+    else thieu.push(l.property_type === "chung_cu" ? "pháp lý (đã ra sổ hồng hay còn hợp đồng mua bán)" : ["dat", "dat_nong_nghiep", "dat_kinh_doanh"].includes(l.property_type) ? "pháp lý (loại sổ)" : "pháp lý (loại sổ, hoàn công)");
     const gia = l.price_vnd != null ? 10 : 0; if (!gia) thieu.push("giá");
     let tn = 0;
     const moTa = String(l.description ?? "").toLowerCase();
@@ -266,7 +268,10 @@ export class FakeDB {
   }
 }
 // Bỏ dấu — bản mock của public.bo_dau() trong DB.
-export const boDauMock = (s) =>
+export // 20261014e (`du_an_co_phap_ly`): dự án trong kho đã có pháp lý.
+const duAnCoPhapLyMock = (t, pid) => !!pid && (t.projects ?? []).some((p) => p.id === pid &&
+  (String(p.legal_status ?? "").trim() || String(p.specs?.phap_ly ?? "").trim() || String(p.specs?.so_huu ?? "").trim()));
+const boDauMock = (s) =>
   String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
 // đủ cho "5 tỷ 8", "5,5 tỷ", "800 triệu"
