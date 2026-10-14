@@ -100,11 +100,27 @@ export function tomTatLuuLuong(dem: DemLuuLuong): Record<string, unknown> {
   return { so: dem.so, byte: dem.byte, top };
 }
 
+/**
+ * SRS-5.1zzzzzzz (chủ dự án 14/10 "giảm độ trễ đi"): mỗi lượt chat-reply gọi `get_secret` ~8 lần (sổ lưu lượng `_luu_luong`). Giá trị ĐỌC
+ * ĐƯỢC nhớ 60 giây trong isolate; null / lỗi KHÔNG nhớ (SEC-02, e2e "VAULT HỤT MỘT LẦN → đọc lại ngay"). Xoay khoá có hiệu lực tối đa sau 60 s.
+ */
+const NHO_BI_MAT_MS = 60_000;
+const nhoBiMat = new Map<string, { v: string; luc: number }>();
+const layNho = (name: string): string | null => {
+  const n = nhoBiMat.get(name);
+  return n && Date.now() - n.luc < NHO_BI_MAT_MS ? n.v : null;
+};
+/** Chỉ cho bộ kiểm: xoá bộ nhớ bí mật giữa các ca. */
+export function xoaNhoBiMat(): void { nhoBiMat.clear(); }
+
 /** Secret lấy từ env (supabase secrets) trước, không có thì đọc Vault. */
 export async function secretOf(db: SupabaseClient, name: string): Promise<string | null> {
   const fromEnv = Deno.env.get(name);
   if (fromEnv) return fromEnv;
+  const nho = layNho(name);
+  if (nho) return nho;
   const { data } = await db.rpc("get_secret", { secret_name: name });
+  if (typeof data === "string" && data) nhoBiMat.set(name, { v: data, luc: Date.now() });
   return (data as string) ?? null;
 }
 
@@ -122,8 +138,11 @@ export async function docBiMat(
 ): Promise<{ giaTri: string | null; loi: string | null }> {
   const fromEnv = Deno.env.get(name);
   if (fromEnv) return { giaTri: fromEnv, loi: null };
+  const nho = layNho(name);
+  if (nho) return { giaTri: nho, loi: null };
   const { data, error } = await db.rpc("get_secret", { secret_name: name });
   if (error) return { giaTri: null, loi: error.message };
+  if (typeof data === "string" && data) nhoBiMat.set(name, { v: data, luc: Date.now() });
   return { giaTri: (data as string) ?? null, loi: null };
 }
 

@@ -309,7 +309,10 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string;
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.
   const dc = diaChiHienThi(l);
-  dong.push(`📍 ${dc.charAt(0).toLocaleUpperCase("vi") + dc.slice(1)}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
+  // SRS-5.1zzzzzzz3: căn hộ có địa chỉ đường VÀ tên chung cư (ô `du_an_ten`) — in cả hai; tên đã nằm trong địa chỉ thì không lặp.
+  const duAn = loai === "chung_cu" ? fact("du_an_ten") : null;
+  const duAnIn = duAn && !boDau(dc).includes(boDau(duAn).trim()) ? ` · ${duAn}` : "";
+  dong.push(`📍 ${dc.charAt(0).toLocaleUpperCase("vi") + dc.slice(1)}${duAnIn}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
   // SRS-5.1zzzzzo (chủ dự án 13/10/2026: "giá để ở cuối cùng"): dòng giá soạn ở đây, in ở CUỐI thân tin (bản 09/09 để ngay dưới địa chỉ).
   let dongGia: string | null = null;
   const gia = giaHienThi(l);

@@ -9867,13 +9867,16 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   rG = await send({ external_user_id: "g-ccrb", text: "ok đăng đi em" });
   const lG = db().t.listings.find((l) => l.code === "BDS-Q5-0971");
   check("AOND-G2 chính chủ gật → lên kệ, câu lên kệ nói hạng (mock: Bạc), KHÔNG nhắc chuẩn 10 căn",
-    lG?.status === "dang_ban" && /hạng Bạc/.test(rG.body.replies.join("\n")) && !/10 căn/.test(rG.body.replies.join("\n")),
+    lG?.status === "dang_ban" && /hạng Bạc/.test(rG.body.replies.join("\n")) && !/10 căn/.test(rG.body.replies.join("\n")) && !/hạng Vàng/.test(rG.body.replies.join("\n")),
     JSON.stringify({ st: lG?.status, rep: rG.body.replies }));
   seedDuyet("g-nmg", "nmg", "BDS-Q5-0972", 2);
   rG = await send({ external_user_id: "g-nmg", text: "ok đăng đi em" });
   const lG2 = db().t.listings.find((l) => l.code === "BDS-Q5-0972");
-  check("AOND-G3 môi giới 3 căn gật → lên kệ, có hạng; KHÔNG nhắc chuẩn 10 căn, không hứa quyền lợi (chủ dự án 06/10 bỏ câu đó)",
-    lG2?.status === "dang_ban" && /hạng Bạc/.test(rG.body.replies.join("\n")) && !/10 căn/.test(rG.body.replies.join("\n")) && !/ưu tiên/.test(rG.body.replies.join("\n")),
+  // SRS-5.1zzzzzzz2 (chủ dự án 14/10 "câu khích lệ làm đi"): môi giới chưa Vàng → câu khích lệ đúng quyền lợi thật (điểm tăng theo số căn, 80 điểm
+  // là Vàng, Vàng được giới thiệu trước); không "Top", không "10 căn", không hứa bán nhanh. Chính chủ (G2) không có câu này.
+  check("AOND-G3 môi giới 3 căn gật → lên kệ, có hạng + câu khích lệ hạng Vàng (quyền lợi có thật), KHÔNG 'Top' / '10 căn' / hứa bán nhanh",
+    lG2?.status === "dang_ban" && /hạng Bạc/.test(rG.body.replies.join("\n")) && /hạng Vàng/.test(rG.body.replies.join("\n")) && /giới thiệu căn hạng Vàng trước/.test(rG.body.replies.join("\n")) &&
+      !/10 căn|Top|bán nhanh|đứng đầu/i.test(rG.body.replies.join("\n")),
     JSON.stringify({ st: lG2?.status, rep: rG.body.replies }));
 }
 // ── SRS-5.1zzt (06/10/2026, bắn thử production thu-ai-0610): gật câu hỏi vai rồi TẢ CĂN không có chữ "bán" → phải MỞ TIN ──

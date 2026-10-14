@@ -4880,6 +4880,97 @@ từng tới khách không phải dữ liệu của khách, cũng không phải 
 câu duyệt bản nháp bị rút không để lại dòng nào). Dữ liệu tin BDS-CH-Q8-0001 trên production còn một dòng `expired` sai cho câu phòng ngủ — chưa
 sửa tay (cần chủ dự án đồng ý trước khi đổi dữ liệu thật).
 
+### SRS-5.1zzzzzzz · Giảm độ trễ lượt người bán (14/10/2026)
+
+**Nguồn.** Chủ dự án 14/10: "giảm độ trễ đi … cần trả lời nhanh nhẹn". Sổ `_ms` của lượt người bán đo trên production: chờ gộp cụm 3 s + đọc DB
+~2,7 s trước lượt AI đầu, lượt AI đọc ý ‖ bóc tách 5–11 s, viết lời ~1 s, AI soát khẳng định ~1,5 s, ghi và gửi ~2 s.
+
+**Lớp lỗi.** Chờ và gọi cố định cho mọi lượt dù lượt đó không cần: (1) gộp cụm chờ cứng 3 s; (2) `get_secret` gọi lại ~8 lần mỗi lượt cho
+cùng khoá; (3) lượt AI soát khẳng định chạy cả khi lời bot chỉ có "Dạ" + một câu hỏi. Chỗ cùng lớp: lượt bóc tách và lượt đọc ý vẫn chạy song
+song cho mọi tin (chưa đổi — đổi là đổi cách đọc, cần đo riêng).
+
+**Quy tắc.** Gộp cụm mặc định 1,5 s (`app_config.gop_cum` vẫn chỉnh được, `tat` = 0, trần 8 s). Khoá bí mật nhớ 60 giây trong isolate
+(`_shared/claude.ts`, chỉ nhớ giá trị đọc được; `xoaNhoBiMat()` cho bài kiểm). `loiKhongCanSoat` (`van-tra-loi.ts`): lời không có chữ số, đúng
+một câu hỏi không chứa tên riêng, các câu còn lại chỉ là "dạ / vâng / em ghi rồi" → bỏ lượt AI soát; có số, tên riêng, khẳng định hay gợi ý giá
+trị thì vẫn soát.
+
+**Kiểm (đỏ khi tắt).** `bun bot/tests/van-tra-loi.mjs` SOAT-01…08 (bỏ soát chỉ với lời trơn; có số / tên riêng / hai câu hỏi / khẳng định → soát).
+
+### SRS-5.1zzzzzzz2 · Câu khích lệ môi giới khi tin lên kệ (14/10/2026)
+
+**Nguồn.** Chủ dự án 14/10: "câu khích lệ làm đi" (bản PR2 từng bỏ câu "đủ 10 căn là lên Top" vì không có thật).
+
+**Lớp lỗi.** Câu thúc đẩy dễ thành lời hứa không có trong hệ thống ("Top 1", "bán nhanh"). Chỗ cùng lớp: mọi câu tiền định nói về quyền lợi
+người bán (hạng, ưu tiên) — soát lại: `dang_xong_hang` chỉ in tên hạng thật từ `tranHangRao`.
+
+**Quy tắc.** Môi giới chưa hạng Vàng, đang rao dưới 10 căn → nối `dang_xong_khich_le` sau câu hạng: chỉ nói điều code làm thật — điểm tăng theo
+số căn đủ thông tin (hệ số `diem_nguoi_ban` tới 10 căn), ≥ 80 điểm là Vàng, Vàng được giới thiệu trước cho khách mua nói rõ khu vực và tầm giá
+(SRS-5.1zzf). Chính chủ không nhận câu này.
+
+**Kiểm (đỏ khi tắt).** e2e AOND-G2 (chính chủ: không "hạng Vàng"), AOND-G3 (môi giới: có câu khích lệ, không "10 căn / Top / bán nhanh / đứng đầu").
+
+### SRS-5.1zzzzzzz3 · Căn hộ phải hỏi tên chung cư dù đã có địa chỉ đường (14/10/2026)
+
+**Nguồn.** Người test thật 14/10 07:55–07:59 (Zalo …4980): "Chung cư đường Phạm Thế Hiển quận 8", "địa chỉ 2225 Phạm Thế Hiển" → bot ghi vị
+trí rồi hỏi phường, diện tích, tầng, giá, pháp lý — không bao giờ hỏi căn hộ thuộc chung cư nào. Chủ dự án: "sửa luôn, tất cả các thứ sửa từ gốc".
+
+**Lớp lỗi.** Một ô gánh hai thứ khác nhau: với căn hộ, `vi_tri` vừa là địa chỉ đường vừa là tên dự án, và `listing_missing_facts` coi ô đó là có
+ngay khi có fact `vi_tri` / `location_raw` / `street`. Địa chỉ đường lấp ô, tên chung cư (thứ người mua tìm; một đường nhiều chung cư) không còn
+chỗ bắt buộc. Chỗ cùng lớp: đất nền dự án (`du_an_ten` chỉ dùng để bỏ câu xây dựng, không bắt buộc — đúng, đất ngoài dự án không có tên); toà
+nhà / kho xưởng hỏi "khu công nghiệp / cụm nào" trong cùng câu vị trí (chấp nhận: không phải thứ người mua lọc).
+
+**Quy tắc.** `required_facts` căn hộ có ô riêng `du_an_ten` (nhóm `co_ban`, ưu tiên 2 — xếp trước `vi_tri`), migration `20261014b`; view coi
+ô đó là CÓ chỉ khi có fact `du_an_ten` hoặc tin đã gắn `project_id` — địa chỉ đường không lấp. Khách nói tên thì trigger vẫn điền `location_raw`
+nên câu vị trí không hỏi lặp; khách nói địa chỉ trước thì bot hỏi tiếp tên chung cư. Câu vị trí căn hộ đổi thành hỏi đường / khu (không hỏi lại
+dự án). Bản nháp in tên chung cư cạnh địa chỉ (`soanTinNhapHaiBong`), không lặp khi tên đã là địa chỉ.
+
+**Kiểm (đỏ khi tắt).** `bun bot/tests/o-bat-buoc-moi.mjs` (view `schema.sql`, migration, DB giả: có địa chỉ đường mà chưa tên → còn thiếu
+`du_an_ten`; gắn dự án / đã nói tên → không thiếu), `tin-nhap-rao.mjs` CC-TEN-1/2, `re-nhanh.mjs` nhãn vị trí theo loại. Migration phải áp cùng
+lúc deploy (`apply-migration.yml`); câu mẫu và nhãn mới phải đẩy lên `bot_prompts` (`dong-bo-prompt`).
+
+### SRS-5.1zzzzzzz4 · "Đăng giúp nội dung này" khi nội dung chưa gửi; "đủ rồi" đã đóng câu thì không nhường im (14/10/2026)
+
+**Nguồn.** Người test thật 14/10 (tin cho thuê Q8): "đăng giúp chị theo nội dung này nhé" trước khi bài rao tới → lượt AI đọc ý ra cả gật-đăng
+lẫn "sắp gửi nội dung"; và nhánh "đủ rồi" đóng mọi câu treo rồi vẫn có thể nhường lượt ở bước trước khi gửi.
+
+**Lớp lỗi.** (1) Hai ý trái nhau từ cùng một lượt AI không có chỗ phân xử: nơi hỏi gật đọc `dong_y`, nơi khác đọc `yeu_cau`. (2) Lượt đã ghi một
+thay đổi trạng thái khách phải nghe (đóng câu, đóng dấu `chu_noi_du_at`) mà vẫn nhường lượt im — cùng lớp với SRS-5.1zzzzzzu (đã đăng mà nhường).
+Chỗ cùng lớp đã soát: bốn chỗ đóng dấu duyệt (đã bật cờ từ 5.1zzzzzzu), hai nhánh "đủ rồi" (trong và ngoài vòng hỏi — sửa lần này).
+
+**Quy tắc.** `dongYAi` (một chỗ cho `gatLuot`, `baoDangLuot`, gật kèm nói thêm): AI đọc ra `gui_noi_dung_sau` (trích dẫn đã kiểm) → không gật.
+Prompt đọc ý: "đăng giúp (theo) nội dung này / sau" mà bot chưa gửi bản nháp và tin không kèm nội dung căn → `khong_noi` + `gui_noi_dung_sau`;
+bot vừa gửi bản nháp thì vẫn là gật-đăng. Hai nhánh "đủ rồi" bật `daDuyetLuot` ngay sau khi ghi đóng câu / `chu_noi_du_at` — bước trước khi gửi
+không nhường nữa.
+
+**Kiểm.** e2e cho hai ca này viết khi chạy bộ tổng thể (chủ dự án tắt e2e tự động 14/10); `bun run kieu:bot` sạch.
+
+### SRS-5.1zzzzzzz5 · Tin cho thuê căn hộ / cấp 4 / biệt thự hỏi bù trượt giá (14/10/2026)
+
+**Nguồn.** Soát `required_facts` production 14/10: `truot_gia` (giá thuê tăng mỗi năm) có ở nhà phố, mặt bằng, kho xưởng, không có ở căn hộ, nhà
+cấp 4, biệt thự.
+
+**Lớp lỗi.** Bộ câu theo loại BĐS viết tay từng loại (seed 20260909h/i) nên thiếu lệch giữa các loại cùng nhánh cho thuê. Chỗ cùng lớp: `fit_out`
+cho thuê có ở căn hộ / biệt thự / nhà phố nhưng thiếu ở cấp 4 (giữ: cấp 4 ít khi bàn giao thô — chưa đổi); DB giả chưa chép các dòng `fit_out`.
+
+**Quy tắc.** Migration `20261014c`: `truot_gia` nhóm `sau_dang` (hỏi sau khi lên kệ, không chặn bản nháp), deal `cho_thue`, ngay sau câu thời hạn
+thuê. DB giả chép theo.
+
+**Kiểm (đỏ khi tắt).** `bun bot/tests/o-bat-buoc-moi.mjs` (migration + DB giả: thuê có `truot_gia` nhóm `sau_dang`, bán không có).
+
+### SRS-5.1zzzzzzz6 · Giọng: không mặt cười, đáp theo nhịp khách, khen đúng lúc (14/10/2026)
+
+**Nguồn.** Chủ dự án 14/10: "ko cần dùng mặt cười cũng được nhưng cần trả lời nhanh nhẹn tinh tế và ko rập khuôn, khen lâu lâu đúng thứ mới khen".
+Hội thoại thật 07:55–07:59 mở hai lượt liền bằng "Dạ vâng anh chị. Căn mình …".
+
+**Lớp lỗi.** Prompt cho phép mặt cười và chỉ cấm khen suông chung chung, không nói cách đáp theo nhịp khách. Chỗ cùng lớp: câu tiền định
+"Dạ em ghi … rồi ạ" (`tiepSauGhi`) vẫn là khuôn cố định — chấp nhận vì là câu xác nhận ghi, ngắn.
+
+**Quy tắc.** `TONE_RULES`: không dùng mặt cười; khách gõ cụt thì đáp gọn, khách kể thêm chuyện thì đáp đúng chuyện đó nửa câu rồi mới hỏi, không
+dùng lại câu mở đầu hay khuôn câu hỏi của tin trước; khen chỉ khi khách VỪA nói một điểm mạnh thật. Đổi lời = đổi prompt (không thêm van sửa văn).
+Sau merge đẩy `tone_rules` lên `bot_prompts`.
+
+**Kiểm.** Lời model không kiểm tất định được; đo bằng khách mô phỏng (`mo-phong.yml`) khi chủ dự án cho chạy.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

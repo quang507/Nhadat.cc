@@ -1532,5 +1532,17 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ok("ZZZZZY-V1d không có tên đã biết → trả nguyên mảng", sua(["Căn Trương Đình Hối"], [null, "Lê"]).length === 1 && sua(["Căn Trương Đình Hối"], [])[0] === "Căn Trương Đình Hối");
   ok("ZZZZZY-V1e tên khác chữ (không chỉ lệch dấu: 'Trương Định') → không đụng", sua(["Căn Trương Định này"], biet)[0] === "Căn Trương Định này");
 }
+// SRS-5.1zzzzzzz (giảm độ trễ): lời không có gì để soát → bỏ lượt AI soát; có số / tên riêng / khẳng định / gợi ý → vẫn soát.
+{
+  const { loiKhongCanSoat: k } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  ok("SOAT-01 (ca gốc 07:58) 'Dạ vâng anh chị. Căn mình anh chị mong muốn bán giá bao nhiêu vậy ạ?' → không cần soát", k("Dạ vâng anh chị. Căn mình anh chị mong muốn bán giá bao nhiêu vậy ạ?"));
+  ok("SOAT-02 'Dạ em ghi rồi ạ.\nCăn hộ mình ở tầng mấy anh chị ạ?' → không cần soát", k("Dạ em ghi rồi ạ.\nCăn hộ mình ở tầng mấy anh chị ạ?"));
+  ok("SOAT-03 câu hỏi gợi ý phường (tên riêng) → PHẢI soát", !k("Dạ em ghi rồi ạ. Đường Phạm Thế Hiển đoạn căn hộ mình thuộc Phường Bình Đông hay Phường Chánh Hưng vậy anh chị?"));
+  ok("SOAT-04 có số ('2,85 tỷ') → PHẢI soát", !k("Dạ giá 2,85 tỷ em ghi rồi. Giấy tờ thế nào ạ?"));
+  ok("SOAT-05 có câu nhận xét → PHẢI soát", !k("Dạ vâng, căn góc thoáng lắm ạ. Giấy tờ thế nào ạ?"));
+  ok("SOAT-06 hai câu hỏi → PHẢI soát", !k("Nhà mình mấy tầng ạ? Có sổ chưa ạ?"));
+  ok("SOAT-07 (cách nói mới) 'Vâng ạ. Căn mình giấy tờ thế nào vậy ạ?' → không cần soát", k("Vâng ạ. Căn mình giấy tờ thế nào vậy ạ?"));
+  ok("SOAT-08 không có câu hỏi → PHẢI soát (khẳng định trơn)", !k("Dạ em ghi rồi ạ."));
+}
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

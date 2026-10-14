@@ -93,7 +93,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, laChiLenhDang, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo, boLoiChaoDau,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { chanPhiChuaXacNhan, boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, cauHoiGoiYKhongNguon, boCauHoiGoiY, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
+import { chanPhiChuaXacNhan, boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, cauHoiGoiYKhongNguon, boCauHoiGoiY, loiKhongCanSoat, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, lungChuaRoDem, docTraLoiLung, ketCauTheoLung, soTangTrongDapLung, phanNgoaiCauLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -2182,6 +2182,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
      * thấy tin đã đăng nên chỉ nói "em ghi … vào tin rồi". Tin lên kệ mà chủ nhà không hề biết. Đóng dấu duyệt (đưa tin lên kệ) là
      * việc KHÔNG rút lại được — lượt đã đóng dấu thì không nhường, phải nói ra. (Đường "đăng đi" kiểm tin mới hơn NGAY TRƯỚC khi đóng
      * dấu, để phần lớn ca nhường TRƯỚC khi đăng.)
+     * SRS-5.1zzzzzzz4: cờ này nghĩa rộng là "lượt đã ghi một thay đổi trạng thái khách phải được nghe" — cả "đủ rồi" (đóng mọi câu
+     * treo + `chu_noi_du_at`) cũng bật nó: đóng câu xong mà nhường im thì khách không biết bot đã thôi hỏi.
      */
     let daDuyetLuot = false;
     // SRS-5.1zzzzzq (Zalo thật 13/10/2026 11:42: "Cháu đăng giúp Bác thông tin này nhé!" rồi 12 giây sau cả bài rao; lượt tin 1 đang chạy
@@ -2244,7 +2246,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const { data: cfgGop, error: cfgErr } = await client.rpc("cau_hinh", { p_key: "gop_cum" });
       if (cfgErr) await ghiLoi(client, "chat-reply cau_hinh(gop_cum)", cfgErr.message);
       const chuoiGop = String(cfgGop ?? "").trim();
-      const giayGop = chuoiGop === "tat" ? 0 : Math.min(8, Math.max(0, Number(chuoiGop) || 3));
+      // SRS-5.1zzzzzzz (chủ dự án 14/10 "giảm độ trễ đi"): mặc định 3 → 1,5 giây. Tin giật cục thật (14/10: cách nhau 8–16 giây) nằm ngoài cả
+      // cửa sổ 3 giây, nên chờ 3 giây chủ yếu là trễ thêm; tin tới muộn hơn vẫn được cổng nhường lượt trước khi gửi bắt.
+      const giayGop = chuoiGop === "tat" ? 0 : Math.min(8, Math.max(0, Number(chuoiGop) || 1.5));
       const laTinMedia = (b: string | null | undefined) => /\[(?:ảnh|file|link): /.test(b ?? "");
       type DongCum = { sender: string; body: string | null; seq: number; created_at: string | null; zalo_msg_id?: string | null };
       let truocDo: DongCum[] = [];
@@ -2951,6 +2955,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (!yLuotAi) return undefined;
       const k = await yLuotAi;
       if (!laCheDoAi || k?.dongY === undefined) return undefined;
+      // SRS-5.1zzzzzzz4 (Zalo thật 14/10/2026): "đăng giúp chị theo nội dung này nhé" khi nội dung CHƯA gửi — AI đọc cả gật-đăng lẫn
+      // "báo nội dung sắp gửi". Hai ý đó trái nhau; báo sắp gửi thắng: chưa có nội dung thì chưa có gì để gật. Một chỗ quyết cho mọi
+      // nơi hỏi gật / bảo đăng (gatLuot, baoDangLuot, gatKemNoiThem).
+      const yc = k?.yeuCau !== undefined ? docYeuCau(k.yeuCau, textTreo || text) : null;
+      if (yc?.loai === "gui_noi_dung_sau") return null;
       return docDongY(k.dongY, textTreo || text);
     };
     /**
@@ -3047,6 +3056,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     const soatNhanXet = async (loi: string | null, bangChung: string, daGhi = ""): Promise<string | null> => {
       nhanXetAiXong = false;
       if (!loi || !anthropicS || !laCheDoAi) return loi;
+      // SRS-5.1zzzzzzz: lời không có khẳng định nào để soát (dạ / ghi nhận + một câu hỏi mở) → bỏ lượt AI soát (~1,5 s); lưới code vẫn chạy.
+      if (loiKhongCanSoat(loi)) return loi;
       try {
         // SRS-5.1zzzzzb: căn cứ hợp lệ có BA nguồn — lời chủ nhà, đã ghi, dữ liệu tra (cùng khối model đã thấy khi viết, `duLieuTra`).
         const tra = [await duLieuTra(), duAnNguon].filter(Boolean).join("\n");
@@ -5059,7 +5070,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // "chuẩn môi giới 10 căn" đã bỏ cùng ngày theo chủ dự án — không hứa, không rao thêm việc.
     const dongHangRao = async (): Promise<string> => {
       const tr = await tranHangRao();
-      return tr?.hang ? cauTD("dang_xong_hang", { hang: tenHang(tr.hang) }) : "";
+      if (!tr?.hang) return "";
+      // SRS-5.1zzzzzzz2: câu khích lệ có quyền lợi thật — môi giới chưa Vàng, dưới 10 căn (hệ số điểm chỉ tăng tới 10 căn).
+      const khichLe = sellerRow.seller_type === "nmg" && tr.hang !== "vang" && tr.so_dang_rao < 10 ? cauTD("dang_xong_khich_le") : "";
+      return [cauTD("dang_xong_hang", { hang: tenHang(tr.hang) }), khichLe].filter(Boolean).join(" ");
     };
 
     // ─── SRD §VI 2.4 (05/10/2026, SRS-5.1zzc): câu keep-alive "còn bán không" đang treo. AI đọc theo NGHĨA: gật với câu bot vừa
@@ -6958,6 +6972,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           .update({ status: "expired" })
           .eq("listing_id", pendingReq.listing_id).eq("status", "pending");
         if (dongErr) await ghiLoi(client, "chat-reply dong cau treo(du roi)", dongErr.message);
+        daDuyetLuot = true; // SRS-5.1zzzzzzz4: đã đóng câu — lượt này phải nói ra, không nhường im
         const [{ data: dDu }, { data: tDu, error: tDuErr }] = await Promise.all([
           client.rpc("diem_tin", { p_listing_id: pendingReq.listing_id }),
           client.from("listings").select("status, chu_duyet_at").eq("id", pendingReq.listing_id).maybeSingle(),
@@ -9626,6 +9641,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           .update({ chu_noi_du_at: luc })
           .eq("id", tinChot.id);
         if (duErr) await ghiLoi(client, "chat-reply chu noi du roi", duErr.message);
+        daDuyetLuot = true; // SRS-5.1zzzzzzz4
         // SRS-5.1zzzzr (bắn production 09/10, thu-thuong12: "đăng giúp chú" → "Dạ vâng, vậy em rao như vậy nhé…" mà tin vẫn
         // `cho_thong_tin`, không bản nháp): nhánh này từng đóng dấu duyệt rồi nói "em rao" bất kể tin có lên kệ được không. Tin CHƯA
         // lên kệ đi đúng một đường với "đăng đi" trong vòng hỏi (`guiBanNhap(…, dangLuon)`): đủ điểm thì đóng dấu và nói theo trạng
