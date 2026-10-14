@@ -229,8 +229,9 @@ thật (chưa có project thứ hai để thử).
    là để dựng — cổng CI thứ 7 so md5 từng thân hàm `schema.sql` ↔ DB nên file này
    không tụt lại được nữa; đỏ thì `node scripts/sinh-schema.mjs` rồi commit.*
    Xong thì chạy thêm `migrations/20260907c_schema_so_doc_nhu_excel.sql`,
-   `migrations/20260907f_so_ro_hang_doc_mot_dong.sql` rồi
-   `migrations/20260907g_so_hoi_thoai_doc_lai_log_chat.sql`:
+   `migrations/20260907f_so_ro_hang_doc_mot_dong.sql`,
+   `migrations/20260907g_so_hoi_thoai_doc_lai_log_chat.sql` rồi
+   `migrations/20260924f_so_hoi_thoai_ten_tro_ly.sql` (lượt dựng 08/10 bỏ sót file này, log ghi cứng "Thái (bot)" — 20261014d vá):
    schema `so` (hai view nhìn như Excel) nằm NGOÀI vùng `xuat_schema()` quét
    nên không có trong `schema.sql`. Bỏ qua cũng không mất dữ liệu — chỉ là view.
 3. **Bí mật**: chép tay vào Vault — `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`.

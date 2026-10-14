@@ -5156,6 +5156,32 @@ ok" lúc chờ duyệt (phải không đăng), hỏi "có thông tin về <dự 
 đọc). Sửa prompt không có bài offline đỏ khi tắt — model giả của e2e không đọc prompt. Offline: `bun run kieu:bot` sạch, `vi-du-boc-rao.mjs` 131/131,
 e2e 1419/1419 (SEC-06 nâng trần sổ 4.000 → 12.000; ZH-10 đỏ ở bản tra-mọi-tin đầu tiên, nhờ đó đổi sang tra theo AI).
 
+### SRS-5.1zzzzzzz16 · Soát lại lượt test 14/10 10:09–10:49: chữ "pháp lý" theo loại, "sẽ lên kệ" khi đã lên kệ, ô trả lời gộp hai ô, log tên trợ lý (14/10/2026)
+
+**Ca gốc.** Chủ dự án: "xem lại mấy test lúc nãy, sửa từ gốc, cái nào chưa sửa được báo". Đối chiếu từng lượt của tester …4980 (bài rao Conic
+Boulevard) với SRS-5.1zzzzzzz10…15: các lỗi đã có bản sửa (duyệt / địa chỉ / hai tin / quận / tên dự án / "chưa ok" / căn đó-căn khác / tra kho /
+mặt tiền căn hộ / cắt tin) không làm lại. Còn bốn chỗ: (a) căn hộ nhận gợi ý "thêm pháp lý (loại sổ, hoàn công)"; (b) tin ĐÃ lên kệ mà bot nói "Tin
+sẽ lên kệ trong hôm nay"; (c) "căn chị 3 pn, 2wc" → ô số phòng ngủ ghi "3 phòng ngủ, 2 WC"; (d) log quản trị `so.hoi_thoai` ghi "Thái (bot)" trong
+khi khách được chào bằng tên khác.
+
+**Lớp lỗi.** (a) Chữ thiếu viết một bản cho mọi loại BĐS (`diem_tin`, 20261013c). (b) Lưới trạng thái chỉ soát MỘT chiều (nói "đã đăng" khi chưa
+lên kệ); chiều ngược không có chủ. (c) Câu trả lời câu treo (`tra_loi.gia_tri`) được phép gộp ý của ô khác. (d) Script dựng lại DB 08/10 chỉ chạy ba
+file schema `so`, bỏ sót 20260924f — đúng hình lỗi "repo có, DB thiếu" mà cổng soát migration không thấy (schema `so` nằm ngoài `xuat_schema`).
+
+**Chỗ cùng lớp.** (a) Đất cũng không có hoàn công → chữ "loại sổ". (b) Ô `noi_chua_len_ke` cùng chủ (lưới trạng thái ở `traLoiSeller`), lượt soát
+nguồn bỏ qua nó như `noi_trang_thai_tin`. (c) Áp cho mọi câu treo qua mô tả ô `gia_tri` (prompt), không vá riêng ô phòng ngủ. (d) Production còn
+thiếu `so.mau_cau`, `so.boc_tach` và hai view `so.ro_hang` / `so.nguoi_ban` là bản cũ (chỉ màn hình quản trị, bot không đọc) — CHƯA dựng lại, ghi
+ở đây để làm sau. Tên trợ lý "Ph•ai" ở lời chào 10:09:18 là bản trước #514 (deploy chạy 10:09:23 → 10:11), nay tên tất định theo Zalo ID ("Duy").
+Bong bóng "đang ở hạng Đồng" KHÔNG lệch thứ tự: theo `seq` nó đứng sau câu lên kệ, view log sắp theo giờ trùng nhau nên hiện lộn.
+
+**Sửa.** Migration `20261014d`: `diem_tin` chữ pháp lý theo loại (chung_cu "sổ hồng riêng hay chung", đất "loại sổ"), `so.hoi_thoai` chạy lại bản
+20260924f; `scripts/dung-lai-db.mjs` + `bot/README.md` thêm 20260924f vào danh sách schema `so`. `kiem-khen.ts` ô `noi_chua_len_ke`; `traLoiSeller`
+bỏ câu đó khi tin đang lên kệ; `nhanXetKhongCanCu` không bỏ nó. `boc-rao.ts` mô tả `gia_tri` chỉ trả lời đúng câu đang hỏi. Mock `diem_tin` theo.
+
+**Kiểm (đỏ khi tắt).** `van-tra-loi.mjs` CLK-01 (ca gốc) / CLK-02 (cách nói mới) — bỏ miễn trừ ở `nhanXetKhongCanCu` thì đỏ. e2e 1419/1419, kiểu
+sạch. Prompt (c) và lưới (b) cần lượt thật: tester gửi câu gộp "3 pn, 2wc" lúc hỏi phòng ngủ; sau khi tin lên kệ nhắn "thêm tiện ích giúp chị".
+Chưa làm: đọc nội dung LINK trang web khách gửi (conic.vn → bot chỉ "em cảm ơn") — hiện chỉ đọc link Google Drive (SRS-5.1zzm).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -1696,7 +1696,7 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
 const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
 export function nhanXetKhongCanCu(
-  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null; kieu?: string | null; hua_khong_lam?: boolean | null; ghi_nhan?: boolean | null }> | null | undefined,
+  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null; noi_chua_len_ke?: boolean | null; kieu?: string | null; hua_khong_lam?: boolean | null; ghi_nhan?: boolean | null }> | null | undefined,
   bangChung: string,
   /** SRS-5.1zzzzzf: sổ ghi của lượt — câu "em ghi X rồi" (`ghi_nhan`) chỉ đứng được khi X có trong đây. Không truyền = không soát loại câu này. */
   vuaGhi?: string,
@@ -1716,7 +1716,7 @@ export function nhanXetKhongCanCu(
     // SRS-5.1zzzzzb: câu hỏi GỢI Ý giá trị chủ nhà chưa nói cũng cần nguồn (`cauHoiGoiYKhongNguon` bỏ cả câu hỏi đó); câu hỏi mở thì giữ.
     if (!cau || /\?/.test(cau)) continue;
     // SRS-5.1zzzzk: câu trạng thái tin có chủ riêng (lưới trạng thái ở đường ra, đối chiếu DB) — đúng thì giữ, sai thì lưới đó bỏ.
-    if (x?.noi_trang_thai_tin === true) continue;
+    if (x?.noi_trang_thai_tin === true || x?.noi_chua_len_ke === true) continue; // chủ là lưới trạng thái (đối chiếu DB)
     // SRS-5.1zzy (chat thử 07/10: "Khu Hà Huy Giáp đất vàng quận 12 anh"): AI trích "khu hà huy giáp" làm căn cứ — tên khu có thật
     // nhưng lời ĐÁNH GIÁ khu thì không. Bot không có số liệu thị trường: câu AI đánh dấu đánh giá thị trường luôn bỏ, căn cứ gì cũng vậy.
     if (x?.danh_gia_thi_truong === true) { bo.push(cau); continue; }

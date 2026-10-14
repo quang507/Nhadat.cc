@@ -9,7 +9,7 @@
 //   TOKEN=… PROJECT_REF=… node scripts/dung-lai-db.mjs <bước>
 //   kiem      chỉ đọc: phiên bản Postgres, event trigger, số bảng public — xem token có vào được project không
 //   cau-truc  gỡ event trigger "tự bật RLS" của dashboard (nó bật RLS cả bảng production cố ý để tắt), rồi:
-//             20260929b (schema luu_tru) → schema.sql → 20261008a → ba file schema `so`
+//             20260929b (schema luu_tru) → schema.sql → 20261008a → bốn file schema `so`
 //   du-lieu   dữ liệu tham chiếu KHÔNG nằm trong schema.sql: chạy lại theo thứ tự file mọi câu insert/update/delete
 //             trên wards, phuong_cu, quan_cu, required_facts, app_config trong migrations/ (chỉ các câu đó — câu tạo
 //             hàm trong migration cũ là bản cũ, chạy lại là đè bản mới của schema.sql). Mã project cũ trong câu được
@@ -220,7 +220,8 @@ if (buoc === "kiem") {
   hong += await chay("schema.sql", tachCau(vaSchema(docFile(join(GOC, "bot", "supabase", "schema.sql")))));
   hong += await chay("20261008b (xuat_schema xuất đúng cột sinh / identity)", tachCau(docFile(fileMig("20261008b"))));
   hong += await chay("20261008a", tachCau(docFile(fileMig("20261008a"))));
-  for (const t of ["20260907c", "20260907f", "20260907g"]) hong += await chay(`${t} (schema so)`, tachCau(docFile(fileMig(t))));
+  // 20261014d: thêm 20260924f — lượt dựng 08/10 bỏ sót nó, log so.hoi_thoai ghi cứng "Thái (bot)".
+  for (const t of ["20260907c", "20260907f", "20260907g", "20260924f"]) hong += await chay(`${t} (schema so)`, tachCau(docFile(fileMig(t))));
   console.log(`\nbảng public: ${JSON.stringify(await sql("select count(*)::int as n from pg_tables where schemaname = 'public'", true))}`);
   process.exit(hong ? 1 : 0);
 } else if (buoc === "bu") {

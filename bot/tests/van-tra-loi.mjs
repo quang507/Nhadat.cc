@@ -1544,5 +1544,14 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ok("SOAT-07 (cách nói mới) 'Vâng ạ. Căn mình giấy tờ thế nào vậy ạ?' → không cần soát", k("Vâng ạ. Căn mình giấy tờ thế nào vậy ạ?"));
   ok("SOAT-08 không có câu hỏi → PHẢI soát (khẳng định trơn)", !k("Dạ em ghi rồi ạ."));
 }
+// SRS-5.1zzzzzzz16 (Zalo thật 14/10 10:30: tin ĐÃ lên kệ, bot "Tin sẽ lên kệ trong hôm nay"): câu nói tin CHƯA / SẼ lên kệ thuộc lưới trạng
+// thái (đối chiếu DB) — lượt soát nguồn KHÔNG được bỏ nó vì "không căn cứ" (bỏ thì câu đúng lúc tin chưa lên kệ cũng mất).
+{
+  const { nhanXetKhongCanCu: nx } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  const bo = nx([{ cau: "Tin sẽ lên kệ trong hôm nay", can_cu: null, noi_chua_len_ke: true, danh_gia_thi_truong: false }], "chị muốn bán căn hộ", "");
+  ok("CLK-01 (ca gốc 14/10) câu 'Tin sẽ lên kệ trong hôm nay' (noi_chua_len_ke) → lượt soát nguồn không bỏ, lưới trạng thái quyết", !bo.includes("Tin sẽ lên kệ trong hôm nay"));
+  const bo2 = nx([{ cau: "Em chờ duyệt xong mới đăng ạ", can_cu: null, noi_chua_len_ke: true, danh_gia_thi_truong: false }], "đăng giúp chị", "");
+  ok("CLK-02 (cách nói mới) 'Em chờ duyệt xong mới đăng ạ' → không bỏ ở lượt soát nguồn", !bo2.includes("Em chờ duyệt xong mới đăng ạ"));
+}
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

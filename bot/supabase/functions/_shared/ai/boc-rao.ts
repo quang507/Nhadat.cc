@@ -20,7 +20,7 @@ const TruongBoc = z.object({
 // tin và trả lời thẳng câu bot đang hỏi — không phải điền ô theo từ khoá. Code kiểm trích dẫn + con số (`kiemTraLoiCau`).
 const TraLoiCau = z.object({
   co_tra_loi: z.boolean().describe("Tin có TRẢ LỜI câu bot vừa hỏi không — đọc theo NGHĨA cả câu, không theo từ khoá. Không có câu đang hỏi, khách nói chuyện khác, hỏi lại, hẹn trả lời sau → false."),
-  gia_tri: z.string().nullable().describe("Câu trả lời VIẾT GỌN, ĐỦ Ý, có dấu, bỏ từ đệm, đúng ý khách, không thêm điều khách không nói. co_tra_loi = false thì null."),
+  gia_tri: z.string().nullable().describe("Câu trả lời VIẾT GỌN, ĐỦ Ý, có dấu, bỏ từ đệm, đúng ý khách, không thêm điều khách không nói — CHỈ phần trả lời ĐÚNG câu đang hỏi: ý của ô khác trong cùng tin vào truong của ô đó, không gộp vào đây (hỏi phòng ngủ, khách \"căn chị 3 pn, 2wc\" → \"3 phòng ngủ\"; 2 WC vào ô so_wc). co_tra_loi = false thì null."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ tin chứa câu trả lời. co_tra_loi = false thì null."),
 });
 // FR-226 (25/09/2026, chủ dự án: "khách trả lời nhỏ giọt về địa chỉ hoặc các trường khác thì để AI gộp lại hoặc thay thế
