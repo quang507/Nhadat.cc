@@ -605,6 +605,7 @@ export const O_XIN_BO: Array<[string, RegExp, string]> = [
   ["do_rong_hem", /\b(?:hem|hxh|ngo|duong vao)\b/, "hẻm"],
   ["gia", /\bgia\b/, "giá"],
   ["phuong", /\bphuong\b|\bp\s*\d{1,2}\b/, "phường"],
+  ["quan", /\b(?:quan|huyen)\b|\bq\s*\d{1,2}\b/, "quận"],
   ["dien_tich", /\bdien tich\b|\bm2\b|\bngang\b|\bdai\b/, "diện tích"],
   ["so_phong_ngu", /\bphong ngu\b|\bpn\b/, "số phòng ngủ"],
   ["ket_cau", /\b(?:tang|lau|tret|tam)\b/, "số tầng"],

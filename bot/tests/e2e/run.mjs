@@ -12409,6 +12409,84 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
       JSON.stringify({ rep, facts: db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => [f.question, f.answer]) }));
   }
 
+  // SRS-5.1zzzzzzz10 (Zalo thật 14/10 10:04): chờ duyệt bản nháp, chủ nhà đưa ĐỊA CHỈ ĐÚNG + "sửa lại giúp mình" → AI nhét địa chỉ vào tra_loi
+  // của "câu" duyet_tin, truong rỗng → bot hỏi lại "chỗ cần sửa". Nay: lượt gọi lại (nhacLai) đưa cụm vào đúng ô, địa chỉ được ghi.
+  for (const [nhan, cau, dc] of [
+    ["ca gốc", "căn của mình tại địa chỉ Ấp 18 Khu dân cư 584 - Huỳnh Bá Chánh, Tân Nhựt, Hồ Chí Minh bạn sửa lại giúp mình", "Ấp 18 Khu dân cư 584 - Huỳnh Bá Chánh"],
+    ["cách nói mới", "nhà chị ở 45 Nguyễn Văn Cừ chứ không phải chỗ đó, em chỉnh lại giúp chị", "45 Nguyễn Văn Cừ"],
+  ]) {
+    const { uid, L } = dungU({ cauTreo: "duyet_tin" });
+    let soBoc = 0, goiLai = false;
+    globalThis.__model = {
+      parse: (p) => {
+        if (laYU(p)) return { ...rongU, dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "xin_sua", yeu_cau_trich: cau.split(/[,]/).at(-1).trim() };
+        if (!laBocU(p)) return OUT();
+        soBoc++;
+        const nd = JSON.stringify(p.messages ?? []);
+        if (/Lượt đọc trước em đặt/.test(nd)) { goiLai = true; return { ...rongU, truong: [TU("duong", dc, dc), TU("ten_duong", dc.replace(/^[\dẤấp ]+/u, "").split(" Khu")[0], dc)] }; }
+        return { ...rongU, tra_loi: { co_tra_loi: true, gia_tri: dc, trich_dan: dc } };
+      },
+      create: () => "Dạ vâng ạ.",
+    };
+    const r = await send({ external_user_id: uid, text: cau });
+    const rep = (r.body?.replies ?? []).join(" | ");
+    const viTri = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "vi_tri").map((f) => f.answer);
+    check(`TTA-${nhan} chờ duyệt, «${cau.slice(0, 40)}…» (AI lượt đầu đặt địa chỉ vào tra_loi) → gọi lại một lần, ghi địa chỉ, KHÔNG hỏi "chỗ cần sửa"`,
+      goiLai && soBoc >= 2 && viTri.some((v) => v.includes(dc.split(" ").slice(-2).join(" "))) && !/chỗ cần sửa/.test(rep),
+      JSON.stringify({ goiLai, soBoc, viTri, rep }));
+  }
+  // SRS-5.1zzzzzzz10 (cùng ca, 10:03): "Căn chung cư không phải ở quận 5" — nói một ô SAI mà không đưa giá trị mới → xin_bo_o ô quận: đọc lại
+  // quận đang ghi và xin quận đúng (bản trước O_BO không có ô quận → "chỗ nào ghi nhầm…").
+  for (const [nhan, cau] of [["ca gốc", "Căn chung cư không phải ở quận 5"], ["cách nói mới", "quận 5 là sai rồi em"]]) {
+    const { uid } = dungU({ cauTreo: "duyet_tin" });
+    globalThis.__model = { parse: (p) => laYU(p) ? { ...rongU, dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "xin_bo_o", yeu_cau_trich: cau, yeu_cau_o: "quan" } : laBocU(p) ? rongU : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text: cau });
+    const rep = (r.body?.replies ?? []).join(" | ");
+    check(`TTA-quan-${nhan} chờ duyệt, «${cau}» → đọc lại "đang ghi Quận 5", xin quận đúng (không "chỗ nào ghi nhầm")`,
+      /đang ghi Quận 5/.test(rep) && /quận đúng/.test(rep) && !/chỗ nào ghi nhầm/.test(rep), JSON.stringify({ rep }));
+  }
+  // SRS-5.1zzzzzzz11 (Zalo thật 14/10 09:53): câu đầu mở tin RỖNG, bot hỏi bằng lời model (không câu treo), bài rao kế mở tin THỨ HAI → người một
+  // căn thành "nhiều căn", mọi câu hỏi sau gọi "Căn Phường Tân Tạo mình…". Nay: bài rao điền vào tin rỗng đang neo.
+  for (const [nhan, cau, truong] of [
+    ["ca gốc", "Bán chung cư Sky Garden Chỉ 1,3 tỷ, căn 60m2, vào quận 5 khoảng 20 phút",
+      [TU("loai_giao_dich", "ban", "Bán chung cư"), TU("loai_bds", "chung_cu", "chung cư"), TU("gia", "1,3 tỷ", "Chỉ 1,3 tỷ"), TU("dien_tich", "60", "60m2")]],
+    ["cách nói mới", "căn hộ 2pn 75m2 giá 3 tỷ 2 nha em",
+      [TU("loai_bds", "chung_cu", "căn hộ"), TU("gia", "3 tỷ 2", "giá 3 tỷ 2"), TU("dien_tich", "75", "75m2")]],
+  ]) {
+    const { uid, s, L } = dungU({ tin: { property_type: "chung_cu", location_raw: null, street: null, ward: null, district: null, area_m2: null, frontage_m: null,
+      length_m: null, floors: null, floors_text: null, bedrooms: null, legal_status: null, price_raw: null, price_vnd: null, alley_width_m: null, access_type: null } });
+    globalThis.__model = { parse: (p) => laBocU(p) ? { ...rongU, so_can: 1, truong } : laYU(p) ? rongU : OUT(), create: () => "Dạ vâng ạ, căn mình mấy phòng ngủ vậy chị?" };
+    await send({ external_user_id: uid, text: cau });
+    const ds = db().t.listings.filter((x) => x.seller_id === s.id);
+    check(`TTB-${nhan} tin rỗng đang neo, KHÔNG câu treo, bài rao «${cau.slice(0, 30)}…» → điền vào tin đó, không mở tin thứ hai`,
+      ds.length === 1 && ds[0].id === L.id && !!ds[0].price_raw, JSON.stringify(ds.map((x) => ({ code: x.code, gia: x.price_raw, dt: x.area_m2 }))));
+  }
+  // SRS-5.1zzzzzzz12: căn hộ gắn dự án kho (quận của dự án) mà AI trích "vào quận 5" (câu chỉ đường) → quận của DỰ ÁN, không Quận 5.
+  {
+    const { uid, s } = dungU({ tin: { property_type: "chung_cu", location_raw: null, street: null, ward: null, district: null, area_m2: null, frontage_m: null,
+      length_m: null, floors: null, floors_text: null, bedrooms: null, legal_status: null, price_raw: null, price_vnd: null, alley_width_m: null, access_type: null } });
+    db().insert("projects", { name: "Conic Boulevard", slug: "conic-boulevard", district: "Huyện Bình Chánh", amenities: [], description: "" });
+    const cau = "Bán chung cư Conic Boulevard Chỉ 1,3 tỷ, Mặt tiền Quốc lộ 1, vào quận 5 khoản 20 phút";
+    globalThis.__model = { parse: (p) => laBocU(p) ? { ...rongU, so_can: 1, truong: [TU("loai_giao_dich", "ban", "Bán chung cư"), TU("loai_bds", "chung_cu", "chung cư"),
+      TU("du_an", "Conic Boulevard", "Conic Boulevard"), TU("gia", "1,3 tỷ", "Chỉ 1,3 tỷ"), TU("quan", "Quận 5", "vào quận 5")] } : laYU(p) ? rongU : OUT(), create: () => "Dạ vâng ạ." };
+    await send({ external_user_id: uid, text: cau });
+    const ds = db().t.listings.filter((x) => x.seller_id === s.id);
+    check("TTC-01 (ca gốc 14/10 09:54) căn hộ dự án kho Huyện Bình Chánh, AI trích «vào quận 5» → quận của dự án, không Quận 5",
+      ds.length === 1 && ds[0].district === "Huyện Bình Chánh", JSON.stringify(ds.map((x) => ({ q: x.district, w: x.ward, pj: x.project_id }))));
+  }
+  // SRS-5.1zzzzzzz13 (Zalo thật 14/10 10:00): căn hộ đã gắn dự án kho, không có ô du_an_ten → bản tin không có tên chung cư. Nay tên dự án kho
+  // vào tiêu đề / 📍 (mã HTML trong tên kho được giải).
+  for (const [nhan, tenKho, tenIn] of [["ca gốc", "Conic Boulevard", "Conic Boulevard"], ["cách nói mới", "Chung Cư CONIC &#8211; Đông Nam Á", "Đông Nam Á"]]) {
+    const { uid, L } = dungU({ tin: { property_type: "chung_cu", location_raw: null, street: null, ward: "Phường Tân Tạo", district: "Huyện Bình Chánh",
+      area_m2: 60, frontage_m: null, length_m: null, floors: null, floors_text: null, floor: 10, bedrooms: 2, alley_width_m: null, access_type: "mat_tien", price_raw: "1,3 tỷ", price_vnd: 1.3e9 } });
+    db().t.listings.find((x) => x.id === L.id).project_id = db().insert("projects", { name: tenKho, slug: `pj-${nhan.length}`, district: "Huyện Bình Chánh", amenities: [], description: "" }).data.id;
+    globalThis.__model = { parse: (p) => laYU(p) ? { ...rongU, dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "hoi_noi_dung", yeu_cau_trich: "cho chị xem lại tin" } : laBocU(p) ? rongU : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text: "cho chị xem lại tin đăng" });
+    const nhap = (r.body?.replies ?? []).find((x) => /📋/u.test(x)) ?? "";
+    check(`TTD-${nhan} căn hộ gắn dự án kho «${tenKho}», không ô du_an_ten → bản tin có tên dự án «${tenIn}»`,
+      nhap.includes(tenIn) && !/&#\d+;/.test(nhap), JSON.stringify({ nhap: nhap.slice(0, 300) }));
+  }
+
   // (v) ca gốc: tin cho thuê đang thu thập (mới có quận), KHÔNG câu chờ (câu địa chỉ đã bị đóng), chủ nhà dán bài rao → không kết bằng lời ghi suông.
   {
     const { uid, L } = dungU({ tin: { deal: "cho_thue", location_raw: null, street: null, ward: null, district: "Quận 8", area_m2: null, frontage_m: null, length_m: null,

@@ -27,6 +27,8 @@ const TraLoiCau = z.object({
 // hoặc sửa"): AI thấy giá trị ĐANG GHI của vài ô chữ, khách nói thêm / sửa một phần → trả TOÀN BỘ giá trị mới. Code kiểm
 // mọi chữ và số của giá trị mới đều có trong giá trị cũ hoặc trong tin (`kiemCapNhat`) — không thêm được điều khách không nói.
 export const KHOA_GOP = ["vi_tri", "ket_cau", "phap_ly", "do_rong_hem", "noi_that"] as const;
+/** SRS-5.1zzzzzzz10: câu treo KHÔNG phải câu hỏi một ô (chờ duyệt bản nháp) — AI không được đặt dữ liệu vào tra_loi của nó. */
+export const CAU_KHONG_PHAI_O: ReadonlySet<string> = new Set(["duyet_tin"]);
 const CapNhat = z.object({
   khoa: z.enum(KHOA_GOP),
   gia_tri_moi: z.string().describe("TOÀN BỘ giá trị mới của ô sau khi gộp phần khách vừa nói vào giá trị đang ghi (hoặc sửa phần khách sửa)."),
@@ -147,7 +149,8 @@ LUẬT CỨNG (code kiểm từng trường, sai là bị bỏ):
 5. Sửa lời ("à nhầm, 6 tỷ 5 nha", "là đất trống chứ không phải nhà") → chỉ đưa giá trị MỚI, trích đúng cụm giá trị mới. Lúc đang chờ duyệt
    bản nháp, câu BẢO SỬA kèm giá trị ("Điều chỉnh cho mình giá 6,950 tỷ", "sửa giá từ 1,2 tỷ thành 6,950 tỷ", "diện tích để 80m2 nha") là LỜI
    SỬA DỮ LIỆU, không phải lời nói với bot: đưa ô đó với giá trị MỚI vào truong (gia "6,950 tỷ", trích "thành 6,950 tỷ"), KHÔNG để trống; ô
-   đó có trong "Thông tin đang ghi" thì đưa thêm vào cap_nhat cach "thay".
+   đó có trong "Thông tin đang ghi" thì đưa thêm vào cap_nhat cach "thay". Câu ĐƯA ĐỊA CHỈ ĐÚNG lúc duyệt ("căn của mình tại địa chỉ Ấp 18
+   KDC 584, Tân Nhựt, bạn sửa lại giúp mình") cũng vậy: duong + ten_duong / phuong / quan vào truong — KHÔNG để ở tra_loi.
 6. Tin rao nhiều căn → điền "can" cho từng trường.
 
 KHOÁ:
@@ -169,7 +172,8 @@ KHOÁ:
   ngang 5, dai 18) — KHÔNG phải do_rong_hem; bề rộng hẻm phải có "rộng" hoặc số mét gắn với hẻm ("hẻm 4m", "hẻm rộng 3m").
 - so_phong_ngu, so_wc: số HIỆN CÓ, MỘT con số. Khách kể theo tầng mà cộng được ("3 phòng ngủ ở lầu với 1 phòng ở trệt") → TỔNG (4), trích cả cụm. "chia được 4-5 phòng để cho thuê", "làm thêm được 2 phòng" là tiềm năng → kien_thuc, không vào so_phong_ngu; khách nói khoảng / không chắc ("chắc 3-4 phòng") → không đưa. so_tang = TỔNG số tầng tính CẢ TRỆT, không tính lửng/sân thượng ("1 trệt 2 lầu" = 3, "trệt 3 lầu" = 4, "3 tấm" = 3, "3 tầng" = 3 — TẦNG đã gồm trệt, chỉ LẦU mới cộng 1); tang = căn hộ nằm tầng mấy. Tin có cụm kết cấu (trệt / lầu / lửng) thì ket_cau là ô chính, so_tang chỉ là số tính ra từ cụm đó — đưa cả hai được, code giữ ket_cau.
 - quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can. quan / phuong / duong là NƠI CĂN NHÀ
-  NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
+  NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "vào quận 5 khoảng 20 phút", "qua Phú Mỹ
+  Hưng Q7 cũng 20 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
   Người rao NHIỀU căn đã nói quận CHUNG cho các căn ở tin trước ("có mấy căn quận 5 cần đăng", "cả 2 căn đều quận 10") mà tin này rao căn
   tiếp theo không nói quận → đưa quan, trich_dan là đúng cụm quận ở tin trước đó (chỉ quận; loại, giá, địa chỉ của căn trước KHÔNG lấy).
 - phuong: ĐỌC THEO NGHĨA, không cần chữ "phường / xã" đứng trước — "nhà ở Vĩnh Lộc B", "bên Thảo Điền", "an hoi tay", gõ sai một hai chữ đều là nói phường. Trả tên phường MỚI ĐẦY ĐỦ đúng như DANH SÁCH PHƯỜNG gửi kèm tin nhắn (chỉ gồm các phường câu khách có thể đang nhắc; không có danh sách thì chỉ đưa phuong khi khách nói rõ "phường / xã X") ("Phường An Hội Tây", "Xã Tân Vĩnh Lộc"): khách nói tên CŨ thì đổi sang phường mới theo bảng tên cũ ("Vĩnh Lộc B" → "Xã Tân Vĩnh Lộc", "Thảo Điền" → "Phường An Khánh"); phường cũ bị chia (dấu *) sang nhiều phường mới mà câu không đủ để biết phần nào thì KHÔNG đưa phuong. KHÔNG cắt bớt chữ ("An Hội Tây" ≠ "An Hội"). trich_dan = cụm khách nói nguyên văn ("Vĩnh Lộc B"). Tên trùng tên quận cũ ("gò vấp", "phú nhuận") mà khách không nói "phường" thì là QUẬN. Phường đánh số ("phường 12", "p4") giữ số: "Phường 12".
@@ -255,6 +259,7 @@ Chủ nhà BẢO ĐĂNG / lên tin / chốt — "ok đăng đi", "đăng luôn �
 dù bot đang HỎI thông tin hay đang đưa bản nháp → du_roi (trich_dan là chính cụm đó), KHÔNG phải ban_roi, KHÔNG phải binh_thuong.
 Chủ nhà bảo THÔI HỎI mà không nói "đăng" — "đủ rồi em", "nhiêu đó thôi cháu", "vậy được rồi, khỏi hỏi nữa" — đáp NGAY sau câu bot hỏi
 mà không trả lời câu đó → cũng là du_roi.
+Chủ nhà bảo SỬA / chỉnh lại ("sửa lại giúp mình", "bạn chỉnh lại nhé", "đổi lại địa chỉ") → binh_thuong, KHÔNG phải du_roi.
 Câu TẢ căn nhà có chữ "hết rồi" / "rồi" ("xây kín hết rồi em", "sổ có rồi") → binh_thuong.
 
 CÂU HỎI KẾ ("cau_ke") — có danh sách "Câu bot còn định hỏi" thì chọn MỘT câu nên hỏi tiếp, như môi giới giỏi: (1) thông tin cần
@@ -358,7 +363,8 @@ export async function bocRaoBangModel(
    */
   /** SRS-5.1zzzg: `canDangCo` — các căn người này đang có ("mã: loại, nơi, giá"), để AI biết tin nói về căn nào. */
   /** SRS-5.1zzzzzzh: `goiY` — cụm từ điển tiền định thấy trong tin khi lượt trước AI trả RỖNG (lượt gọi lại); AI vẫn quyết, code vẫn kiểm trích dẫn. */
-  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[]; canDangCo?: string[]; goiY?: string[] } | null = null,
+  /** SRS-5.1zzzzzzz10: `nhacLai` — lượt gọi lại khi lượt trước đặt dữ liệu sai chỗ (lời sửa lúc duyệt nằm trong tra_loi). */
+  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[]; canDangCo?: string[]; goiY?: string[]; nhacLai?: string } | null = null,
   /** SRS-5.1zzzd: lượt CHỐT TIN — `text` là toàn bộ tin chủ nhà về căn (mỗi dòng một tin), thêm khối LUAT_CHOT. */
   cheDoChot = false,
 ): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
@@ -380,6 +386,15 @@ export async function bocRaoBangModel(
     ? `\n\nLượt đọc trước em trả rỗng. Từ điển nghề của hệ thống thấy trong tin các cụm có thể là dữ liệu căn: ${goiY.join("; ")}. Đọc lại theo NGHĨA: cụm nào đúng là thông tin căn thì đưa vào truong (trich_dan nguyên văn trong tin), cụm nào không phải thì bỏ — không bắt buộc, không bịa.`
     : "";
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
+  // SRS-5.1zzzzzzz10 (Zalo thật 14/10 10:04: chờ duyệt bản nháp, "căn của mình tại địa chỉ Ấp 18 … Tân Nhựt … bạn sửa lại giúp mình" → AI
+  // nhét địa chỉ vào tra_loi của "câu" duyet_tin, truong rỗng → không ô nào được ghi, bot hỏi lại "chỗ cần sửa"). Chờ duyệt KHÔNG phải câu
+  // hỏi một ô: nói thẳng cho AI biết, để lời sửa đi vào truong như mọi thông tin căn.
+  const dongCauHoi = !cauDangHoi
+    ? ""
+    : CAU_KHONG_PHAI_O.has(cauDangHoi)
+    ? `Bot vừa gửi BẢN NHÁP tin rao và đang chờ chủ nhà duyệt — đây KHÔNG phải câu hỏi một ô: tra_loi.co_tra_loi = false. Chủ nhà sửa / nói lại thông tin căn (địa chỉ, phường, quận, giá, diện tích…) thì đưa ô đó với giá trị MỚI vào truong (ô có trong "Thông tin đang ghi" thì thêm cap_nhat cach "thay").\n`
+    : `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n`;
+  const nhacLai = nguCanh?.nhacLai?.trim() ? `\n\n${nguCanh.nhacLai.trim()}` : "";
   const r = await ai.messages.parse({
     model,
     // 02/10/2026: đợt 1–2 thêm ~40 khoá + ý định + vai — đầu ra dài hơn; 1300 có thể cắt cụt JSON câu rao dài.
@@ -392,7 +407,7 @@ export async function bocRaoBangModel(
     ],
     messages: [{
       role: "user",
-      content: `${canDangCo.length ? `Căn chủ nhà đang có với em (để biết tin nói về căn nào — không trích từ đây):\n${canDangCo.map((c) => `- ${c}`).join("\n")}\n` : ""}${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}${khoiGoiY}`,
+      content: `${canDangCo.length ? `Căn chủ nhà đang có với em (để biết tin nói về căn nào — không trích từ đây):\n${canDangCo.map((c) => `- ${c}`).join("\n")}\n` : ""}${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${dongCauHoi}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}${khoiGoiY}${nhacLai}`,
     }],
   });
   const ket = docLong(DeXuatRaoDoc, r.parsed_output);
