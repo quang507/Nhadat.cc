@@ -195,7 +195,20 @@ function diemManhTieuDe(l: TinNhapRow, facts: FactNhap[]): string | null {
     const m = f.answer ? O_TO_TAN_CUA.exec(f.answer) : null;
     if (m) return m[0].toLocaleLowerCase("vi").replace(/\s+/g, " ");
   }
+  // Căn hộ: "mặt tiền / hẻm xe hơi" là đường vào CẢ TOÀ, không phải điểm mạnh của căn (bản nháp 14/10 "căn hộ mặt tiền tại Tân Nhựt").
+  if (l.property_type === "chung_cu") return null;
   return l.access_type === "mat_tien" || l.access_type === "hem_xe_hoi" ? DUONG_VAO_TIEU_DE[l.access_type] : null;
+}
+
+/**
+ * SRS-5.1zzzzzzz19 (chủ dự án 14/10/2026: "nhà ở dự án thì phải nêu tiêu đề là tên dự án ra, tên chung cư ra chứ không phải địa chỉ"): tên
+ * chung cư / dự án của căn hộ (ô `du_an_ten` — lời chủ nhà, hoặc tên dự án kho đã gắn, chat-reply nạp vào cùng ô). Bỏ chữ dẫn "dự án /
+ * chung cư" khách gõ kèm. Không phải căn hộ hoặc chưa có tên → null.
+ */
+export function tenChungCuTieuDe(l: Pick<TinNhapRow, "property_type">, fact: (k: string) => string | null): string | null {
+  if (l.property_type !== "chung_cu") return null;
+  const ten = (fact("du_an_ten") ?? "").replace(/^\s*(?:dự án|du an|chung cư|chung cu|khu căn hộ|cc)\s+/iu, "").replace(/\s+/g, " ").trim();
+  return ten.length >= 2 ? ten : null;
 }
 
 /**
@@ -206,6 +219,12 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null, fac
   const tdk = (tieuDeKhach ?? "").replace(/\s+/g, " ").trim();
   if (tdk) return tdk;
   const giaBan = l.deal !== "cho_thue" ? giaHienThi(l)?.replace(/\s*\(?\s*(?:còn\s+)?(?:thương lượng|tl|còn bớt|fix|cố định)\b.*$/iu, "").trim() : null;
+  // Căn hộ có tên dự án: tiêu đề nêu TÊN DỰ ÁN thay cho phường / địa chỉ (quận giữ để khách lọc khu vực).
+  const tenDA = tenChungCuTieuDe(l, fact);
+  if (giaBan && tenDA) {
+    const q = tenKhuVuc(l.district);
+    return `Chỉ ${giaBan} căn hộ ${tenDA}${l.bedrooms ? ` ${l.bedrooms}PN` : ""}${l.gap === true ? " cần bán gấp" : ""}${q ? ` tại ${q}` : ""}`.replace(/\s+/g, " ").trim();
+  }
   if (giaBan) {
     const loaiChen = l.property_type && l.property_type !== "nha_pho" ? ` ${LOAI_TIEU_DE[l.property_type] ?? ""}`.trimEnd() : "";
     const dm = diemManhTieuDe(l, facts);
@@ -223,13 +242,16 @@ export function tieuDeTinLe(l: TinNhapRow, fact: (k: string) => string | null): 
   // bao nhiêu m² → nhà thế nào → giấy tờ → giá. Nhét hết vào một chuỗi dài
   // không dấu phẩy thì đọc như máy đọc ("Bán nhà trệt + 2 lầu 3PN hẻm…").
   const vitri: string[] = [thue ? "Cho thuê" : "Bán", LOAI_TIEU_DE[l.property_type ?? ""] ?? "bất động sản"];
-  const duongVao = DUONG_VAO_TIEU_DE[l.access_type ?? ""] ?? null;
+  // SRS-5.1zzzzzzz19: căn hộ có tên dự án → "Cho thuê căn hộ {dự án}, quận", không đường vào / địa chỉ / phường.
+  const tenDA = tenChungCuTieuDe(l, fact);
+  if (tenDA) vitri.push(tenDA);
+  const duongVao = tenDA ? null : DUONG_VAO_TIEU_DE[l.access_type ?? ""] ?? null;
   const rong = rongDuongVao(l, fact);
   if (duongVao) vitri.push(duongVao + (rong ? ` ${rong}` : ""));
   // Đường/hẻm: lời chủ nhà nói, bỏ phần phường/quận vì đã có ở vế sau, và bỏ
   // chữ "hẻm xe hơi 5m" nếu vế đường vào ngay trên đã nói rồi.
   // Giữa câu tiêu đề: từ loại đầu chữ thường ("Bán nhà phố hẻm 45 …"), tên riêng giữ hoa.
-  const duong = duongGiuaCau(l.location_raw, l.street).split(",")[0].trim();
+  const duong = tenDA ? "" : duongGiuaCau(l.location_raw, l.street).split(",")[0].trim();
   if (duong) {
     // 01/10/2026 (bắn thật lx-tam-42): "12 hẻm 4m Trần Bình Trọng" — chữ "hẻm 4m" đứng SAU số nhà nên tiêu đề lặp "hẻm xe hơi 4m
     // 12 hẻm 4m …". Bề rộng hẻm (có "m") ở giữa câu cũng bỏ; "hẻm 45" (số hẻm, không "m") giữ.
@@ -242,7 +264,7 @@ export function tieuDeTinLe(l: TinNhapRow, fact: (k: string) => string | null): 
       : duong;
     vitri.push(gon || duong);
   }
-  const hc = [gonHanhChinh(l.ward), gonHanhChinh(l.district)].filter(Boolean).join(" ");
+  const hc = [tenDA ? null : gonHanhChinh(l.ward), gonHanhChinh(l.district)].filter(Boolean).join(" ");
   if (hc) vitri.push(hc);
 
   const cum: string[] = [vitri.join(" ")];
@@ -331,7 +353,8 @@ export function soanTinNhapHaiBong(t: ThamSoNhap): { than: string; duoi: string;
 
   dong.push(tieuDeDau?.trim() ? tieuDeDau.trim() : cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de", { loai: loaiDoc(l.property_type) }));
   const tdKhach = (tieuDeKhach ?? "").trim();
-  const td = tieuDeTin(l, fact, facts, tdKhach || tieuDeAi || null);
+  // SRS-5.1zzzzzzz19: căn hộ có tên dự án → tiêu đề code ghép (tên dự án), không dùng tiêu đề AI (hay kéo địa chỉ đường vào).
+  const td = tieuDeTin(l, fact, facts, tdKhach || (tenChungCuTieuDe(l, fact) ? null : tieuDeAi) || null);
   // Tiêu đề khách tự đặt giữ nguyên chữ khách; tiêu đề máy / AI viết thì căn hộ phải mang tên chung cư (SRS-5.1zzzzzzz8).
   dong.push(tdKhach ? td : themTenChungCu(td, l, fact));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
