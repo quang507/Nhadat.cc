@@ -4724,6 +4724,70 @@ vào một khuôn thì phải xem lại trần của chính lượt đó.
 **Kiểm.** `bot/tests/khen-nhap.mjs` TRAN-1 (≥ 900), TRAN-2 (≥ số trường × 120). Tắt (hạ về 300): đỏ. Sau deploy: bài rao dài nhiều tiện ích phải ra
 tiêu đề AI + "📝 Thêm" gom ≤ 4 ý, sổ lỗi không còn dòng `khen ban nhap`.
 
+### SRS-5.1zzzzzzp · Lượt bị nhường trước khi gửi rút MỌI câu chờ nó vừa mở (14/10/2026)
+
+**Nguồn.** Tự soát hội thoại thật 14/10 (chủ dự án: "người test cho m 1 đống rồi đó, m cũng phải tự xem lại"). Tin Trần Bình Trọng 09:59: khách
+nhắn ba tin liền ("hẻm xe hơi 5m" / "hướng Đông Nam" / "đang để trống"). Lượt của tin giữa mở câu chờ `hien_trang_su_dung` (03:00:05 UTC) rồi
+nhường lượt (`superseded_luc = truoc_gui`, 20 s, không gửi gì); lượt sau đã ghi "đang để trống" (03:00:04). Câu chờ không ai hỏi còn `pending`
+tới giờ: hỏi bù drip một-câu-một-lúc (`ask-seller`) bị chặn vĩnh viễn cho tin này, và tin kế của khách dễ bị đọc làm câu trả lời cho nó.
+
+**Lớp lỗi.** Trạng thái hội thoại (câu chờ) được ghi TRƯỚC khi lời mang câu hỏi tới khách, nhưng đường nhường lượt chỉ dọn một loại câu chờ.
+SRS-5.1zzzzzzb vá đúng `duyet_tin` (so `extra.ban_nhap`) — vá từng ca. Chỗ cùng lớp: 13 chỗ mở câu chờ bên bán (`moCauTreo`) — nay đi chung một
+cửa; bên mua chỉ mở câu `buyer_ask` (câu hỏi gửi CHỦ NHÀ, không phải câu chờ khách) — để nguyên; nhường lượt `dau_luot` (gộp cụm) xảy ra trước mọi
+chỗ mở câu nên không cần dọn.
+
+**Quy tắc.** Mọi câu chờ bên bán mở qua `moCauTreo` (ghi `cauMoLuot`); nhường lượt `truoc_gui` rút đúng các câu đó (`expired`, chỉ câu pending
+tạo sau mốc tin chủ nhà — index một-câu-pending-mỗi-tin bảo đảm đó là câu của lượt này). `nhap_rut` giữ nghĩa cũ khi trong đó có `duyet_tin`.
+
+**Kiểm.** e2e ZZZZZZP-01 (ca gốc: trả lời hiện trạng, ảnh tới giữa lượt → câu kế vừa mở bị rút), NHAPRUT-01/02 giữ nguyên. Tắt: ZZZZZZP-01 đỏ.
+
+### SRS-5.1zzzzzzq · Khách xin bỏ ô không bắt buộc → bỏ thật, nhớ giá trị đã bỏ (14/10/2026)
+
+**Nguồn.** Cùng hội thoại, 10:05: chờ duyệt, khách "bỏ cái hướng Đông Nam ra" → bot "Dạ tin mình đang ghi hướng Đông Nam ạ, anh chị nhắn hướng
+đúng là em sửa lại liền" (luật 22/09: bot không tự xoá ô) → khách "sửa lại giúp anh" → bot hỏi "đăng hay chưa" → khách bỏ cuộc "ok đăng đi" →
+tin lên kệ VẪN in hướng khách đã xin bỏ.
+
+**Lớp lỗi.** Một luật đặt cho ca "ghi nhầm, giá trị đúng là khác" (GVC-02: "xoá cái hẻm 4m ghi nhầm đi" khi tin đã sửa thành 3.5m) bị áp cho mọi lời
+xin bỏ, kể cả ô khách không muốn đăng. Thêm một lớp: bỏ xong mà lượt AI sau (đọc lại tin cũ của khách — "bộ nhớ" SRS-5.1za, lượt chốt tin) ghi lại
+đúng giá trị đó thì bỏ cũng bằng không. Chỗ cùng lớp: ý dòng "📝 Thêm" đã có cơ chế này (`y_da_bo`, SRS-5.1zzzzy); ô lõi giữ luật cũ.
+
+**Quy tắc.** (a) `O_XOA_DUOC` (ghi-fact.ts): hướng, độ rộng hẻm, số phòng ngủ, pháp lý bỏ được; giá, diện tích, địa chỉ, phường, số tầng (ô lõi để
+đăng) vẫn xin giá trị đúng. (b) `nhacGiaTriKhac`: khách gọi KÈM giá trị khác giá trị đang ghi ("hẻm 4m" khi tin là 3.5m) → không bỏ (thứ khách muốn
+bỏ không còn trong tin), đi đường cũ. (c) `boOTin`: KHÔNG xoá dòng nào (nguyên tắc "không bao giờ xoá dữ liệu, chỉ đổi trạng thái") — fact đổi câu
+thành `<ô>_da_bo`, cột về null, khoá `boc_tach.<ô>` bỏ, giá trị nhớ ở `boc_tach.o_da_bo`; báo "Dạ em bỏ … khỏi tin rồi ạ", chờ duyệt thì gửi lại
+bản nháp. (d) Cửa `ghiFact`: lượt AI (không phải `seller_chat`) đưa ĐÚNG giá trị đã bỏ → `boQua: "o_da_bo"`; giá trị khác thì ghi; khách tự nhắn lại
+thì ghi. Đọc `o_da_bo` một lần mỗi tin mỗi lượt (bộ nhớ theo client) — không thêm truy vấn cho từng fact (TOIUU-07 giữ ≤ 27).
+
+**Kiểm.** `bot/tests/bo-o-tin.mjs` 11 ca (thuần + client giả: đổi tên fact không xoá, AI ghi lại bị chặn, giá trị mới / khách tự nhắn thì ghi); e2e
+ZZZZZZQ-01 (ca gốc), 02 (cách nói mới "xoá giùm số phòng ngủ đi em"), 03 (ô lõi giá không xoá), GVC-02/02b giữ nguyên (hẻm 4m ghi nhầm → không bỏ
+3.5m). Tắt: Q-01, Q-02 đỏ.
+
+### SRS-5.1zzzzzzr · Gật bản nháp kèm câu hỏi về tin → đăng VÀ trả lời (14/10/2026)
+
+**Nguồn.** Cùng hội thoại, 10:08: "hồi nãy anh nói giá bao nhiêu ok đăng đi" → tin lên kệ, câu hỏi giá không ai trả lời.
+
+**Lớp lỗi.** Một tin mang HAI ý (gật + hỏi) mà luồng chỉ có chỗ cho một: luật lượt AI ý ngắn liệt kê "gật" trong nhóm `yeu_cau = khong` nên model
+chọn gật, bỏ câu hỏi; ngược lại nếu model đọc ra `hoi_gia` thì nhánh hỏi về tin trả lời rồi DỪNG, nuốt lời gật. Chỗ cùng lớp: gật kèm hỏi PHÍ đã
+có `dapKemDuyet` (SRS-5.1zzzzz) — nay câu hỏi về tin đi cùng đường đó.
+
+**Quy tắc.** `doc-y-luot.ts` LUAT: gật kèm câu hỏi về tin → ghi cả `dong_y` lẫn `yeu_cau = hoi_*`. Nhánh hỏi về tin: đang chờ duyệt + AI đọc gật
+(trích dẫn đã kiểm) + câu hỏi không phải trạng thái / nội dung tin → không dừng, câu trả lời (`dapHoiKemDuyet`) nối vào lượt đăng. Chỉ hỏi (không
+gật) → như cũ.
+
+**Kiểm.** e2e ZZZZZZR-01 (ca gốc: duyệt + có "7 tỷ 5"), R-02 (đối chứng: chỉ hỏi giá → trả lời, chưa duyệt). Tắt: R-01 đỏ.
+
+### SRS-5.1zzzzzzs · Dòng "📝 Thêm": một ý in một lần (14/10/2026)
+
+**Nguồn.** Tin Cao Lỗ 11:47: khách gửi bài rao hai lần (lần đầu thiếu chữ "tỷ"), bản nháp in "Vị trí gần kề các trường Đại Học Lớn: …" và "Gần kề
+các trường Đại Học Lớn: …" cạnh nhau, giữa một dòng "Thêm" dài năm đoạn (lượt khen hỏng — SRS-5.1zzzzzzo — nên không có danh sách chọn lọc).
+
+**Lớp lỗi.** Mỗi lượt bóc tách thêm ý mới vào `bo_sung` mà không so với ý đã có khi cách viết hơi khác; dòng in chỉ bỏ trùng tuyệt đối. Chỗ cùng lớp:
+lượt chốt tin đã so `trungY` khi thêm ý (SRS-5.1zzzzzg) — nhưng `trungY` lỏng (gộp "chợ" với "gần chợ Bình Tây") nên không dùng được ở bước in.
+
+**Quy tắc.** `tin-nhap.ts` dựng dòng "Thêm" bỏ ý gần trùng: ý ngắn nằm trọn trong ý dài và dài ≥ 80% (≥ 12 ký tự), ý đầu thắng. DB giữ nguyên mọi fact.
+
+**Kiểm.** `tin-nhap-rao.mjs` THEM-TRUNG-1 (ca gốc), THEM-TRUNG-2 (đối chứng: hai chợ khác nhau giữ cả hai); e2e ZZZZZZ-01b, QUYMO-01b giữ nguyên.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

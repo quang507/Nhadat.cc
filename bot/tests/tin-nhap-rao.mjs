@@ -311,6 +311,20 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   const t2 = soanTinNhap({ ...HM, lai: false, cauTD });
   la("QUYMO-2 không có danh sách AI xếp (AI không chạy) → ý thêm ở dòng Thêm như cũ, không đoán bằng từ khoá", /sân rộng/.test(t2.split("\n").find((x) => x.startsWith("📝")) ?? "") && !/sân rộng/.test(t2.split("\n").find((x) => x.startsWith("🏗")) ?? ""), t2);
 }
+
+// SRS-5.1zzzzzzs (Zalo thật 14/10 11:47, tin Cao Lỗ): bài rao gửi hai lần → hai ý gần như một nằm cùng dòng 📝 Thêm. Một ý in một lần;
+// ý ngắn nằm trong ý dài khác hẳn ("chợ" / "gần chợ Bình Tây") vẫn giữ cả hai.
+{
+  const y1 = "Vị trí gần kề các trường Đại Học Lớn: Đại học Công nghệ Sài Gòn, Đại học Sài Gòn, Đại học Y Dược";
+  const y2 = "Gần kề các trường Đại Học Lớn: Đại học Công nghệ Sài Gòn, Đại học Sài Gòn, Đại học Y Dược";
+  const t = soanTinNhap({ ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "bo_sung", answer: y1 }, { question: "bo_sung", answer: y2 }, { question: "bo_sung", answer: "Ngay Parc Mall" }], lai: false, cauTD });
+  const d = t.split("\n").find((x) => x.startsWith("📝 Thêm")) ?? "";
+  la("THEM-TRUNG-1 (ca gốc Cao Lỗ) hai ý gần như một → in một lần; ý khác ('Ngay Parc Mall') giữ", (d.match(/Đại Học Lớn/g) ?? []).length === 1 && /Ngay Parc Mall/.test(d), d);
+  const t2 = soanTinNhap({ ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "bo_sung", answer: "gần chợ Bình Tây" }], lai: false, cauTD });
+  const d2 = t2.split("\n").find((x) => x.startsWith("📝 Thêm")) ?? "";
+  la("THEM-TRUNG-2 (đối chứng) 'gần chợ An Đông' và 'gần chợ Bình Tây' là hai ý → giữ cả hai", /gần chợ An Đông/.test(d2) && /gần chợ Bình Tây/.test(d2), d2);
+}
+
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 // SRS-5.1zzzzzo (test Zalo 13/10/2026): "nhà trống" → bản nháp từng in "🛋 Nội thất: khong" và "🏠 Hiện trạng: trống".
 {

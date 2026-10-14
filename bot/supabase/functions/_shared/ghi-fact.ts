@@ -20,10 +20,101 @@ import { duongTraDuoc } from "./extraction/tra-phuong.ts";
 
 export type ThamSoFact = { p_listing_id: string | null | undefined; p_question: string; p_answer: string; p_source?: string | null };
 /** `ghi`: câu trả lời ĐÃ ghi (fact phường: tên chuẩn; fact vi_tri: địa chỉ đã chuẩn hoá) — lời xác nhận cho khách đọc chữ này, không đọc chữ khách gõ. */
-export type KetQuaFact = { data: unknown; error: { message: string; code?: string } | null; boQua?: "phuong_khong_chuan"; ghi?: string };
+export type KetQuaFact = { data: unknown; error: { message: string; code?: string } | null; boQua?: "phuong_khong_chuan" | "o_da_bo"; ghi?: string };
 
 const boDau = (s: string): string =>
   s.normalize("NFC").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+
+/**
+ * SRS-5.1zzzzzzq (Zalo thật 14/10 10:05, tin Trần Bình Trọng): "bỏ cái hướng Đông Nam ra" lúc chờ duyệt → bot "tin mình đang ghi hướng
+ * Đông Nam ạ, anh chị nhắn hướng đúng là em sửa lại liền" (luật 22/09: bot không tự xoá ô) — khách "sửa lại giúp anh", bot hỏi "đăng hay
+ * chưa", khách bỏ cuộc "ok đăng đi", tin lên kệ VẪN có hướng khách đã xin bỏ. Ô không bắt buộc để đăng thì xin bỏ là BỎ: xoá fact + cột,
+ * nhớ giá trị đã bỏ ở `boc_tach.o_da_bo` để lượt AI sau (đọc lại tin cũ của khách trong "bộ nhớ") không ghi lại đúng giá trị đó. Ô lõi
+ * (giá, diện tích, địa chỉ, phường, số tầng) vẫn đi đường cũ: hỏi giá trị đúng — tin không có chúng thì không đăng được.
+ */
+export const O_XOA_DUOC: Readonly<Record<string, readonly string[]>> = {
+  huong: ["direction"],
+  do_rong_hem: ["alley_width_m"],
+  so_phong_ngu: ["bedrooms"],
+  phap_ly: ["legal_status"],
+};
+/** So hai giá trị một ô cho việc "đã bỏ": bỏ dấu, bỏ chữ nhãn ô ("hướng Đông Nam" = "Đông Nam", "4 phòng ngủ" = "4", "hẻm 5m" = "5m"). */
+export const cungGiaTriO = (a: string, b: string): boolean => {
+  const g = (s: string) => boDau(s).replace(/\b(?:huong|hem|phong ngu|pn|phap ly)\b/g, " ").replace(/\s+/g, " ").trim();
+  return !!g(a) && g(a) === g(b);
+};
+
+/**
+ * Bỏ một ô khỏi tin theo lời khách (SRS-5.1zzzzzzq). Trả giá trị vừa bỏ (null = ô không nằm trong `O_XOA_DUOC` hay tin chưa ghi gì).
+ * Không đụng ô lõi. `boc_tach` ghi trực tiếp (không qua `ghi_boc_tach` — RPC đó chỉ GỘP, không xoá được khoá).
+ */
+export async function boOTin(client: SupabaseClient, listingId: string, truong: string, giaTriHienTai: string | null): Promise<{ daBo: string | null; error: { message: string } | null }> {
+  const cot = O_XOA_DUOC[truong];
+  if (!cot || !giaTriHienTai) return { daBo: null, error: null };
+  const { data: l, error: lErr } = await client.from("listings").select("boc_tach").eq("id", listingId).maybeSingle();
+  if (lErr) return { daBo: null, error: lErr };
+  const bt = { ...((l?.boc_tach ?? {}) as Record<string, unknown>) };
+  delete bt[truong];
+  bt.o_da_bo = { ...((bt.o_da_bo ?? {}) as Record<string, string>), [truong]: giaTriHienTai };
+  // Không xoá dòng nào (nguyên tắc AOND "không bao giờ xoá dữ liệu, chỉ đổi trạng thái"): fact đổi tên câu thành `<ô>_da_bo` — còn nguyên
+  // trong DB để truy, bản nháp / cột / điểm không đọc nữa. Trigger fact chỉ chạy khi INSERT nên UPDATE không đổ ngược vào cột.
+  const { error: fErr } = await client.from("listing_facts").update({ question: `${truong}_da_bo` }).eq("listing_id", listingId).eq("question", truong);
+  if (fErr) return { daBo: null, error: fErr };
+  const { error: uErr } = await client.from("listings").update({ ...Object.fromEntries(cot.map((c) => [c, null])), boc_tach: bt }).eq("id", listingId);
+  if (uErr) return { daBo: null, error: uErr };
+  // Lượt này (chốt tin trong `guiBanNhap`) phải thấy ngay dấu vừa ghi — cập nhật bản nhớ của client.
+  const m = nhoODaBo.get(client) ?? new Map<string, Promise<Record<string, string>>>();
+  nhoODaBo.set(client, m);
+  m.set(listingId, Promise.resolve({ ...(bt.o_da_bo as Record<string, string>) }));
+  return { daBo: giaTriHienTai, error: null };
+}
+
+const HUONG_KD = ["dong nam", "dong bac", "tay nam", "tay bac", "dong", "tay", "nam", "bac"];
+/**
+ * Khách gọi KÈM một giá trị khác giá trị tin đang ghi ("xoá cái hẻm 4m ghi nhầm đi" trong khi tin đã sửa thành hẻm 3.5m — GVC-02, 22/09)
+ * → thứ khách muốn bỏ không còn trong tin: KHÔNG bỏ giá trị đang có (đó là giá trị đúng), đi đường cũ đọc lại ô + xin giá trị đúng.
+ * Không gọi giá trị nào ("xoá giùm số phòng ngủ đi") hay gọi đúng giá trị đang có ("bỏ cái hướng Đông Nam ra") → bỏ được.
+ */
+export function nhacGiaTriKhac(truong: string, loiKhach: string, giaTriHienTai: string): boolean {
+  const kd = boDau(loiKhach), ht = boDau(giaTriHienTai);
+  if (truong === "huong") {
+    const nhac = HUONG_KD.find((h) => new RegExp(`\\b${h}\\b`).test(kd));
+    const dang = HUONG_KD.find((h) => new RegExp(`\\b${h}\\b`).test(ht));
+    return !!nhac && nhac !== dang;
+  }
+  const so = (s: string) => (s.match(/\d+(?:[.,]\d+)?/g) ?? []).map((x) => Number(x.replace(",", ".")));
+  const soKhach = so(kd);
+  return soKhach.length > 0 && !soKhach.some((x) => so(ht).includes(x));
+}
+
+/** `boc_tach.o_da_bo` đọc MỘT lần mỗi tin mỗi lượt (client sống đúng một lượt) — cửa ghi không thêm truy vấn cho từng fact. */
+const nhoODaBo = new WeakMap<object, Map<string, Promise<Record<string, string>>>>();
+const docODaBo = (client: SupabaseClient, listingId: string): Promise<Record<string, string>> => {
+  let m = nhoODaBo.get(client);
+  if (!m) { m = new Map(); nhoODaBo.set(client, m); }
+  let p = m.get(listingId);
+  if (!p) {
+    p = (async () => {
+      const { data: l, error } = await client.from("listings").select("boc_tach").eq("id", listingId).maybeSingle();
+      if (error) { console.log(`ghi-fact: đọc o_da_bo hỏng: ${error.message}`); return {}; }
+      return { ...(((l?.boc_tach ?? {}) as Record<string, unknown>).o_da_bo ?? {}) as Record<string, string> };
+    })();
+    m.set(listingId, p);
+  }
+  return p;
+};
+
+/**
+ * Chốt chặn ở cửa ghi: ô khách đã xin bỏ mà lượt AI (bóc tách / chốt tin, đọc lại tin cũ) đưa ĐÚNG giá trị đã bỏ → không ghi. Giá trị KHÁC
+ * thì ghi (khách nói hướng mới). Khách tự nhắn (`seller_chat`, đường lời sửa / câu trả lời) luôn ghi — đó là ý khách mới nhất; không đọc DB.
+ */
+async function chanODaBo(client: SupabaseClient, a: ThamSoFact): Promise<boolean> {
+  if (!O_XOA_DUOC[a.p_question] || !a.p_listing_id || a.p_source === "seller_chat") return false;
+  const daBo = (await docODaBo(client, a.p_listing_id))[a.p_question];
+  if (!daBo || !cungGiaTriO(String(a.p_answer ?? ""), daBo)) return false;
+  console.log(`ghi-fact: ô "${a.p_question}" khách đã xin bỏ ("${daBo}") — không ghi lại từ lượt AI`);
+  return true;
+}
 /**
  * Bản TS của nhánh đầu `ghi_fact_listing` (20260928f, FR-241): câu `vi_tri` chỉ là "xã / phường / thị trấn …", không có dấu hiệu
  * đường / hẻm / số nhà → DB ghi nó thành fact `phuong`. Cửa này phải biết trước để tên phường đó cũng qua `tenPhuongCot`.
@@ -65,6 +156,7 @@ async function tenDuongTuDien(client: SupabaseClient, viTri: string, quan: strin
 
 /** Ghi một fact tin rao. Fact phường không chuẩn được → không ghi (`boQua`), không lỗi: bot hỏi lại phường như chưa biết. */
 export async function ghiFact(client: SupabaseClient, a: ThamSoFact): Promise<KetQuaFact> {
+  if (await chanODaBo(client, a)) return { data: null, error: null, boQua: "o_da_bo" };
   let answer = String(a.p_answer ?? "");
   const laPhuong = a.p_question === "phuong" || (a.p_question === "vi_tri" && viTriLaPhuong(answer));
   if (a.p_question === "vi_tri" && !laPhuong && answer.trim()) {

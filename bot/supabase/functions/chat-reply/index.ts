@@ -213,7 +213,7 @@ import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, loa
 import { moSoVan, theoDoiVan, apVan, tenVanKich } from "../_shared/extraction/so-van.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 import { goNhamDau } from "../_shared/extraction/go-nham-dau.ts";
-import { ghiFact as ghiFactMotCua, viTriLaPhuong, type ThamSoFact } from "../_shared/ghi-fact.ts";
+import { boOTin, ghiFact as ghiFactMotCua, nhacGiaTriKhac, O_XOA_DUOC, viTriLaPhuong, type ThamSoFact } from "../_shared/ghi-fact.ts";
 import { diaChiHienThi, duongGiuaCau, duongHienThi } from "../_shared/extraction/hien-thi-dia-chi.ts";
 
 // SRS-5.1zzzzm: hai dấu của dòng "lượt này em ghi gì" trong câu lệnh model người bán — bất biến e2e GHI NHẬN đọc đúng hai chuỗi này.
@@ -2144,6 +2144,20 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     const seqGop = new Set<number>();
     /** Tin chủ nhà vừa nhắn, NGUYÊN BẢN đơn (trước gộp cụm) — đúng dòng đã ghi `messages`. */
     const textTinNay = text;
+    /**
+     * SRS-5.1zzzzzzp (Zalo thật 14/10 09:59, tin Trần Bình Trọng): khách nhắn ba tin liền ("hẻm xe hơi 5m" / "hướng Đông Nam" / "đang để
+     * trống"); lượt của tin giữa MỞ câu chờ `hien_trang_su_dung` rồi nhường lượt trước khi gửi — câu hỏi không bao giờ tới khách, lượt sau
+     * đã ghi "đang để trống", vậy mà câu chờ còn `pending` mãi: hỏi bù (drip một-câu-một-lúc) bị chặn vĩnh viễn, tin kế của khách dễ bị đọc
+     * làm câu trả lời cho câu không ai hỏi. MỌI câu chờ lượt này mở đi qua đây; nhường lượt trước khi gửi thì rút đúng những câu này
+     * (thay khối chỉ rút `duyet_tin` của SRS-5.1zzzzzzb). Index `info_requests_mot_cau_cho_idx` (một câu pending mỗi tin + câu) bảo đảm
+     * câu pending cùng khoá tạo sau mốc tin chủ nhà là câu của chính lượt này.
+     */
+    const cauMoLuot: Array<{ listing_id: string; question: string }> = [];
+    const moCauTreo = async (row: Record<string, unknown>): Promise<{ error: { code?: string; message: string } | null }> => {
+      const { error } = await client.from("info_requests").insert(row);
+      if (!error && typeof row.listing_id === "string" && typeof row.question === "string") cauMoLuot.push({ listing_id: row.listing_id, question: row.question });
+      return { error };
+    };
     // SRS-5.1zzzzzq (Zalo thật 13/10/2026 11:42: "Cháu đăng giúp Bác thông tin này nhé!" rồi 12 giây sau cả bài rao; lượt tin 1 đang chạy
     // model, đọc "đăng giúp" là đủ rồi → "thôi hỏi", đóng câu treo, đóng dấu `chu_noi_du_at`; lượt tin 2 chạy song song ghi fact nhưng
     // không còn câu nào để hỏi, không nháp): nhánh bán chưa từng có check nhường lượt FR-131. Hàm này được gọi (a) trước quyết định
@@ -3842,12 +3856,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // nhắn ok" trong khi chưa có bản nháp nào. Trạng thái phải khớp điều khách thấy: nhường lượt mà lời mang bản nháp thì đóng
           // câu chờ duyệt vừa mở (chỉ câu mở TRONG lượt này — câu duyệt của bản nháp đã gửi trước đó giữ nguyên); lượt sau hết câu
           // hỏi sẽ soạn và gửi bản nháp lại như thường.
+          // SRS-5.1zzzzzzp: tổng quát — rút MỌI câu chờ lượt này mở (`cauMoLuot`), không chỉ câu duyệt bản nháp.
           let nhapRut = false;
-          if (extra.ban_nhap === true && typeof extra.nhap_cua === "string" && lucTinChu) {
-            const { error: rutErr } = await client.from("info_requests").update({ status: "expired" })
-              .eq("listing_id", extra.nhap_cua).eq("question", "duyet_tin").eq("status", "pending").gte("created_at", lucTinChu);
-            if (rutErr) await ghiLoi(client, "chat-reply rut cau duyet (nhuong luot)", rutErr.message);
-            else nhapRut = true;
+          if (lucTinChu) {
+            for (const c of cauMoLuot) {
+              const { error: rutErr } = await client.from("info_requests").update({ status: "expired" })
+                .eq("listing_id", c.listing_id).eq("question", c.question).eq("status", "pending").gte("created_at", lucTinChu);
+              if (rutErr) await ghiLoi(client, "chat-reply rut cau cho (nhuong luot)", rutErr.message);
+              else if (c.question === "duyet_tin") nhapRut = true;
+            }
           }
           return await hoanTat({ reply: null, replies: [], role: "seller", superseded: true, superseded_luc: "truoc_gui", ...(nhapRut ? { nhap_rut: true } : {}), ...extra });
         }
@@ -4023,7 +4040,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         return { cau: cauTD("dang_giu_thieu_phuong"), meta: { thieu_dang: thieuDang, loai_cau: "giu_thieu_phuong" } };
       }
       if (sau && !sau.ward && !khongBietP) {
-        const { error: pErr } = await client.from("info_requests").insert({ listing_id: listingId, question: "phuong", status: "pending" });
+        const { error: pErr } = await moCauTreo({ listing_id: listingId, question: "phuong", status: "pending" });
         if (pErr && pErr.code !== "23505") await ghiLoi(client, "chat-reply thieu de dang(mo phuong)", pErr.message);
         if (sau.area_m2 != null && sau.price_vnd != null) {
           // SRS-5.1zzy: đã có tên đường thì tự tra phường.
@@ -4564,7 +4581,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const keG = chonCauKe([], ((thieuG ?? []) as Array<{ fact_key: string; priority?: number; nhom?: string }>).filter((f) => f.nhom !== "sau_dang"));
         const meta = { gan_manh: true, ...(voRong ? { bo_cau_vo_rong: pendingReq.question } : { giu_nhap: pendingReq.listing_id }), ...(tinGhiManh ? {} : { chuyen_can: tg.code }) };
         if (keG && keG !== "hinh_anh") {
-          const { error: irG } = await client.from("info_requests").insert({ listing_id: tg.id, question: keG, status: "pending" });
+          const { error: irG } = await moCauTreo({ listing_id: tg.id, question: keG, status: "pending" });
           if (irG && irG.code !== "23505") await ghiLoi(client, "chat-reply gan manh(cau ke)", irG.message);
           return await traLoiSeller([cauHoiMau(keG, cachGoi, tg.property_type, tg.district)], { ...meta, asked: keG });
         }
@@ -5118,7 +5135,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           }
           const an = mo.filter((c) => !giuIds.has(c.id));
           if (an.length) {
-            const { error: irErr } = await client.from("info_requests").insert({
+            const { error: irErr } = await moCauTreo({
               listing_id: mo[0].id, question: "xac_nhan_ngung_hang_loat", status: "pending",
               answer: JSON.stringify({ an: an.map((c) => c.id), giu: giu.map((c) => c.id) }),
             });
@@ -5144,7 +5161,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const { data: daXin } = await client.from("info_requests").select("id")
         .in("listing_id", idsNguoi).eq("question", "danh_gia").limit(1);
       if (daXin?.length) return null;
-      const { error: irErr } = await client.from("info_requests").insert({
+      const { error: irErr } = await moCauTreo({
         listing_id: listingId, question: "danh_gia", status: "pending",
       });
       if (irErr) {
@@ -5182,7 +5199,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const chon = canConBan ?? (dangChonCanNgung ? chonCanTheoCau(text, cans) : (cans.length === 1 ? cans[0] : chonCanTheoCau(text, cans)));
       if (!chon) {
         if (!dangChonCanNgung) {
-          const { error: irErr } = await client.from("info_requests").insert({
+          const { error: irErr } = await moCauTreo({
             listing_id: cans[0].id, question: "ngung_rao_can_nao", status: "pending", answer: kieuNgung,
           });
           if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo ngung_rao_can_nao", irErr.message);
@@ -5230,6 +5247,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     const ycLuot = await yeuCauAi();
     /** Xin xoá dữ liệu: AI quyết cho cả lượt; luật chỉ khi AI không chạy. */
     const xinXoaLuot = (cau: string): boolean => ycLuot !== undefined ? ycLuot?.loai === "xin_xoa_du_lieu" : laXinXoaDuLieu(cau); // lưới đỡ
+    /** SRS-5.1zzzzzzr: câu trả lời cho câu hỏi về tin mà khách hỏi KÈM lời gật bản nháp — nối vào lượt đăng. */
+    let dapHoiKemDuyet: string | null = null;
     {
       let loaiHoiTin: LoaiHoiTin | null = ycLuot !== undefined
         ? (ycLuot?.loai.startsWith("hoi_") ? ycLuot.loai.slice(4) as LoaiHoiTin : null)
@@ -5300,8 +5319,16 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
             }
           }
           const dap = dapHoiVeTin(loaiHoiTin, tinHoi as TinTom, { quan_tam: soQuanTam ?? 0, hoi: soHoi ?? 0 }, cachGoi, conThieu);
-          const hoiLaiTreo = hoiLaiTreoTin();
-          return await traLoiSeller(hoiLaiTreo ? [dap, hoiLaiTreo] : [dap], { hoi_ve_tin: loaiHoiTin, ...(conThieu?.thieu ? { thieu: conThieu.thieu } : {}) });
+          // SRS-5.1zzzzzzr (Zalo thật 14/10 10:08: "hồi nãy anh nói giá bao nhiêu ok đăng đi" lúc chờ duyệt → tin lên kệ, câu hỏi giá không ai
+          // trả lời): gật bản nháp KÈM câu hỏi về tin thì không nuốt bên nào — câu trả lời đi cùng lượt đăng (`dapKemDuyet`), không dừng ở đây.
+          // Hỏi trạng thái / nội dung tin thì lượt đăng chính là câu trả lời, không cần bong bóng riêng.
+          if (pendingReq?.question === "duyet_tin" && !["trang_thai", "noi_dung"].includes(loaiHoiTin) && (await dongYAi())?.la === "dong_y") {
+            dapHoiKemDuyet = dap;
+            console.log("chat-reply: hoi ve tin kem gat duyet — tra loi cung luot dang", loaiHoiTin);
+          } else {
+            const hoiLaiTreo = hoiLaiTreoTin();
+            return await traLoiSeller(hoiLaiTreo ? [dap, hoiLaiTreo] : [dap], { hoi_ve_tin: loaiHoiTin, ...(conThieu?.thieu ? { thieu: conThieu.thieu } : {}) });
+          }
         }
       }
     }
@@ -5315,7 +5342,8 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // ─── 22/09/2026 (kịch bản C, bắn thật): "em xoá cái hẻm 4m ghi nhầm đi" — chủ nhà xin BỎ một thứ đã
     // ghi. Bản trước đọc thành ĐỊA CHỈ (street = nguyên câu, tin lên web như thế) và "hẻm 4m" trong câu đè
     // lại hẻm 3.5m vừa sửa. Đây là lời nói với bot, không phải dữ liệu: không ghi gì, đọc lại ô đang giữ và
-    // xin giá trị đúng (bot không tự xoá một ô — xoá xong tin thiếu, hỏi lại là cùng một việc).
+    // xin giá trị đúng. SRS-5.1zzzzzzq: chỉ còn đúng cho ô LÕI (giá, diện tích, địa chỉ, phường, số tầng); ô không bắt buộc
+    // (`O_XOA_DUOC`: hướng, hẻm, phòng ngủ, pháp lý) thì bỏ thật (`boOTin`) — "bỏ cái hướng Đông Nam ra" mà tin vẫn đăng hướng là sai.
     {
       const xinBo = ycLuot !== undefined
         ? (ycLuot?.loai === "xin_bo_o" ? { truong: ycLuot.o, nhan: O_XIN_BO.find(([k]) => k === ycLuot.o)?.[2] ?? null } : null)
@@ -5366,6 +5394,22 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           vi_tri: tinBo?.location_raw ?? null,
         };
         const ht = xinBo.truong ? hienTai[xinBo.truong] : null;
+        // SRS-5.1zzzzzzq: ô không bắt buộc đang có giá trị → bỏ thật, báo đã bỏ; đang chờ duyệt thì gửi lại bản nháp không còn ô đó.
+        if (xinBo.truong && O_XOA_DUOC[xinBo.truong] && ht && !nhacGiaTriKhac(xinBo.truong, text, ht)) {
+          const { daBo, error: boErr } = await boOTin(client, lidBo, xinBo.truong, ht);
+          if (boErr) await ghiLoi(client, "chat-reply bo o tin", boErr.message);
+          if (daBo) {
+            console.log("chat-reply: bo o tin", xinBo.truong, daBo);
+            const cauBo = `Dạ em bỏ ${daBo} khỏi tin rồi ạ.`;
+            if (pendingReq?.question === "duyet_tin") {
+              const nhapCu = [...lichSuRows].reverse().find((m) => !laTinNguoi(m.sender) && (m.body ?? "").includes("📋"))?.body ?? null;
+              const lai = await guiBanNhap(lidBo, { reask: "duyet_tin", sua_nhap: true, nhap_cu: nhapCu, xin_bo_truong: xinBo.truong, o_da_bo: daBo }, true, [cauBo]);
+              if (!Array.isArray(lai)) return lai;
+            }
+            return await traLoiSeller([cauBo, ...(nhacCauTreo() ? [nhacCauTreo()!] : [])],
+              { xin_bo_truong: xinBo.truong, o_da_bo: daBo, ...(pendingReq ? { reask: pendingReq.question } : {}) });
+          }
+        }
         const dap = !xinBo.truong
           ? `Dạ chỗ nào ghi nhầm ${cachGoi} nhắn lại giúp em nha, em sửa liền ạ.`
           : ht
@@ -5602,7 +5646,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
               .eq("listing_id", canKe).order("priority").limit(40);
             const ke = chonCauKe([...(pendingReq ? [pendingReq.question] : [])], (await thieuCoReNhanh(client, canKe, (thieu ?? []) as Array<{ fact_key: string; priority: number; nhom: string | null }>, pendingReq ? [pendingReq.question] : [], text)).filter((f) => f.nhom !== "sau_dang"));
             if (ke) {
-              const { error: irErr } = await client.from("info_requests").insert({ listing_id: canKe, question: ke, status: "pending" });
+              const { error: irErr } = await moCauTreo({ listing_id: canKe, question: ke, status: "pending" });
               if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(theo can)", irErr.message);
               const lKe = cans.find((c) => c.id === canKe);
               cauKe = cauHoiMau(ke, cachGoi, lKe?.property_type, lKe?.district, lKe?.deal);
@@ -5800,7 +5844,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           .eq("listing_id", dau!.id).order("priority").limit(40);
         const keLo = chonCauKe(["gia", "dien_tich"], (await thieuCoReNhanh(client, dau!.id, thieuLo)).filter((f) => f.nhom !== "sau_dang" && !["vi_tri", "phuong", "gap"].includes(f.fact_key)));
         if (keLo) {
-          const { error: irLo } = await client.from("info_requests").insert({ listing_id: dau!.id, question: keLo, status: "pending" });
+          const { error: irLo } = await moCauTreo({ listing_id: dau!.id, question: keLo, status: "pending" });
           if (irLo && irLo.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(nhieu can)", irLo.message);
         }
         return await traLoiSeller([
@@ -6607,7 +6651,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         return await traLoiSeller([`Dạ em ghi thêm rồi ạ. Bản nháp ở trên ${cachGoi} thấy được thì nhắn "ok" là em đăng liền ạ.`], { ...extraGon, loai_cau: "ghi_them" });
       }
       // 23505 = câu duyệt đã mở từ lượt trước (gửi lại bản nháp) — không phải sự cố.
-      const { error: irErr } = await client.from("info_requests").insert({
+      const { error: irErr } = await moCauTreo({
         listing_id: listingId, question: "duyet_tin", status: "pending",
       });
       if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo duyet_tin", irErr.message);
@@ -6633,7 +6677,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const thieu = iMuc > 0 ? [nhap[iMuc], ...nhap.filter((_, i) => i !== iMuc)] : nhap;
       const khoaMo = iMuc >= 0 ? khoaCuaMucThieu(nhap[iMuc], loai) : null;
       if (khoaMo && !dangTreo.has(khoaMo)) {
-        const { error: gErr } = await client.from("info_requests").insert({ listing_id: listingId, question: khoaMo, status: "pending" });
+        const { error: gErr } = await moCauTreo({ listing_id: listingId, question: khoaMo, status: "pending" });
         if (gErr && gErr.code !== "23505") await ghiLoi(client, "chat-reply mo cau thieu diem", gErr.message);
       }
       return { thieu, khoaMo };
@@ -8396,7 +8440,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // SRS-5.1zzzzz (khách mô phỏng hoi-phi: "Được rồi em ơi, rao đi. Mà … chị phải trả bao nhiêu tiền hoa hồng" → tin lên kệ, câu hỏi
         // phí bị bỏ qua): gật kèm câu hỏi thì câu hỏi được trả lời ở đây (bong bóng tiền định đã soạn, `hoiNguocDap`), không dẫn phí lần hai;
         // SRS-5.1zzzzzu: câu phí chưa rõ vai nêu cả hai mức, không nối câu hỏi vai (một luật với r1/r2/r3).
-        const dapKemDuyet = hoiNguoc && hoiNguocDap ? hoiNguocDap : null;
+        const dapKemDuyet = hoiNguoc && hoiNguocDap ? hoiNguocDap : dapHoiKemDuyet; // SRS-5.1zzzzzzr: câu hỏi về tin kèm gật
         const cauDanPhi = len && !daNoiPhiRoi() && !(dapKemDuyet && coCauPhi(dapKemDuyet)) ? cauBaoPhiLenKe((lstOk as { deal?: string | null } | null)?.deal ?? dealNguoi) : "";
         // SRS-5.1zzs: dòng hạng đi cùng bong bóng "thêm điểm" (chuyện điểm / hạng ở một chỗ) — bong bóng đầu giữ hai câu ≤ 30 từ (H8e).
         const dongHang = len ? await dongHangRao() : "";
@@ -8803,7 +8847,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (nextKey && sellerReply) {
         // 23505 = `ask-seller` (nhịp drip :22/:52) vừa mở đúng câu này. Không
         // phải sự cố — bỏ qua. Mã khác thì vào sổ (FR-152 d).
-        const { error: irErr } = await client.from("info_requests").insert({
+        const { error: irErr } = await moCauTreo({
           listing_id: pendingReq.listing_id, question: nextKey, status: "pending",
         });
         if (irErr && irErr.code !== "23505") {
@@ -9235,7 +9279,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         const moCauDau = async () => {
           if (!firstKey || cauDauDaMo) return;
           cauDauDaMo = true;
-          const { error: ir1Err } = await client.from("info_requests").insert({
+          const { error: ir1Err } = await moCauTreo({
             listing_id: newLst.id, question: firstKey, status: "pending",
           });
           if (ir1Err && ir1Err.code !== "23505") {
@@ -9460,7 +9504,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           const hh = new Set((hetHanRoi ?? []).map((q) => q.question));
           const keRoi = chonCauKe(factRoi.map((f) => f.question), (await thieuCoReNhanh(client, canNeo.id, thieuRoi, factRoi.map((f) => f.question), text)).filter((f) => !hh.has(f.fact_key) && f.nhom !== "sau_dang"));
           if (keRoi && keRoi !== "hinh_anh") {
-            const { error: irRoi } = await client.from("info_requests").insert({ listing_id: canNeo.id, question: keRoi, status: "pending" });
+            const { error: irRoi } = await moCauTreo({ listing_id: canNeo.id, question: keRoi, status: "pending" });
             if (irRoi && irRoi.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(roi)", irRoi.message);
             return await traLoiSeller([`Dạ em ghi ${daGhi} rồi ạ.\n${cauHoiMau(keRoi, cachGoi, canNeo.property_type, canNeo.district, canNeo.deal)}`], { saved_fact: factRoi.map((f) => f.question), asked: keRoi });
           }
@@ -9498,7 +9542,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           const { data: lLoai } = await client.from("listings").select("property_type, district, deal").eq("id", tinChot.id).maybeSingle();
           const khoaThieu = nhap.map((m) => khoaCuaMucThieu(m, lLoai?.property_type)).find(Boolean) ?? null;
           if (khoaThieu) {
-            const { error: tErr } = await client.from("info_requests").insert({ listing_id: tinChot.id, question: khoaThieu, status: "pending" });
+            const { error: tErr } = await moCauTreo({ listing_id: tinChot.id, question: khoaThieu, status: "pending" });
             if (tErr && tErr.code !== "23505") await ghiLoi(client, "chat-reply du roi(mo cau thieu)", tErr.message);
           }
           const thieuVan = nhap.slice(0, 2).join(" và ");
