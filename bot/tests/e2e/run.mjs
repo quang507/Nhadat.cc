@@ -1574,6 +1574,7 @@ fresh(seedKho);
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-cc", seller_type: "ccrb", name: null, active_listing_id: null }).data;
     const l = d.insert("listings", { code: "BDS-Q5-0101", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", gap: false, location_raw: "Sunrise City", ward: "Phường 4", price_raw: "3 tỷ", price_vnd: 3e9, area_m2: 70, floor: 12, can_chu_duyet: true }).data;
+    d.insert("listing_facts", { listing_id: l.id, question: "du_an_ten", answer: "Sunrise City", source: "seller_chat" }); // SRS-5.1zzzzzzz3: căn hộ đã nói tên chung cư
     d.insert("info_requests", { listing_id: l.id, question: "so_phong_ngu", status: "pending" });
   });
   r = await send({ external_user_id: "z-cc", text: "2 phòng ngủ" });
@@ -6862,7 +6863,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-nhap-rut", seller_type: "ccrb", name: null, active_listing_id: null }).data;
     const l = d.insert("listings", { code: "BDS-Q5-0119", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", gap: false, location_raw: "Sunrise City", ward: "Phường 4", price_raw: "3 tỷ 9", price_vnd: 3.9e9, area_m2: 70, floor: 12, legal_status: "so_hong_rieng", can_chu_duyet: true }).data;
-    for (const [q, a] of [["phi_quan_ly", "phí quản lý 20 nghìn/m2"], ["so_phong_ngu", "2 phòng ngủ"], ["so_wc", "2 WC"], ["hien_trang_su_dung", "đang để trống"], ["hinh_anh", "https://x/1.jpg"]]) {
+    for (const [q, a] of [["phi_quan_ly", "phí quản lý 20 nghìn/m2"], ["so_phong_ngu", "2 phòng ngủ"], ["so_wc", "2 WC"], ["hien_trang_su_dung", "đang để trống"], ["hinh_anh", "https://x/1.jpg"], ["du_an_ten", "Sunrise City"]]) { // du_an_ten: SRS-5.1zzzzzzz3
       d.insert("listing_facts", { listing_id: l.id, question: q, answer: a, source: "seller_chat" });
     }
     d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
@@ -6892,7 +6893,8 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
     sC.active_listing_id = tin.id;
     const cuCHg = globalThis.__cauHinh;
-    globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
+    // SRS-5.1zzzzzzz: mặc định gộp cụm 1,5 s — ca này đo CƠ CHẾ gộp với cửa sổ chỉnh 3 s (tin 2 s trước nằm trong cửa sổ).
+    globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi", gop_cum: "3" };
     r = await send({ external_user_id: "z-ccrb", text: "anh đang coi lại" }); // mở hội thoại + có lời bot làm ranh giới cụm
     const conv = db().t.conversations.find((c) => c.seller_id === sC.id);
     const noiDungGoi = (c) => [...(c.params.system ?? []).map((s) => s.text ?? ""), ...(c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : JSON.stringify(m.content))].join("\n");
