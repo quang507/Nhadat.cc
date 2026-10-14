@@ -158,5 +158,22 @@ const gan = ganNhatMoiLoai(10.7229033, 106.6106773, diem);
 la("ganNhatMoiLoai: gần nhất mỗi loại, xếp theo mét, bỏ ngoài 3 km",
   gan.map((g) => `${g.loai}:${g.m}`), ["sieu_thi:190", "truong_hoc:240", "benh_vien:910"]);
 
+
+// SRS-5.1zzzzzzn (14/10/2026): danh sách máy Overpass của geocode-listings. Từ 09/10 cả ba máy cũ hỏng mọi tick (overpass-api.de 406 từ edge,
+// private.coffee quá giờ / 500, mail.ru 504) → project mới chưa tin nào nạp được tiện ích, sổ lỗi 9 dòng / 24 giờ. Đo pg_net từ chính DB 14/10:
+// openstreetmap.fr trả 200 kèm 10 điểm quanh Cao Lỗ; osm.ch 200 nhưng chỉ dữ liệu Thuỵ Sĩ (0 điểm VN). Đỏ khi: bỏ máy .fr, để máy đã biết
+// hỏng (overpass-api.de) đứng trước nó (mỗi máy hỏng tốn tới 35 s ngân sách), hay thêm osm.ch.
+console.log("\n4. MÁY OVERPASS (geocode-listings)\n");
+{
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../supabase/functions/geocode-listings/index.ts", import.meta.url), "utf8");
+  const ds = [...(/const OVERPASS = \[([\s\S]*?)\];/.exec(src)?.[1] ?? "").matchAll(/"(https:[^"]+)"/g)].map((m) => new URL(m[1]).host);
+  dung("OVERPASS: có máy openstreetmap.fr (máy duy nhất trả dữ liệu TP.HCM từ hạ tầng Supabase 14/10)", ds.includes("overpass.openstreetmap.fr"), ds.join(", "));
+  dung("OVERPASS: openstreetmap.fr đứng trước overpass-api.de (máy chính chặn dải IP edge → 406, đừng tốn lượt đầu)",
+    ds.indexOf("overpass.openstreetmap.fr") < ds.indexOf("overpass-api.de"), ds.join(", "));
+  dung("OVERPASS: không có osm.ch (chỉ dữ liệu Thuỵ Sĩ, trả 200 rỗng → tin lên 'không có tiện ích' oan)", !ds.includes("overpass.osm.ch"), ds.join(", "));
+  dung("OVERPASS: ≥ 3 máy để một máy bận không làm trễ cả lượt", ds.length >= 3, String(ds.length));
+}
+
 console.log(hong ? `\n${hong}/${dat + hong} CA HỎNG` : `\nTẤT CẢ ${dat} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
