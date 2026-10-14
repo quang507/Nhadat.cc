@@ -4943,7 +4943,9 @@ Prompt đọc ý: "đăng giúp (theo) nội dung này / sau" mà bot chưa gử
 bot vừa gửi bản nháp thì vẫn là gật-đăng. Hai nhánh "đủ rồi" bật `daDuyetLuot` ngay sau khi ghi đóng câu / `chu_noi_du_at` — bước trước khi gửi
 không nhường nữa.
 
-**Kiểm.** e2e cho hai ca này viết khi chạy bộ tổng thể (chủ dự án tắt e2e tự động 14/10); `bun run kieu:bot` sạch.
+**Kiểm (đỏ khi tắt).** e2e ZZZZZZZ4-01 ("đủ rồi" đã đóng câu, tin mới hơn tới sau → không nhường, khách nhận lời; tắt cờ là đỏ —
+đã thử). ZZZZZZZ4-02 (chờ duyệt, AI đọc cả gật-đăng lẫn sắp gửi → không đăng) là ca giữ lại: nhánh duyệt vốn đã chặn bằng `ycDuyet`, nên ca
+này không đỏ khi tắt riêng `dongYAi` — chốt chặn trong `dongYAi` là một chỗ cho các nơi hỏi gật còn lại.
 
 ### SRS-5.1zzzzzzz5 · Tin cho thuê căn hộ / cấp 4 / biệt thự hỏi bù trượt giá (14/10/2026)
 

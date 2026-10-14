@@ -12374,6 +12374,27 @@ if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_
       /gửi nội dung tin qua đây/.test(rep) && !Lu(L).chu_noi_du_at && !Lu(L).chu_duyet_at && Lu(L).status === "cho_thong_tin",
       JSON.stringify({ rep, cnd: Lu(L).chu_noi_du_at, cd: Lu(L).chu_duyet_at }));
   }
+  // SRS-5.1zzzzzzz4 (a): "đủ rồi" TRONG vòng hỏi đã đóng câu + chu_noi_du_at, rồi tin mới hơn tới → lượt này không được nhường im.
+  {
+    const { uid, L } = dungU({ cauTreo: "huong" });
+    let daChen = false;
+    globalThis.__rpc = { diem_tin: (d, a) => { const l = d.t.listings.find((x) => x.id === a.p_listing_id); if (l?.chu_noi_du_at && !daChen) { daChen = true; chenRao(L); } return { data: l ? d.diemTin(l) : null, error: null }; } };
+    globalThis.__model = { parse: (p) => (laBocU(p) || laYU(p)) ? { ...rongU, y_dinh: { loai: "du_roi", trich_dan: "đủ rồi em" }, dong_y: "khong_noi", dong_y_trich: null } : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text: "đủ rồi em" });
+    globalThis.__rpc = null;
+    check("ZZZZZZZ4-01 (đủ rồi đã đóng câu) tin mới hơn tới SAU khi đóng → không nhường, khách nhận lời, câu treo đã đóng",
+      daChen && r.body.superseded !== true && (r.body.replies ?? []).length > 0 && !!Lu(L).chu_noi_du_at && !treoU(L).includes("huong"),
+      JSON.stringify({ daChen, body: r.body, cnd: Lu(L).chu_noi_du_at, treo: treoU(L) }));
+  }
+  // SRS-5.1zzzzzzz4 (b): AI đọc CẢ gật-đăng lẫn "sắp gửi nội dung" khi đang chờ duyệt bản nháp → báo sắp gửi thắng: không đăng.
+  {
+    const { uid, L } = dungU({ cauTreo: "duyet_tin" });
+    const cau = "đăng giúp chị theo nội dung sau nhé";
+    globalThis.__model = { parse: (p) => (laBocU(p) || laYU(p)) ? { ...rongU, ...AI_DANG, yeu_cau: "gui_noi_dung_sau", yeu_cau_trich: cau } : OUT(), create: () => "Dạ vâng ạ." };
+    await send({ external_user_id: uid, text: cau });
+    check("ZZZZZZZ4-02 (cách nói mới) chờ duyệt, 'đăng giúp chị theo nội dung sau nhé' (AI: gật-đăng + sắp gửi) → KHÔNG đăng, tin chưa lên kệ",
+      !Lu(L).chu_duyet_at && Lu(L).status === "cho_thong_tin", JSON.stringify({ cd: Lu(L).chu_duyet_at, st: Lu(L).status, treo: treoU(L) }));
+  }
 
   // (v) ca gốc: tin cho thuê đang thu thập (mới có quận), KHÔNG câu chờ (câu địa chỉ đã bị đóng), chủ nhà dán bài rao → không kết bằng lời ghi suông.
   {
