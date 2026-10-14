@@ -5242,6 +5242,48 @@ tin trước rồi đó"), `DNR-02` (vừa phàn nàn vừa trả lời → khô
 trả câu mở cũ). Mock AI phân vai ở ba khối e2e trả cụm làm bằng KHÔNG có trong tin ("ừ", "ban nha") — model thật trích nguyên văn (`donVai`
 đòi vậy); sửa mock trả cụm có trong tin. TOIUU-02/03 nới +1 truy vấn (đọc công tắc). e2e 1426/1426.
 
+### SRS-5.1zzzzzzz19 · Căn hộ dự án: tiêu đề theo tên dự án, không hỏi pháp lý khi dự án đã có, thông tin dự án tự xác nhận theo đồng thuận + uy tín (14/10/2026)
+
+**Ca gốc.** Chủ dự án 14/10/2026: "nhà ở dự án thì phải nêu tiêu đề là tên dự án ra, tên chung cư ra chứ không phải địa chỉ"; "câu hỏi về
+dự án không cần hỏi về pháp lý" → chọn "chỉ bỏ khi kho dự án đã có pháp lý"; "sao câu pháp lý nãy test nó cứ hỏi về sổ hồng riêng"; "Bật cái
+thu thập thông tin dự án lên nếu 5 người đưa dữ liệu về dự án vào thì xác nhận tin đúng dựa theo điểm uy tín của người rao nữa giống bên
+AOND" → "Làm giống bên AOND, giờ ko duyệt tay". Zalo thật cùng ngày: bản nháp 10:34 "Chỉ 1,3 tỷ căn hộ mặt tiền tại Tân Nhựt, Bình Chánh"
+(tin đã gắn dự án Conic Boulevard); 10:15 bot hỏi căn hộ "có sổ hồng riêng hay chung vậy chị?".
+
+**Lớp lỗi.** (1) Tiêu đề ghép theo khuôn NHÀ PHỐ (giá + đường vào + phường/quận) cho mọi loại; tên dự án chỉ được chèn thêm, và đường vào
+"mặt tiền" của CẢ TOÀ thành "điểm mạnh" của căn. (2) Một ý CẦN HỎI chung cho mọi loại ("pháp lý (giấy tờ)") + ví dụ mẫu dạy "pháp lý → sổ
+riêng hay chung" → model hỏi căn hộ bằng câu nhà phố; chữ "thiếu pháp lý" của căn hộ (20261014d) còn tự viết "sổ hồng riêng hay chung". Căn
+hộ thuộc dự án bị hỏi pháp lý như căn lẻ dù pháp lý là của dự án. (3) Thông tin dự án do người rao kể chỉ có MỘT cửa: admin bấm duyệt; người
+thứ hai nói cùng giá trị bị `on conflict do nothing` nuốt — không có gì đếm "bao nhiêu người xác nhận".
+
+**Chỗ cùng lớp.** Đã sửa: `tieuDeTin` + `tieuDeTinLe` + tiêu đề AI (bỏ khi căn hộ có tên dự án) + `diemManhTieuDe` (căn hộ không lấy đường
+vào); nhãn CẦN HỎI theo loại cho `phap_ly` (`phap_ly@chung_cu`); ví dụ mẫu `SELLER_FEWSHOT`; chữ thiếu trong `diem_tin`; `listing_missing_facts`
++ `diem_tin` coi pháp lý dự án là pháp lý căn hộ; `ghi_fact_du_an` (cửa ghi DUY NHẤT của thông tin dự án — cả luật lẫn lượt model `llm`) nay
+là cửa bỏ phiếu. **Còn lại:** web (`app/nha-dat/[code]`, `ListingCard`) vẫn đặt H1 / thẻ theo đường, phường — chưa đổi (khác bản nháp Zalo);
+khoá đơn trị khác cách viết ("12 nghìn/m2" vs "12k/m2") là hai giá trị, chưa gộp nghĩa; dòng chỉ có tên dự án (chưa gắn `project_id`) đủ
+người vẫn nằm hàng chờ vì kho chưa có dự án để ghi; giá trị đã chốt không tự bỏ chốt khi phe khác lớn dần (AOND bỏ chốt) — chốt lại khi phe
+mới tự đạt điều kiện; bot chưa hỏi người rao khác để xác minh ý đang tranh (AOND "CƠ HỘI XÁC MINH").
+
+**Sửa.** (1) `tin-nhap.ts`: căn hộ có tên dự án (ô `du_an_ten`, hoặc dự án kho chat-reply nạp vào cùng ô) → "Chỉ {giá} căn hộ {dự án}
+{N}PN tại {quận}" / "Cho thuê căn hộ {dự án}, …, quận" — không phường, không địa chỉ đường, không "mặt tiền"; tiêu đề khách tự đặt vẫn
+thắng. (2) `FACT_LABELS["phap_ly@chung_cu"]` = "pháp lý căn hộ (đã ra sổ hồng hay còn hợp đồng mua bán, KHÔNG hỏi sổ riêng hay chung)"; ví dụ
+mẫu đổi câu sổ thành "giấy tờ nhà mình thế nào"; migration `20261014e`: chữ thiếu căn hộ "đã ra sổ hồng hay còn hợp đồng mua bán", hàm
+`du_an_co_phap_ly` (cột `legal_status` hoặc specs `phap_ly` / `so_huu`), view + `diem_tin` coi là có pháp lý. (3) `20261014e`: bảng
+`project_fact_phieu` (mỗi người rao một phiếu mỗi khoá, đổi giá trị = chuyển phiếu, lưu điểm uy tín lúc bỏ phiếu); `ghi_fact_du_an` bỏ phiếu
+rồi gọi `xet_dong_thuan_du_an`: giá trị dẫn đầu theo tổng trọng số (`greatest(diem, 10) / 100`) có ≥ 5 người khác nhau và phe nói khác ≤ 1/3
+trọng số → `ap_fact_du_an_vao_kho` (cùng luật ghi của `duyet_fact_du_an`), phe thua `bo`, `duyet_boi = 'dong_thuan'`. Khoá tiện ích là danh
+sách — mỗi ý tự chốt khi đủ người, không chọi nhau. Không duyệt tay; admin vẫn bấm được.
+
+**Kiểm (đỏ khi tắt).** `bot/tests/tin-nhap-rao.mjs` DA-TD-1 (ca gốc) … DA-TD-4, CC-TEN-4 đổi theo hành vi mới. `bot/tests/phap-ly-can-ho.mjs`
+PLCH-01 (ca gốc) … 03. **SQL thật** `bot/tests/sql/du-an-dong-thuan.sql` trong `bun run test:sql` (Postgres tạm nạp `schema.sql` + `20261014e`):
+DT-01 … DT-10 — 4 người chưa chốt, người thứ 5 chốt vào kho, một người nói lại không thêm phiếu, tranh chấp theo trọng số, đổi ý chuyển
+phiếu, tiện ích không chọi nhau, uy tín đổi kết quả, pháp lý dự án, view + `diem_tin` không đòi pháp lý căn hộ dự án đã có pháp lý. Tắt trọng
+số (mỗi phiếu 1) → DT-07 đỏ; bỏ điều kiện pháp lý dự án trong view → DT-09 đỏ. Bộ này bắt được một lỗi thật trước khi đẩy (thân `diem_tin`
+trong migration thiếu dòng `CREATE`). Mock e2e (`listing_missing_facts`, `diem_tin`) theo cùng luật; e2e 1426/1426.
+CI bắt thêm một lỗi của chính `20261014e` qua `bot/tests/null-ba-tri.mjs`: vế `l.property_type = 'chung_cu'` trong khối `NOT (…)` của view ra
+NULL khi tin chưa rõ loại → mất mọi câu còn thiếu của tin đó (cùng lớp 20260925b). Vá ở `20261014f` bằng `IS NOT DISTINCT FROM`; bài đó đỏ trên
+`schema.sql` cũ, xanh trên bản mới.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

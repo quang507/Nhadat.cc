@@ -384,11 +384,29 @@ console.log(`\n${dat} đạt · ${hong} hỏng`);
   const f = [{ question: "du_an_ten", answer: "Green river" }];
   const t2 = (o) => soanTinNhap({ l, facts: f, diem: 78, thieu: [], soAnh: 0, lai: false, cauTD, ...o }).split("\n")[1];
   la("CC-TEN-3 (ca gốc) tiêu đề code ghép → có tên chung cư sau chữ căn hộ", /căn hộ Green river/.test(t2({})), t2({}));
-  la("CC-TEN-4 (cách khác) tiêu đề AI không có chữ căn hộ → mở bằng 'Căn hộ Green river'", /^Căn hộ Green river, /.test(t2({ tieuDeAi: "View sông, nội thất đủ, chỉ 2,85 tỷ" })), t2({ tieuDeAi: "View sông, nội thất đủ, chỉ 2,85 tỷ" }));
+  // SRS-5.1zzzzzzz19: căn hộ có tên dự án → tiêu đề code ghép (tên dự án), tiêu đề AI không dùng.
+  la("CC-TEN-4 (cách khác) có tiêu đề AI mà căn hộ có tên dự án → vẫn tiêu đề tên dự án, không lấy tiêu đề AI", /^Chỉ 2,850? tỷ căn hộ Green river tại Q\.8$/.test(t2({ tieuDeAi: "View sông, nội thất đủ, chỉ 2,85 tỷ" })), t2({ tieuDeAi: "View sông, nội thất đủ, chỉ 2,85 tỷ" }));
   la("CC-TEN-5 tiêu đề đã có tên → không lặp", (t2({ tieuDeAi: "Căn hộ Green River 60m² chỉ 2,85 tỷ" }).match(/green river/gi) ?? []).length === 1, t2({ tieuDeAi: "Căn hộ Green River 60m² chỉ 2,85 tỷ" }));
   la("CC-TEN-6 tiêu đề khách tự đặt → giữ nguyên chữ khách", t2({ tieuDeKhach: "Bán gấp căn 60m2 Q8" }) === "Bán gấp căn 60m2 Q8", t2({ tieuDeKhach: "Bán gấp căn 60m2 Q8" }));
   la("CC-TEN-7 khách gõ 'Dự án Green river' → tiêu đề không thành 'căn hộ Dự án …'", themTenChungCu("Chỉ 2 tỷ căn hộ tại Q8", l, () => "Dự án Green river") === "Chỉ 2 tỷ căn hộ Green river tại Q8");
   la("CC-TEN-8 đối chứng nhà phố → không chèn", themTenChungCu("Chỉ 5 tỷ nhà phố", { property_type: "nha_pho" }, () => "Green river") === "Chỉ 5 tỷ nhà phố");
+}
+// SRS-5.1zzzzzzz19 (chủ dự án 14/10/2026: "nhà ở dự án thì phải nêu tiêu đề là tên dự án ra, tên chung cư ra chứ không phải địa chỉ"). Ca gốc:
+// bản nháp 14/10 10:34 "Chỉ 1,3 tỷ căn hộ mặt tiền tại Tân Nhựt, Bình Chánh" — căn hộ đã gắn dự án Conic Boulevard.
+{
+  const l = { code: "BDS-CH-HUYENBINHCHANH-0001", property_type: "chung_cu", deal: "ban", location_raw: "Ấp 18 Khu dân cư 584 - Huỳnh Bá Chánh",
+    ward: "Xã Tân Nhựt", district: "Huyện Bình Chánh", area_m2: 60, price_raw: "1,3 tỷ", bedrooms: 3, access_type: "mat_tien" };
+  const f = [{ question: "du_an_ten", answer: "Conic Boulevard" }];
+  const td = soanTinNhap({ l, facts: f, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD }).split("\n")[1];
+  la("DA-TD-1 (ca gốc) căn hộ dự án → tiêu đề 'Chỉ 1,3 tỷ căn hộ Conic Boulevard 3PN tại Bình Chánh', không xã / địa chỉ / 'mặt tiền'",
+    td === "Chỉ 1,3 tỷ căn hộ Conic Boulevard 3PN tại Bình Chánh", td);
+  const tdThue = tieuDeTinLe({ ...l, deal: "cho_thue", price_raw: "8 triệu" }, (k) => k === "du_an_ten" ? "Chung cư Sky Garden" : null);
+  la("DA-TD-2 (cách nói mới) cho thuê căn hộ 'Chung cư Sky Garden' → 'Cho thuê căn hộ Sky Garden …', không 'Huỳnh Bá Chánh', không 'Tân Nhựt'",
+    /^Cho thuê căn hộ Sky Garden/.test(tdThue) && !/Huỳnh Bá Chánh|Tân Nhựt|mặt tiền/.test(tdThue), tdThue);
+  const tdKhongTen = tieuDeTin(l, () => null, []);
+  la("DA-TD-3 căn hộ chưa có tên dự án → giữ tiêu đề khu vực, nhưng không 'mặt tiền' (đường vào của toà)", /tại Tân Nhựt, Bình Chánh/.test(tdKhongTen) && !/mặt tiền/.test(tdKhongTen), tdKhongTen);
+  const tdNha = tieuDeTin({ ...l, property_type: "nha_pho" }, (k) => k === "du_an_ten" ? "Conic Boulevard" : null, []);
+  la("DA-TD-4 đối chứng nhà phố có ô dự án → không đổi kiểu tiêu đề", /mặt tiền tại Tân Nhựt/.test(tdNha), tdNha);
 }
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");
