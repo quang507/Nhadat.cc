@@ -1946,13 +1946,28 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   );
   let vaiModel: VaiModel | null = null;
   const hoSoMuaSom = (bCu?.preferences ?? null) as Record<string, unknown> | null;
-  if (nenHoiModelVai({
+  const daCoHoSoMuaSom = BUYER_PROFILE_FIELDS.some(([k]) => hoSoMuaSom?.[k] != null && hoSoMuaSom?.[k] !== "");
+  const nhacMaSom = new RegExp(CODE_RE.source).test(textOrTag);
+  // SRS-5.1zzzzzzz18 (chủ dự án 14/10: "xoá hết mấy cái code đi đọc bằng ai hết luôn"). Lớp lỗi: VAI người lạ (rao bán / hỏi mua /
+  // gật câu hỏi vai) đoán bằng từ khoá — luật đã kết luận thì model không bao giờ được hỏi, nên "chào bạn mình tìm nhà" ("ban"),
+  // "ban công hướng Đông", "tôi tìm nhà chính chủ" ("chính chủ") đều từng mở nhầm hồ sơ bán, và mỗi lần vá là thêm một từ vào regex.
+  // Chế độ `boc_tach_ai = ai`: người lạ có câu luật ĐÃ kết luận (bán / mua / đáp vai) cũng qua lượt model phân vai, và model trả
+  // được (`donVai` khác null, cụm làm bằng có nguyên trong tin) thì MODEL quyết — luật chỉ đỡ khi model hỏng.
+  const coTheAiVai = !sellerRow && !imageUrl && !nhacMaSom && !VOICE_RE_KD.test(tKD) &&
+    (wantsSellLuat || (hoiMuaTho && !daCoHoSoMuaSom) || (!!dangTraLoiHoiVai && vaiDapLuat));
+  let cheDoAiVai = false;
+  if (coTheAiVai) {
+    const { data: cd, error: cdErr } = await client.rpc("cau_hinh", { p_key: "boc_tach_ai" });
+    if (cdErr) await ghiLoi(client, "chat-reply cau_hinh(boc_tach_ai) vai", cdErr.message);
+    cheDoAiVai = String(cd ?? "tat").trim() === "ai";
+  }
+  if (cheDoAiVai || nenHoiModelVai({
     coHoSoBan: !!sellerRow,
     raoTheoLuat: wantsSellLuat,
     muaTheoLuat: hoiMuaTho,
-    daCoHoSoMua: BUYER_PROFILE_FIELDS.some(([k]) => hoSoMuaSom?.[k] != null && hoSoMuaSom?.[k] !== ""),
+    daCoHoSoMua: daCoHoSoMuaSom,
     coAnh: !!imageUrl,
-    nhacMaCan: new RegExp(CODE_RE.source).test(textOrTag),
+    nhacMaCan: nhacMaSom,
     doiGoi: VOICE_RE_KD.test(tKD),
     text,
     traLoiCauVai: !!dangTraLoiHoiVai,
@@ -1970,6 +1985,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       await ghiLoi(client, "chat-reply phan vai (model)", e);
     }
   }
+  // Model đã quyết vai ở chế độ ai → mọi kết luận vai bằng từ khoá bên dưới (rao / mua / đáp vai / "chính chủ") không tính.
+  const vaiAiQuyet = cheDoAiVai && vaiModel !== null;
+  if (vaiAiQuyet) console.log("chat-reply: AI phan vai nguoi la", vaiModel);
   // SRS-5.1zzzzze (khách mô phỏng lần bảy: chủ nhà đã rao hỏi "phí 1% đó lấy từ chị hay từ bên mua nhà vậy?" → luật `hoiMuaTho` thấy
   // "mua nhà", rẽ người bán sang nhánh MUA, ghi hồ sơ mua "mua hay thuê: mua"). Lớp lỗi: đoán Ý đổi vai bằng từ khoá. Người ĐÃ có hồ sơ
   // bán mà luật thấy chữ mua / thuê / tìm → AI phân vai quyết (đọc theo nghĩa, có trích dẫn); luật chỉ đỡ khi model hỏng.
@@ -1990,9 +2008,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   // Model gật vai cho một câu KHÔNG tả căn ("đúng rồi e") chỉ mở hồ sơ bán (`gatVaiAi`), không coi câu đó là câu rao.
   const gatVaiAi = !!dangTraLoiHoiVai && vaiModel === "ban";
   // `let`: SRS-5.1zzzg — người bán ĐÃ CÓ tin mở thì "câu rao căn mới" do AI quyết (`can_khac`), sửa lại sau khi lượt AI chạy.
-  let wantsSell = wantsSellLuat || (vaiModel === "ban" && (!dangTraLoiHoiVai || coMuiBDS(text)));
+  let wantsSell = (!vaiAiQuyet && wantsSellLuat) || (vaiModel === "ban" && (!dangTraLoiHoiVai || coMuiBDS(text)));
   // Câu rao thì KHÔNG phải ý định mua, dù có chữ "mua" kể chuyện ("mua nhà cũ sửa lại bán").
-  const hoiMua = (muaTuLuat || vaiModel === "mua") && !wantsSell;
+  const hoiMua = ((!vaiAiQuyet && muaTuLuat) || vaiModel === "mua") && !wantsSell;
   // Phường trong câu rao, bắt trên bản bỏ dấu — chỉ lấy CON SỐ nên bỏ dấu
   // không mất gì. Tự kiểm 02/09 (bơm câu rao qua handler thật): "bán nhà P4
   // giá 5 tỷ 8 50m2" tạo tin với phường RỖNG — bản cũ chỉ hiểu "phường 4",
@@ -2025,15 +2043,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   // người này có dấu hiệu môi giới ("em là sale bên sàn…") — để lượt trả lời
   // "có căn cần bán" vẫn nhận đúng nhãn, không rơi về chính chủ vì câu trả lời
   // không nhắc lại chữ "môi giới" (tự kiểm 02/09).
-  const tuNhanCoBDS = wantsSell ||
+  const tuNhanCoBDS = wantsSell || gatVaiAi || (!vaiAiQuyet && (
     khop(
       /chính chủ|ký gửi|cần rao|muốn rao|đăng tin bán|đăng bán/i,
       /chinh chu|ky gui|can rao|muon rao|dang tin ban|dang ban/,
     ) ||
-    vaiDapLuat || gatVaiAi;
+    vaiDapLuat));
   // SRS-5.1zzzf: tin này chỉ là câu TRẢ LỜI câu hỏi vai (không tả căn) → bong bóng 🤖 nói đã hiểu gì, kèm câu bot đã hỏi.
   const cauVaiDaHoi = boGachCheo(CAU_HOI_VAI);
-  const hieuTraLoiVai = dangTraLoiHoiVai && !wantsSell && (vaiDapLuat || gatVaiAi) ? "cần rao bán, em mở hồ sơ người bán" : null;
+  const hieuTraLoiVai = dangTraLoiHoiVai && !wantsSell && ((!vaiAiQuyet && vaiDapLuat) || gatVaiAi) ? "cần rao bán, em mở hồ sơ người bán" : null;
   // ─── NHÃN chính chủ / môi giới — gán NGAY lúc bóc tách (quyết định chủ dự
   // án 02/09/2026: "gán nhãn khi bóc tách là họ có BĐS muốn bán"). Ai nói mình
   // CÓ bất động sản muốn bán là CHÍNH CHỦ; chỉ khi tự xưng môi giới mới là NMG
@@ -7528,7 +7546,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // bổ sung" và bot hỏi lại lần ba. Nay đọc lại ≤ 3 tin gần nhất của chủ nhà, tin nào trả lời được câu đang treo thì
       // lấy làm câu trả lời; không có thì xin lỗi và hỏi lại MỘT câu, không ghi gì vào tin.
       let dapAnTuTinTruoc = false;
-      if (laNoiDaTraLoi(dapAn) && !humanActive) {
+      // SRS-5.1zzzzzzz18: "đã trả lời rồi" do AI đọc (y_dinh da_noi_roi, có trích dẫn) — từ khoá ≤ 8 chữ chỉ đỡ khi AI không chạy.
+      const ydDaNoi = await yDinhAi();
+      if ((ydDaNoi !== undefined ? ydDaNoi?.loai === "da_noi_roi" : laNoiDaTraLoi(dapAn)) && !humanActive) {
         const tinTruoc = lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => boBaoLai(m.body) ?? "")
           // 27/09/2026 (test Zalo): "Giá 8.000.000.000" nằm cách "Cái giá hồi nãy đó" năm tin — đọc lại 8 tin.
           .map((b) => b.replace(/\[ảnh:[^\]]*\]/giu, " ").trim()).filter(Boolean).slice(-8).reverse();

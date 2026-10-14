@@ -34,6 +34,7 @@ Người nhắn là MỘT trong ba:
 - ban: người đang CÓ bất động sản muốn bán, cho thuê, sang nhượng, ký gửi — kể cả khi không nói chữ "bán": liệt kê căn CỦA MÌNH (vị trí, diện tích, giá, pháp lý), "để lại", "cần tiền nên ra", "chủ đi nước ngoài cần bán gấp", môi giới giới thiệu hàng đang có.
 - mua: người đang TÌM mua hoặc thuê — hỏi có căn nào, nêu ngân sách ("tầm", "khoảng", "dưới"), nêu nhu cầu (gần trường, gần bệnh viện, mấy phòng ngủ), hỏi giá khu vực để mua.
 - chua_ro: chào hỏi, câu chung chung, hỏi thăm, hoặc không đủ chữ để phân biệt.
+Đọc theo NGHĨA cả tin, không bắt từ khoá: "tìm nhà chính chủ", "mua nhà bán gấp giá tốt" là người MUA dù có chữ "chính chủ" / "bán"; "tôi có căn ở Q10, giờ muốn tìm căn Q5" là người MUA kể hoàn cảnh; "ban công", "chào bạn" không phải chữ "bán"; "cho thuê" là người có hàng, "đi thuê / cần thuê" là người tìm.
 Chỉ dựa vào chữ có trong tin, không đoán thêm. Nhầm người MUA thành người BÁN là lỗi đắt nhất — chỉ trả ban khi câu cho thấy người nhắn đang có hàng. Không chắc thì chua_ro: hỏi lại khách một câu rẻ hơn nhiều so với đoán sai.
 bang_chung phải là cụm chữ chép NGUYÊN từ tin, không viết lại.
 Có dòng "Câu trợ lý vừa hỏi" thì tin là câu TRẢ LỜI cho câu đó, đọc theo nghĩa của cả hai: trợ lý hỏi có cần rao bán bất động sản không mà khách GẬT (đúng rồi, đúng rồi e, vâng ạ, dạ phải, chuẩn luôn, ừa, có) → ban, bang_chung là lời gật; khách chối hoặc nói đang tìm mua / thuê → mua; khen, hỏi lại, nói chuyện khác → chua_ro.`;
@@ -74,7 +75,7 @@ export async function phanVaiBangModel(
       system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
       messages: [{
         role: "user",
-        content: `${daLaNguoiBan ? NGUOI_BAN_CU : ""}${cauBotVuaHoi ? `Câu trợ lý vừa hỏi: "${cauBotVuaHoi.slice(0, 300)}"\n` : ""}Tin nhắn: "${(text ?? "").slice(0, 600)}"`,
+        content: `${daLaNguoiBan ? NGUOI_BAN_CU : ""}${cauBotVuaHoi ? `Câu trợ lý vừa hỏi: "${cauBotVuaHoi.slice(0, 300)}"\n` : ""}Tin nhắn: "${(text ?? "").slice(0, 6000)}"`,
       }],
     });
     const k = docLong(VaiBoc, r.parsed_output);
