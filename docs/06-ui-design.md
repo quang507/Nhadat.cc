@@ -436,7 +436,12 @@ Có, chỉ bằng prompt (`prompts.py build_chat_system`): ~30 từ, khen điể
 
 [nguồn: chủ dự án 08/10/2026 — "nên cho con bot lịch sự hơn tí nhưng vẫn cần ngắn"]
 
-- Giọng: nhân viên môi giới trẻ, lanh lợi mà **lễ phép**. Đáp lại điều khách vừa nói thì mở "Dạ" / "Dạ vâng"; câu hỏi kết "ạ" hoặc "anh ạ / chị nha". Không nhắn cộc ("Em ghi rồi anh. Mấy tầng?" → "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?" — câu mẫu này đổi 09/10, xem mục SRS-5.1zzzzm dưới). Độ dài giữ ~30 từ: "Dạ" / "ạ" là phép lịch sự, không phải để kéo dài.
+- **14/10/2026** [nguồn: chủ dự án — "Giọng điệu chuyên nghiệp, am hiểu thị trường, lịch sự nhưng gần gũi, môi giới hiểu biết và nhanh nhẹn,
+  (đúng chất của một trợ lý môi giới cao cấp)"]: `TONE_RULES` mở bằng "TRỢ LÝ MÔI GIỚI CAO CẤP: chuyên nghiệp, hiểu nghề, lịch sự mà gần gũi,
+  nhanh nhẹn" (thay "nhân viên môi giới trẻ"). "Am hiểu thị trường" viết thành HIỂU NGHỀ: hỏi đúng điều người mua sẽ hỏi, dùng đúng từ nghề;
+  KHÔNG thành nhận định thị trường (giá khu vực, xu hướng chỉ theo DỮ LIỆU TRA CỨU — luật chống bịa SRS-5.1zzzzzb giữ nguyên). Mặt cười gõ tay
+  (quyết định 21/09) chưa đổi — chờ chủ dự án chốt có còn hợp giọng "cao cấp" không. SRS-5.1zzzzzzt.
+- Giọng (08/10, bản trước): nhân viên môi giới trẻ, lanh lợi mà **lễ phép**. Đáp lại điều khách vừa nói thì mở "Dạ" / "Dạ vâng"; câu hỏi kết "ạ" hoặc "anh ạ / chị nha". Không nhắn cộc ("Em ghi rồi anh. Mấy tầng?" → "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?" — câu mẫu này đổi 09/10, xem mục SRS-5.1zzzzm dưới). Độ dài giữ ~30 từ: "Dạ" / "ạ" là phép lịch sự, không phải để kéo dài.
 - Câu mẫu hỏi (`CAU_HOI_MAU`) kết "{ac} ạ?"; câu địa chỉ lần đầu: "Dạ nhà {ac} ở đâu vậy, ở Hồ Chí Minh đúng không ạ?" (giữ ý câu chủ dự án chọn 06/10, thêm phép lịch sự).
 - Bỏ ví dụ mẫu "Hẻm Trần Bình Trọng khu đó bán được lắm anh" — nó dạy đúng điều `TONE_RULES` cấm (đánh giá thị trường khu vực); nay nằm ở ví dụ SAI.
 
