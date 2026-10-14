@@ -5280,6 +5280,9 @@ DT-01 … DT-10 — 4 người chưa chốt, người thứ 5 chốt vào kho, m
 phiếu, tiện ích không chọi nhau, uy tín đổi kết quả, pháp lý dự án, view + `diem_tin` không đòi pháp lý căn hộ dự án đã có pháp lý. Tắt trọng
 số (mỗi phiếu 1) → DT-07 đỏ; bỏ điều kiện pháp lý dự án trong view → DT-09 đỏ. Bộ này bắt được một lỗi thật trước khi đẩy (thân `diem_tin`
 trong migration thiếu dòng `CREATE`). Mock e2e (`listing_missing_facts`, `diem_tin`) theo cùng luật; e2e 1426/1426.
+CI bắt thêm một lỗi của chính `20261014e` qua `bot/tests/null-ba-tri.mjs`: vế `l.property_type = 'chung_cu'` trong khối `NOT (…)` của view ra
+NULL khi tin chưa rõ loại → mất mọi câu còn thiếu của tin đó (cùng lớp 20260925b). Vá ở `20261014f` bằng `IS NOT DISTINCT FROM`; bài đó đỏ trên
+`schema.sql` cũ, xanh trên bản mới.
 
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
