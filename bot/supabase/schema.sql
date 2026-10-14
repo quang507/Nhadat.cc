@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-14 18:40 (giờ VN)
+-- Sinh lúc: 2026-10-14 23:00 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -501,6 +501,13 @@ create table if not exists public.phuong_cu (
   nguon text
 );
 
+create table if not exists public.project_fact_phieu (
+  fact_id bigint not null,
+  seller_id uuid not null,
+  diem integer not null default 0,
+  created_at timestamp with time zone not null default now()
+);
+
 create table if not exists public.project_facts (
   id bigint not null default nextval('project_facts_id_seq'::regclass),
   project_id uuid,
@@ -948,6 +955,9 @@ do $d$ begin
   alter table public.phuong_cu add constraint phuong_cu_ten_quan_cu_phuong_moi_key UNIQUE (ten, quan_cu, phuong_moi);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.project_fact_phieu add constraint project_fact_phieu_pkey PRIMARY KEY (fact_id, seller_id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_co_dich CHECK (((project_id IS NOT NULL) OR (COALESCE(btrim(ten_du_an), ''::text) <> ''::text)));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1157,6 +1167,12 @@ do $d$ begin
   alter table public.phuong_cu add constraint phuong_cu_phuong_moi_fkey FOREIGN KEY (phuong_moi) REFERENCES wards(ten) ON UPDATE CASCADE;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.project_fact_phieu add constraint project_fact_phieu_fact_id_fkey FOREIGN KEY (fact_id) REFERENCES project_facts(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.project_fact_phieu add constraint project_fact_phieu_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1260,6 +1276,7 @@ create index if not exists media_listing_id_idx ON public.media USING btree (lis
 create index if not exists messages_conv_seq_idx ON public.messages USING btree (conversation_id, seq DESC);
 create index if not exists messages_conv_time_idx ON public.messages USING btree (conversation_id, created_at);
 create index if not exists phuong_cu_nhung_hnsw ON public.phuong_cu USING hnsw (nhung extensions.vector_cosine_ops);
+create index if not exists project_fact_phieu_seller_id_idx ON public.project_fact_phieu USING btree (seller_id);
 create index if not exists project_facts_cho_duyet_idx ON public.project_facts USING btree (trang_thai, created_at DESC);
 create index if not exists project_facts_conversation_id_idx ON public.project_facts USING btree (conversation_id);
 CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (COALESCE((project_id)::text, lower(btrim(ten_du_an))), khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
@@ -1614,6 +1631,31 @@ begin
   return new;
 end;
 $function$
+;
+
+CREATE OR REPLACE FUNCTION public.ap_fact_du_an_vao_kho(p_id bigint, p_boi text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare f project_facts%rowtype;
+begin
+  select * into f from project_facts where id = p_id;
+  if not found or f.project_id is null then return false; end if;
+  if public.khoa_du_an_danh_sach(f.khoa) then
+    update projects
+       set amenities = (select jsonb_agg(distinct x)
+                          from jsonb_array_elements_text(coalesce(amenities, '[]'::jsonb) || to_jsonb(array[f.gia_tri])) x),
+           updated_at = now()
+     where id = f.project_id;
+  else
+    update projects set specs = coalesce(specs, '{}'::jsonb) || jsonb_build_object(f.khoa, f.gia_tri), updated_at = now()
+     where id = f.project_id;
+  end if;
+  update project_facts set trang_thai = 'da_duyet', duyet_at = now(), duyet_boi = p_boi where id = p_id;
+  return true;
+end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean)
@@ -3264,9 +3306,12 @@ begin
   if la_thue then
     if (f ? 'tien_coc') or (f ? 'thoi_han_thue') or (f ? 'phap_ly') or l.legal_status is not null or l.property_type = 'phong_tro' then d_pl := 10;
     else thieu := array_append(thieu, 'điều kiện thuê (cọc, thời hạn)'); end if;
-  elsif l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
-  -- 20261014d: căn hộ không có hoàn công, đất không có hoàn công — chữ thiếu theo loại.
-  else thieu := array_append(thieu, case when l.property_type = 'chung_cu' then 'pháp lý (sổ hồng riêng hay chung)'
+  elsif l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro'
+        -- 20261014e: căn hộ thuộc dự án mà kho dự án đã có pháp lý → pháp lý theo dự án, không thiếu, không hỏi.
+        or (l.property_type = 'chung_cu' and public.du_an_co_phap_ly(l.project_id)) then d_pl := 10;
+  -- 20261014d: căn hộ không có hoàn công, đất không có hoàn công — chữ thiếu theo loại. 20261014e: căn hộ hỏi "đã ra sổ hồng hay còn HĐMB",
+  -- không phải "sổ riêng hay chung" (chữ này đi thẳng vào câu lệnh model và model hỏi theo nó).
+  else thieu := array_append(thieu, case when l.property_type = 'chung_cu' then 'pháp lý (đã ra sổ hồng hay còn hợp đồng mua bán)'
                                          when la_dat then 'pháp lý (loại sổ)'
                                          else 'pháp lý (loại sổ, hoàn công)' end); end if;
 
@@ -3532,6 +3577,21 @@ AS $function$
            p.is_partner desc nulls last,
            p.geocode_at nulls first
   limit greatest(1, least(coalesce(p_limit, 30), 200))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.du_an_co_phap_ly(p_project_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select p_project_id is not null and exists (
+    select 1 from projects p
+     where p.id = p_project_id
+       and (coalesce(btrim(p.legal_status), '') <> ''
+            or coalesce(btrim(p.specs ->> 'phap_ly'), '') <> ''
+            or coalesce(btrim(p.specs ->> 'so_huu'), '') <> ''))
 $function$
 ;
 
@@ -3821,15 +3881,45 @@ CREATE OR REPLACE FUNCTION public.ghi_fact_du_an(p_project_id uuid, p_khoa text,
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare v_id bigint;
+declare v_id bigint; v_gt text := btrim(p_gia_tri); v_ten text := nullif(btrim(p_ten_du_an), ''); v_seller uuid; v_diem int := 0;
 begin
-  if coalesce(btrim(p_gia_tri), '') = '' then return null; end if;
-  if p_project_id is null and coalesce(btrim(p_ten_du_an), '') = '' then return null; end if;
-  insert into project_facts (project_id, ten_du_an, khoa, gia_tri, nguon, listing_id, conversation_id)
-  values (p_project_id, nullif(btrim(p_ten_du_an), ''), p_khoa, btrim(p_gia_tri),
-          coalesce(p_nguon, 'seller_chat'), p_listing_id, p_conversation_id)
-  on conflict do nothing
-  returning id into v_id;
+  if coalesce(v_gt, '') = '' then return null; end if;
+  if p_project_id is null and v_ten is null then return null; end if;
+  -- Cùng ý đã có (không phân biệt hoa thường) → dùng dòng đó; chưa có thì thêm.
+  select pf.id into v_id from project_facts pf
+   where pf.trang_thai <> 'bo' and pf.khoa = p_khoa
+     and coalesce(pf.project_id::text, lower(btrim(pf.ten_du_an))) = coalesce(p_project_id::text, lower(v_ten))
+     and lower(btrim(pf.gia_tri)) = lower(v_gt)
+   order by pf.id limit 1;
+  if v_id is null then
+    insert into project_facts (project_id, ten_du_an, khoa, gia_tri, nguon, listing_id, conversation_id)
+    values (p_project_id, v_ten, p_khoa, v_gt, coalesce(p_nguon, 'seller_chat'), p_listing_id, p_conversation_id)
+    on conflict do nothing
+    returning id into v_id;
+  end if;
+  if v_id is null then return null; end if;
+
+  -- Người bỏ phiếu: chủ tin (hoặc người bán của hội thoại).
+  select l.seller_id into v_seller from listings l where l.id = p_listing_id;
+  if v_seller is null and p_conversation_id is not null then
+    select c.seller_id into v_seller from conversations c where c.id = p_conversation_id;
+  end if;
+  if v_seller is not null then
+    begin
+      v_diem := coalesce((public.diem_nguoi_ban(v_seller) ->> 'diem')::int, 0);
+    exception when others then v_diem := 0;
+    end;
+    -- Một người một phiếu cho mỗi khoá đơn trị: nói giá trị khác thì phiếu chuyển sang giá trị mới.
+    if not public.khoa_du_an_danh_sach(p_khoa) then
+      delete from project_fact_phieu ph
+       using project_facts pf
+       where ph.fact_id = pf.id and ph.seller_id = v_seller and pf.id <> v_id and pf.khoa = p_khoa
+         and coalesce(pf.project_id::text, lower(btrim(pf.ten_du_an))) = coalesce(p_project_id::text, lower(v_ten));
+    end if;
+    insert into project_fact_phieu (fact_id, seller_id, diem) values (v_id, v_seller, v_diem)
+    on conflict (fact_id, seller_id) do update set diem = excluded.diem;
+    perform public.xet_dong_thuan_du_an(v_id);
+  end if;
   return v_id;
 exception when others then
   return null;   -- việc phụ, không được làm hỏng lượt trả lời khách
@@ -4302,6 +4392,16 @@ AS $function$
   select btrim(regexp_replace(
     regexp_replace(lower(public.bo_dau(coalesce(p, ''))), '[^a-z0-9 ]+', '', 'g'),
     '\s+', ' ', 'g'))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.khoa_du_an_danh_sach(p_khoa text)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select p_khoa in ('tien_ich_gan', 'tien_ich', 'ha_tang', 'khu_compound')
 $function$
 ;
 
@@ -7682,6 +7782,58 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.xet_dong_thuan_du_an(p_fact_id bigint)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  f project_facts%rowtype;
+  v_lead record;
+  v_khac numeric;
+  c_n constant int := 5;
+begin
+  select * into f from project_facts where id = p_fact_id;
+  if not found or f.trang_thai = 'bo' then return jsonb_build_object('chot', false); end if;
+  -- Nhóm cùng dự án + cùng khoá. Khoá danh sách: mỗi giá trị một nhóm riêng.
+  with nhom as (
+    select pf.id, pf.trang_thai, count(ph.seller_id)::int as n,
+           coalesce(sum(greatest(ph.diem, 10)) / 100.0, 0) as w
+      from project_facts pf
+      left join project_fact_phieu ph on ph.fact_id = pf.id
+     where pf.trang_thai <> 'bo'
+       and pf.khoa = f.khoa
+       and coalesce(pf.project_id::text, lower(btrim(pf.ten_du_an))) = coalesce(f.project_id::text, lower(btrim(f.ten_du_an)))
+       and (not public.khoa_du_an_danh_sach(f.khoa) or pf.id = f.id)
+     group by pf.id, pf.trang_thai
+  )
+  select n.*, (select coalesce(sum(o.w), 0) from nhom o where o.id <> n.id) as khac
+    into v_lead
+    from nhom n
+   order by n.w desc, n.n desc, n.id
+   limit 1;
+  if v_lead is null then return jsonb_build_object('chot', false); end if;
+  v_khac := v_lead.khac;
+  if v_lead.n < c_n or v_khac > v_lead.w / 3 then
+    return jsonb_build_object('chot', false, 'n', v_lead.n, 'w', round(v_lead.w, 2), 'khac', round(v_khac, 2));
+  end if;
+  if v_lead.trang_thai = 'cho_duyet' then
+    if not public.ap_fact_du_an_vao_kho(v_lead.id, 'dong_thuan') then
+      -- Chưa gắn dự án trong kho (chỉ có tên): đủ người rồi nhưng chưa có chỗ ghi — giữ hàng chờ.
+      return jsonb_build_object('chot', false, 'n', v_lead.n, 'vi', 'chua gan du an trong kho');
+    end if;
+  end if;
+  -- Phe thua (khoá đơn trị) → bỏ.
+  if not public.khoa_du_an_danh_sach(f.khoa) then
+    update project_facts pf set trang_thai = 'bo', duyet_at = now(), duyet_boi = 'dong_thuan'
+     where pf.id <> v_lead.id and pf.trang_thai <> 'bo' and pf.khoa = f.khoa
+       and coalesce(pf.project_id::text, lower(btrim(pf.ten_du_an))) = coalesce(f.project_id::text, lower(btrim(f.ten_du_an)));
+  end if;
+  return jsonb_build_object('chot', true, 'fact_id', v_lead.id, 'n', v_lead.n, 'w', round(v_lead.w, 2));
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.xoa_nguoi_theo_zalo(p_zalo text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -8431,7 +8583,7 @@ create or replace view public.listing_missing_facts as
    FROM listings l
      JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type) AND (rf.deal IS NULL OR rf.deal = l.deal)
      LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
-  WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type IS NOT NULL) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'so_wc'::text AND l.bathrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'no_hau'::text AND l.rear_width_m IS NOT NULL OR rf.fact_key = 'cach_mat_tien'::text AND l.distance_to_street_m IS NOT NULL OR rf.fact_key = 'can_goc'::text AND l.corner_lot IS NOT NULL OR rf.fact_key = 'thang_may'::text AND l.has_elevator IS NOT NULL OR rf.fact_key = 'thuong_luong'::text AND l.negotiable IS NOT NULL OR rf.fact_key = 'doanh_thu'::text AND l.rent_income_vnd IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'gap'::text AND l.gap IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'du_an_ten'::text AND l.project_id IS NOT NULL OR rf.fact_key = 'vi_tri'::text AND (COALESCE(btrim(l.location_raw), ''::text) <> ''::text OR COALESCE(btrim(l.street), ''::text) <> ''::text OR l.project_id IS NOT NULL) OR rf.fact_key = 'tang_phu'::text AND COALESCE(l.floors_text, ''::text) ~ '(lửng|sân thượng|hầm|áp mái)'::text OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
+  WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type IS NOT NULL) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'phap_ly'::text AND l.property_type = 'chung_cu'::property_type AND du_an_co_phap_ly(l.project_id) OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'so_wc'::text AND l.bathrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'no_hau'::text AND l.rear_width_m IS NOT NULL OR rf.fact_key = 'cach_mat_tien'::text AND l.distance_to_street_m IS NOT NULL OR rf.fact_key = 'can_goc'::text AND l.corner_lot IS NOT NULL OR rf.fact_key = 'thang_may'::text AND l.has_elevator IS NOT NULL OR rf.fact_key = 'thuong_luong'::text AND l.negotiable IS NOT NULL OR rf.fact_key = 'doanh_thu'::text AND l.rent_income_vnd IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'gap'::text AND l.gap IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'du_an_ten'::text AND l.project_id IS NOT NULL OR rf.fact_key = 'vi_tri'::text AND (COALESCE(btrim(l.location_raw), ''::text) <> ''::text OR COALESCE(btrim(l.street), ''::text) <> ''::text OR l.project_id IS NOT NULL) OR rf.fact_key = 'tang_phu'::text AND COALESCE(l.floors_text, ''::text) ~ '(lửng|sân thượng|hầm|áp mái)'::text OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
            FROM listing_media m
           WHERE m.listing_id = l.id)))
   ORDER BY l.id, rf.priority, rf.fact_key;
@@ -8654,6 +8806,7 @@ alter table public.nhung_viec enable row level security;
 alter table public.nhung_viec_dia_danh enable row level security;
 alter table public.nhung_viec_du_an enable row level security;
 alter table public.phuong_cu enable row level security;
+alter table public.project_fact_phieu enable row level security;
 alter table public.project_facts enable row level security;
 alter table public.projects enable row level security;
 alter table public.property_events enable row level security;
@@ -8782,6 +8935,8 @@ drop policy if exists messages_admin_read on public.messages;
 create policy messages_admin_read on public.messages as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists project_fact_phieu_admin_read on public.project_fact_phieu;
+create policy project_fact_phieu_admin_read on public.project_fact_phieu as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists project_facts_admin_read on public.project_facts;
 create policy project_facts_admin_read on public.project_facts as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists anon_read_projects on public.projects;
@@ -8877,6 +9032,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nh
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.phuong_cu to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_fact_phieu to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts_cho_duyet to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.projects to service_role;
@@ -8956,6 +9112,7 @@ grant SELECT on public.khach_can_nguoi_that to authenticated;
 grant SELECT on public.listing_media to anon;
 grant SELECT on public.listing_photos_v to anon;
 grant SELECT on public.listing_photos_v to authenticated;
+grant SELECT on public.project_fact_phieu to authenticated;
 grant SELECT on public.project_facts to authenticated;
 grant SELECT on public.project_facts_cho_duyet to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
@@ -8990,6 +9147,8 @@ revoke all on function public.ai_ghi_thu_che_so() from public, anon, authenticat
 grant execute on function public.ai_ghi_thu_che_so() to anon;
 grant execute on function public.ai_ghi_thu_che_so() to authenticated;
 grant execute on function public.ai_ghi_thu_che_so() to service_role;
+revoke all on function public.ap_fact_du_an_vao_kho(p_id bigint, p_boi text) from public, anon, authenticated;
+grant execute on function public.ap_fact_du_an_vao_kho(p_id bigint, p_boi text) to service_role;
 revoke all on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) from public, anon, authenticated;
 grant execute on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) to service_role;
 revoke all on function public.ask_seller_drip(p_listing_id uuid) from public, anon, authenticated;
@@ -9143,6 +9302,8 @@ grant execute on function public.du_an_can_doc_gia() to authenticated;
 grant execute on function public.du_an_can_doc_gia() to service_role;
 revoke all on function public.du_an_can_geocode(p_limit integer) from public, anon, authenticated;
 grant execute on function public.du_an_can_geocode(p_limit integer) to service_role;
+revoke all on function public.du_an_co_phap_ly(p_project_id uuid) from public, anon, authenticated;
+grant execute on function public.du_an_co_phap_ly(p_project_id uuid) to service_role;
 revoke all on function public.duong_gan_duong(p_ten text, p_phuong text, p_ban_kinh_m double precision, p_limit integer) from public, anon, authenticated;
 grant execute on function public.duong_gan_duong(p_ten text, p_phuong text, p_ban_kinh_m double precision, p_limit integer) to service_role;
 revoke all on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) from public, anon, authenticated;
@@ -9215,6 +9376,10 @@ grant execute on function public.jsonb_bo_rong(j jsonb) to service_role;
 revoke all on function public.kd_ten(p text) from public, anon, authenticated;
 grant execute on function public.kd_ten(p text) to authenticated;
 grant execute on function public.kd_ten(p text) to service_role;
+revoke all on function public.khoa_du_an_danh_sach(p_khoa text) from public, anon, authenticated;
+grant execute on function public.khoa_du_an_danh_sach(p_khoa text) to anon;
+grant execute on function public.khoa_du_an_danh_sach(p_khoa text) to authenticated;
+grant execute on function public.khoa_du_an_danh_sach(p_khoa text) to service_role;
 revoke all on function public.khoang_cach_m(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) from public, anon, authenticated;
 grant execute on function public.khoang_cach_m(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) to authenticated;
 grant execute on function public.khoang_cach_m(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) to service_role;
@@ -9471,6 +9636,8 @@ revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, 
 grant execute on function public.viec_inbound_bo_roi(p_limit integer) to service_role;
 revoke all on function public.viewings_bao_ctv_va_email() from public, anon, authenticated;
 grant execute on function public.viewings_bao_ctv_va_email() to service_role;
+revoke all on function public.xet_dong_thuan_du_an(p_fact_id bigint) from public, anon, authenticated;
+grant execute on function public.xet_dong_thuan_du_an(p_fact_id bigint) to service_role;
 revoke all on function public.xoa_nguoi_theo_zalo(p_zalo text) from public, anon, authenticated;
 grant execute on function public.xoa_nguoi_theo_zalo(p_zalo text) to service_role;
 revoke all on function public.xuat_schema() from public, anon, authenticated;
