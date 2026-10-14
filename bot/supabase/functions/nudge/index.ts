@@ -28,7 +28,7 @@ import {
 import { laTinNoiBo } from "../_shared/tin_nhac.ts";
 import { congBiMat } from "../_shared/gate.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
-import { dienTen, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
+import { dienTen, KHO_TEN_TRO_LY, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
 
 // FR-61: kịch bản reengage — XOAY VÒNG TẤT ĐỊNH theo số lần đã hỏi thăm khách
 // đó (mọi trạng thái) % số góc, không random: hai lượt chạy khác nhau cho cùng
@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
   // FR-181: tone viết "{ten}" — điền tên trợ lý riêng của người nhận (cùng hàm
   // băm với chat-reply, nên cùng Zalo ID là cùng tên) ngay trước mỗi lượt gọi.
   const TONE_MAU = toneRow?.content ?? TONE_RULES;
-  const toneCua = (zalo?: string | null) => dienTen(TONE_MAU, zalo ? tenTroLy(zalo) : "T•ai");
+  const toneCua = (zalo?: string | null) => dienTen(TONE_MAU, zalo ? tenTroLy(zalo) : KHO_TEN_TRO_LY[0]);
   const out: Record<string, unknown>[] = [];
 
   // ---- 0. Escalation (FR-140): khách hỏi căn không có chính chủ → báo CTV/admin.
@@ -385,7 +385,7 @@ Deno.serve(async (req) => {
         messages: [{
           role: "user",
           content: r.kind === "viewing"
-            ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là ${who?.zalo_user_id ? tenTroLy(who.zalo_user_id) : "T•ai"}, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
+            ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là ${who?.zalo_user_id ? tenTroLy(who.zalo_user_id) : KHO_TEN_TRO_LY[0]}, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
             // FR-140 c (02/09): chủ nhà vừa trả lời câu khách hỏi → báo lại ĐÚNG câu
             // trả lời, không phải "kể thêm một chi tiết". Trigger DB đặt ghi chú bắt
             // đầu bằng "chủ nhà vừa trả lời" (20260902h).

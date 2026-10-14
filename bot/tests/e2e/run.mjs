@@ -303,7 +303,7 @@ fresh();
 let r = await send({ external_user_id: "la-1", text: "chào em" });
 check("V1.1 lạ 'chào em' → hỏi vai, không gọi model; KHÔNG kèm 'anh Thu phụ trách khu vực' (FR-218 a)", r.body.hoi_vai === true && /cần rao bán bất động sản đúng không ạ\?/.test(r.body.reply) && !/anh Thu|phụ trách/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
 // FR-181 (09/09 chiều): lời chào xưng TÊN TRỢ LÝ RIÊNG của khách này (băm từ Zalo ID), không còn "Thái".
-check("V1.1b lời chào xưng tên trợ lý riêng (T•ai/Kh•ai…), không phải Thái, không còn {ten}", new RegExp(`em là ${tenTroLy("la-1").replace("•", "\\u2022")} bên`).test(r.body.reply) && !/Thái|\{ten\}/.test(r.body.reply), r.body.reply);
+check("V1.1b lời chào xưng tên trợ lý riêng (tên người thật theo Zalo ID), không phải Thái, không còn {ten}", new RegExp(`em là ${tenTroLy("la-1").replace("•", "\\u2022")} bên`).test(r.body.reply) && !/Thái|\{ten\}/.test(r.body.reply), r.body.reply);
 check("V1.1 cờ hoi_vai lưu trên buyer", db().t.buyers[0]?.preferences?.hoi_vai === true);
 check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /cần rao bán bất động sản/.test(m.body)));
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
@@ -1359,7 +1359,7 @@ fresh(seedKho);
       // 13/10/2026 tối (SRS-5.1zzzzzza, chủ dự án "câu này tách ra với câu dưới"): câu điểm KHÔNG kèm câu hỏi duyệt / 👉 — bong bóng thứ ba mang
       // câu hỏi duyệt và kết bằng 👉.
       !/nhắn Zalo cho em/.test(nhap) && (() => { const i = r.body.replies.findIndex((x) => /Em sẽ rao như vầy/.test(x)); const sau = r.body.replies[i + 1] ?? ""; const hoi = r.body.replies[i + 2] ?? "";
-        return i >= 0 && !/Độ đầy đủ|👉/.test(r.body.replies[i]) && /^Độ đầy đủ \d+\/100/.test(sau) && !/👉/.test(sau) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(hoi); })() && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ rao như vầy/.test(prompt(c))) &&
+        return i >= 0 && !/Độ đầy đủ|👉/.test(r.body.replies[i]) && /^Độ đầy đủ \d+\/100/.test(sau) && !/👉/.test(sau) && /\n👉 Có khách quan tâm là \S+ báo lại .+ liền ạ\.$/.test(hoi); })() && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ rao như vầy/.test(prompt(c))) &&
       pend("duyet_tin") && H.status === "cho_thong_tin",
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });

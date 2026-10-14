@@ -5006,6 +5006,24 @@ thì tiêu đề phải có tên đó.
 **Kiểm (đỏ khi tắt).** `bun bot/tests/tin-nhap-rao.mjs` CC-TEN-3…8 (code ghép, AI không chữ căn hộ, đã có tên, tiêu đề khách, chữ dẫn "Dự án",
 đối chứng nhà phố).
 
+### SRS-5.1zzzzzzz9 · Tên trợ lý là tên người thật, giọng người 28–40 tuổi (14/10/2026)
+
+**Nguồn.** Chủ dự án 14/10: "Mấy cái tên Ph•ai các thứ chấm ai xoá đi đổi lại thành tầm 20 cái tên thật đi xưng em như người 28 đến 40 tuổi
+ramdom". Thay quyết định FR-181 (09/09/2026: kho tên "phụ âm + •ai").
+
+**Lớp lỗi.** Không phải lỗi — đổi quyết định sản phẩm. Chỗ cùng lớp cần đổi theo: tên lưu trong `sellers.ten_tro_ly` /
+`buyers.preferences.ten_tro_ly` (trước đây chỉ ghi khi trống nên khách cũ giữ tên "•ai" mãi), câu nhắc `ask-seller` (đọc tên lưu trước),
+tên dự phòng "T•ai" trong `nudge` / `ask-seller`, bài kiểm và bản xuất SRD.
+
+**Quy tắc.** `KHO_TEN_TRO_LY` (`prompts.ts`) là 20 tên người thật (10 nữ, 10 nam), tránh tên trùng địa danh dễ nhầm (Bình, Long, Vinh, Nam,
+Hà) để lưới soát địa danh không bắt nhầm. "Random" = mỗi khách một tên khác nhau, vẫn gán theo Zalo ID (băm tất định) và giữ suốt — không
+đổi tên giữa chừng (`TONE_RULES`). Tên lưu được ghi lại khi khác tên đang dùng (không chỉ khi trống); `ask-seller` tính tên từ Zalo ID trước,
+cột lưu chỉ là bản sao cho CRM. `TONE_RULES` thêm giọng người 28–40 tuổi làm nghề. Hỏi thẳng "người hay máy" vẫn nói thật là trợ lý AI (giữ
+nguyên luật cũ).
+
+**Kiểm.** `fr177-hoi-nhu-moi-gioi-gioi.mjs` (20 tên, không "•ai", không trùng, không tên địa danh; tất định theo ID); e2e V1.1b (lời chào xưng
+đúng tên theo Zalo ID), 1408/1408 đạt. Sau merge đẩy `tone_rules` lên `bot_prompts`.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

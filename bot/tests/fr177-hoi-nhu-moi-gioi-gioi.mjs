@@ -203,11 +203,13 @@ ok("câu mẫu địa chỉ lần ĐẦU: hỏi thẳng kèm phỏng đoán, kh�
 ok("câu mẫu địa chỉ hỏi LẠI: không lý do, dưới 12 từ", !/kiểm tra giá|giá thị trường/.test(cauHoiMau("vi_tri", "anh")) && cauHoiMau("vi_tri", "anh").split(/\s+/).length <= 12, cauHoiMau("vi_tri", "anh"));
 
 // ── FR-181 — tên trợ lý theo khách: tất định, trong kho, giữ nguyên ─────────
-ok("kho tên có 20 tên, có T•ai và Kh•ai, không có P•ai", KHO_TEN_TRO_LY.length === 20 && KHO_TEN_TRO_LY.includes("T•ai") && KHO_TEN_TRO_LY.includes("Kh•ai") && !KHO_TEN_TRO_LY.includes("P•ai"));
+// SRS-5.1zzzzzzz9 (14/10/2026): 20 tên người thật, không còn kiểu "T•ai"; không tên trùng địa danh hay trùng nhau.
+ok("kho tên có 20 tên người thật, không có '•ai', không trùng", KHO_TEN_TRO_LY.length === 20 && KHO_TEN_TRO_LY.every((t) => !/•|ai$/i.test(t) && /^\p{Lu}\p{Ll}+$/u.test(t)) && new Set(KHO_TEN_TRO_LY).size === 20);
+ok("kho tên không có tên trùng địa danh dễ nhầm (Bình, Long, Vinh, Nam, Hà)", !["Bình", "Long", "Vinh", "Nam", "Hà"].some((t) => KHO_TEN_TRO_LY.includes(t)));
 ok("cùng Zalo ID → cùng tên", tenTroLy("zalo-123") === tenTroLy("zalo-123"));
 ok("tên luôn nằm trong kho", ["a", "b", "c", "zalo-9", "7158321"].every((u) => KHO_TEN_TRO_LY.includes(tenTroLy(u))));
 ok("khác ID có thể khác tên (ít nhất 3 tên trong 40 ID)", new Set(Array.from({ length: 40 }, (_, i) => tenTroLy(`u${i}`))).size >= 3);
-ok("dienTen điền mọi {ten}", dienTen("em là {ten}, {ten} đây", "T•ai") === "em là T•ai, T•ai đây");
+ok("dienTen điền mọi {ten}", dienTen("em là {ten}, {ten} đây", "Thảo") === "em là Thảo, Thảo đây");
 
 console.log(hong ? `\nFR-177: ${hong}/${tong} CA HỎNG` : `\nFR-177: ${tong}/${tong} CA ĐẠT`);
 // 21/09/2026 (bắn thật mau-tdt): "nhà ở đường trần đình trọng quận 5" là ĐỊA CHỈ, từng thành tiềm năng "nhà ở"
