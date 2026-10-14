@@ -6947,6 +6947,89 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     globalThis.__cauHinh = cuCHh;
     globalThis.__model.parse = () => OUT();
   }
+  // SRS-5.1zzzzzzi (Zalo thật 14/10 08:39, hội thoại …f0e0): "giờ anh bận, mai nói tiếp 8 giờ 45 sáng" tới khi lượt anh em vừa MỞ câu duyệt
+  // mà chưa gửi 📋 → bot "Bản nháp ở trên anh thấy được thì nhắn ok" (khách chưa thấy bản nháp nào), không hẹn, không nhắc.
+  {
+    const laLuotBocRaoHD = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+    const AI_RONG_HD = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+      hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null } };
+    const aiHD = (yd) => (p) => laLuotBocRaoHD(p) ? { ...AI_RONG_HD, ...(yd ? { y_dinh: yd } : {}) } : OUT();
+    const cuCHi = globalThis.__cauHinh;
+    const CAU_HOAN = "giờ anh bận, mai nói tiếp 8 giờ 45 sáng";
+    const YD_HOAN = { loai: "hoan", trich_dan: "mai nói tiếp 8 giờ 45 sáng" };
+    const mocMai845 = (iso) => { const d = new Date(iso); return d.getUTCHours() === 1 && d.getUTCMinutes() === 45 && d.getTime() > Date.now(); }; // 08:45 VN = 01:45Z
+    const moHD = async () => {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = aiHD(null);
+      const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+      const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+      sC.active_listing_id = tin.id; tin.status = "cho_thong_tin"; tin.chu_duyet_at = null;
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: tin.id, question: "huong", status: "pending" });
+      await send({ external_user_id: "z-ccrb", text: "hướng đông em" }); // mở hội thoại + có lời bot
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      const conv = db().t.conversations.find((c) => c.seller_id === sC.id);
+      return { tin, conv };
+    };
+    // (1) Câu duyệt THẬT (📋 đã gửi) + hoãn kèm giờ → một câu chờ, nói lại mốc "mai 8h45", nhắc promise 01:45Z, câu duyệt vẫn treo, không ép "nhắn ok là em đăng liền".
+    {
+      const { tin, conv } = await moHD();
+      db().insert("info_requests", { listing_id: tin.id, question: "duyet_tin", status: "pending" });
+      db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "📋 Bản nháp tin của anh:\nNhà 99 Nguyễn Trãi…\nĐộ đầy đủ 80/100" });
+      globalThis.__model.parse = aiHD(YD_HOAN);
+      const nRem = db().t.reminders.length;
+      r = await send({ external_user_id: "z-ccrb", text: CAU_HOAN });
+      const rep = r.body.replies.filter((x) => !x.startsWith("🤖")).join(" ");
+      const remMoi = db().t.reminders.slice(nRem).filter((x) => x.kind === "promise");
+      check("HOANDUYET-01 hoãn kèm giờ lúc chờ duyệt (📋 đã gửi) → loai_cau hoan, nói 'mai 8h45 em nhắn lại', KHÔNG 'nhắn ok là em đăng liền', câu duyệt treo, chưa duyệt, không 📋 lại",
+        r.body.hoan === true && r.body.loai_cau === "hoan" && r.body.hen_nhac === true && /mai 8h45 em nhắn lại anh/i.test(rep) && !/nhắn "ok" là em đăng liền/.test(rep) &&
+          db().t.info_requests.some((x) => x.listing_id === tin.id && x.question === "duyet_tin" && x.status === "pending") && !tin.chu_duyet_at && !r.body.replies.some((x) => x.startsWith("📋")),
+        JSON.stringify({ body: r.body, ir: db().t.info_requests.filter((x) => x.status === "pending").map((x) => x.question) }));
+      check("HOANDUYET-01b nhắc promise đúng mốc 8 giờ 45 sáng mai (01:45Z, phút được đọc), ghi chú có nguyên câu", remMoi.length === 1 && remMoi[0].seller_id && mocMai845(remMoi[0].due_at) && /hẹn nói tiếp/.test(remMoi[0].note ?? "") && remMoi[0].note.includes("8 giờ 45"),
+        JSON.stringify(remMoi));
+    }
+    // (2) Lượt anh em đang bay: tin chủ nhà trước chưa được trả lời, câu duyệt vừa mở, KHÔNG có 📋 → câu đó không phải câu treo của lượt này:
+    //     đi đường hoãn thường (một câu chờ + hẹn), KHÔNG "Bản nháp ở trên".
+    {
+      const { tin, conv } = await moHD();
+      // Lịch sử lùi 200 s: lời bot cuối (có thể là 📋 nháp sớm của lượt mở) phải cũ hơn mốc câu duyệt mới quá 60 s.
+      for (const m of db().t.messages) m.created_at = new Date(Date.parse(m.created_at) - 200_000).toISOString();
+      db().insert("messages", { conversation_id: conv.id, sender: "seller", body: "có sổ đỏ chính chủ nha", zalo_msg_id: "hd-2a", created_at: new Date(Date.now() - 8_000).toISOString() });
+      db().insert("info_requests", { listing_id: tin.id, question: "duyet_tin", status: "pending", created_at: new Date(Date.now() - 5_000).toISOString() });
+      globalThis.__model.parse = aiHD(YD_HOAN);
+      const nRem = db().t.reminders.length;
+      r = await send({ external_user_id: "z-ccrb", text: CAU_HOAN });
+      const rep = r.body.replies.filter((x) => !x.startsWith("🤖")).join(" ");
+      check("HOANDUYET-02 câu duyệt do lượt anh em vừa mở (chưa 📋, tin trước chưa được trả lời) → bỏ qua câu đó: hoãn thường, KHÔNG 'Bản nháp ở trên', có hẹn 'mai 8h45', nhắc promise",
+        r.body.hoan === true && !r.body.superseded && !/Bản nháp ở trên/.test(rep) && /mai 8h45/i.test(rep) && db().t.reminders.slice(nRem).some((x) => x.kind === "promise" && mocMai845(x.due_at)),
+        JSON.stringify({ body: r.body, rep }));
+    }
+    // (3) Đối chứng: câu duyệt KHÔNG 📋 nhưng không có tin chủ nhà nào chưa trả lời (lời bot là tin cuối) → vẫn là câu treo như cũ ("😂😂" → nhắn "ok").
+    {
+      const { tin } = await moHD();
+      db().insert("info_requests", { listing_id: tin.id, question: "duyet_tin", status: "pending" });
+      r = await send({ external_user_id: "z-ccrb", text: "😂😂" });
+      check("HOANDUYET-03 đối chứng: câu duyệt mới mở, không 📋 trong lịch sử nhưng không tin nào chưa trả lời → vẫn câu treo (emoji → nhắn 'ok')",
+        r.body.loai_cau === "emoji" && /nhắn "ok"/.test(r.body.replies.join(" ")), JSON.stringify(r.body));
+    }
+    // (4) Hoãn kèm giờ ở câu treo thường (không duyệt) → câu chờ cũng nói lại mốc + nhắc (một chủ `datHenHoan`).
+    {
+      const { tin } = await moHD();
+      db().insert("info_requests", { listing_id: tin.id, question: "phap_ly", status: "pending" });
+      globalThis.__model.parse = aiHD({ loai: "hoan", trich_dan: "mai 3 giờ chiều nói tiếp" });
+      const nRem = db().t.reminders.length;
+      r = await send({ external_user_id: "z-ccrb", text: "anh đang họp, mai 3 giờ chiều nói tiếp nha" });
+      const rep = r.body.replies.filter((x) => !x.startsWith("🤖")).join(" ");
+      const rem = db().t.reminders.slice(nRem).filter((x) => x.kind === "promise");
+      check("HOANDUYET-04 hoãn kèm giờ khi đang treo câu pháp lý → câu chờ nói lại mốc 'mai 15h', nhắc promise lúc 08:00Z (15h VN), câu pháp lý vẫn treo",
+        r.body.hoan === true && /mai 15h em nhắn lại/i.test(rep) && rem.length === 1 && new Date(rem[0].due_at).getUTCHours() === 8 && new Date(rem[0].due_at).getUTCMinutes() === 0 &&
+          db().t.info_requests.some((x) => x.listing_id === tin.id && x.question === "phap_ly" && x.status === "pending"),
+        JSON.stringify({ body: r.body, rem }));
+    }
+    globalThis.__cauHinh = cuCHi;
+    globalThis.__model.parse = () => OUT();
+  }
   // SRS-5.1zzzzzzd (chủ dự án 13/10: "tin đợt trước nó đọc đủ thông tin rồi mà không ra tin nháp mà ra cái bảng nhỏ nhỏ là vì sao"):
   // câu rao ĐỦ ĐIỂM (≥ 70, giá đọc ra số) → bản nháp NGAY ở lượt câu rao, không hỏi câu cơ bản còn thiếu; công tắc `nhap_som = tat` về đường cũ.
   {

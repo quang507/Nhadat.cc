@@ -221,8 +221,10 @@ KHOÁ:
   mat_do_xd, tang_cao_toi_da, tai_trong_san, toa_thap (toà / block), khu_compound, ha_tang, fit_out, duong_container (xe
   container vào được không), tram_bien_ap, xu_ly_nuoc_thai, nguon_nuoc, ranh_gioi, hinh_thuc_thue_dat (trả tiền một lần /
   hằng năm), hien_trang_su_dung (chủ ĐANG Ở / đang cho thuê / để trống — không phải hien_trang), truot_gia.
-- Pháp lý chi tiết (ô chữ, viết lại CÓ DẤU đúng ý khách, không thêm ý): nguoi_dung_ten (AI đứng tên sổ: "anh đứng tên", "ba anh đứng
-  tên", "vợ chồng đứng tên" — chữ "anh/chị" ở đây là chính chủ nhà, KHÔNG phải tên người), dong_so_huu_voi (đứng tên chung với ai),
+- Pháp lý chi tiết (ô chữ, viết lại CÓ DẤU đúng ý khách, không thêm ý): nguoi_dung_ten (AI đứng tên sổ — CHỈ khi khách nói AI đứng
+  tên: "anh đứng tên", "ba anh đứng tên", "vợ chồng đứng tên" — chữ "anh/chị" ở đây là chính chủ nhà, KHÔNG phải tên người; "sổ đỏ chính
+  chủ" / "sổ hồng chính chủ" / "giấy tờ chính chủ" là PHÁP LÝ (phap_ly "sổ đỏ" / "sổ hồng"), KHÔNG phải nguoi_dung_ten — "chính chủ" cạnh
+  chữ sổ nói về giấy tờ, không nói ai đứng tên), dong_so_huu_voi (đứng tên chung với ai),
   dong_y_ban (các bên đứng tên đã đồng ý bán chưa), so_huu (lâu dài / 50 năm), giay_to_hien_co (giấy tờ đang có khi chưa có sổ: hợp đồng
   mua bán, vi bằng), du_kien_ra_so (khi nào ra sổ), ban_giao (đã nhận bàn giao chưa), dien_tich_khop_so (diện tích thực tế khớp sổ không).
 - Khác: tang_phu (lửng, sân thượng, tầng hầm), gia_dien_nuoc (giá điện nước cho thuê), gio_giac (giờ giấc ra vào), nganh_hang_phu_hop
