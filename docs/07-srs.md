@@ -4582,6 +4582,18 @@ trên"), 03 (đối chứng: câu duyệt mới không 📋 nhưng không tin n�
 trên", không nhắc). Cách nói mới chưa bắn: "để tối anh coi rồi trả lời", "chủ nhật này nói tiếp em nha", "sổ hồng chính chủ không thế chấp".
 Còn lại ngoài phạm vi: 🤖 cho câu lệnh "tiếp đi em" vẫn in "Không trích xuất được gì" (lượt đó bản nháp vẫn gửi đúng).
 
+### SRS-5.1zzzzzzj · Bản nháp: gộp dòng "🏫 Tiện ích" vào dòng "📝 Thêm" (14/10/2026)
+
+**Nguồn.** Chủ dự án 14/10 (ảnh bản nháp 105/12 Trần Bình Trọng: "📝 Thêm: hiện trạng đang để trống" và "🏫 Tiện ích: mặt tiền 4m · gần cầu
+Phú Xuân" là hai dòng rời): "để ô tiện ích và thêm gộp lại luôn". Quyết định trình bày, không phải lỗi bóc tách.
+
+**Quy tắc.** `tin-nhap.ts` in MỘT dòng "📝 Thêm": phần tiện ích đi trước (mặt tiền từ cột `frontage_m`, tiện ích khách liệt kê `tien_ich_gan`,
+ý thêm AI xếp tiện ích / chọn lọc theo SRS-5.1zzzzzz), rồi tình trạng nhà, hiện trạng sử dụng, ý thêm còn lại. Mọi luật cũ của hai dòng
+giữ nguyên (chọn lọc ≤ 4 ý, không lặp ô đã có, hiện trạng trùng ý kết cấu không in). Không còn dòng 🏫.
+
+**Kiểm.** `tin-nhap-rao.mjs` (dòng gộp đúng thứ tự, không còn 🏫; TIENICH-1, TIENICH-AI-1/2, TIENICH-CHON-1…3, ZZZZZ-T2 đổi kỳ vọng), e2e
+ZZZZZZ-01/01b (phần tiện ích chọn lọc nằm đầu dòng Thêm, không dòng 🏫).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
