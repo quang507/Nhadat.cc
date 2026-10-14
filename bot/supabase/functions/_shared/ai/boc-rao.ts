@@ -205,7 +205,8 @@ KHOÁ:
   co = "bán gấp", "cần tiền gấp", "kẹt tiền", "kẹt bank", "ngộp ngân hàng / ngộp bank", "cắt lỗ cũng bán", "cần ra hàng sớm", "ra nhanh trong tháng".
   Một tin có cả giá lẫn ý gấp ("16 tỉ em, rao khi nào được giá thì thôi") → đưa CẢ HAI trường, không chỉ giá.
 - loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
-  cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền đường", "mặt đường", "mặt phố", "nhà mặt tiền" (không kèm số đo ngay sau),
+  cả phủ định. CĂN HỘ chung cư không có đường trước nhà: "căn hộ ngay mặt tiền Quốc lộ 1", "dự án mặt tiền Nguyễn Văn Linh" là vị trí
+  của DỰ ÁN → tien_ich_gan, KHÔNG đưa loai_duong_vao / do_rong_duong. Còn lại: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền đường", "mặt đường", "mặt phố", "nhà mặt tiền" (không kèm số đo ngay sau),
   "mặt tiền / MT + TÊN ĐƯỜNG" ("căn 2 mặt tiền Hồng Bàng", "nhà MT Nguyễn Trãi") → mat_tien (tin nhiều căn: đưa riêng cho đúng căn). "MT",
   "MTKD", "MTNB", "mặt tiền kinh doanh", "mặt tiền nội bộ" là viết tắt CHUẨN của nghề = nhà nằm mặt tiền → LUÔN đưa loai_duong_vao mat_tien (trích
   đúng chữ "MT" / "MTKD"), kể cả khi tin còn số đo ở chỗ khác ("Bán nhà MT Nguyễn Trãi Q5, 5x20" → mat_tien + ngang 5 + dai 20); chỉ khi số
@@ -260,6 +261,8 @@ dù bot đang HỎI thông tin hay đang đưa bản nháp → du_roi (trich_dan
 Chủ nhà bảo THÔI HỎI mà không nói "đăng" — "đủ rồi em", "nhiêu đó thôi cháu", "vậy được rồi, khỏi hỏi nữa" — đáp NGAY sau câu bot hỏi
 mà không trả lời câu đó → cũng là du_roi.
 Chủ nhà bảo SỬA / chỉnh lại ("sửa lại giúp mình", "bạn chỉnh lại nhé", "đổi lại địa chỉ") → binh_thuong, KHÔNG phải du_roi.
+Chữ "ok / được / ổn / đăng" đứng sau "chưa / không / ko / hông" là PHỦ ĐỊNH — "chị thấy chưa ok", "chưa ổn em", "không ok lắm",
+"chưa đăng được đâu" → binh_thuong, KHÔNG phải du_roi; đọc nghĩa CẢ câu, không bắt riêng chữ "ok".
 Câu TẢ căn nhà có chữ "hết rồi" / "rồi" ("xây kín hết rồi em", "sổ có rồi") → binh_thuong.
 
 CÂU HỎI KẾ ("cau_ke") — có danh sách "Câu bot còn định hỏi" thì chọn MỘT câu nên hỏi tiếp, như môi giới giỏi: (1) thông tin cần
@@ -371,7 +374,8 @@ export async function bocRaoBangModel(
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   // 02/10/2026 (test Zalo: khách dán nguyên tin rao 700+ chữ có gạch đầu dòng): tin dài không được cắt — 1.200 chữ cũ cắt mất
   // phần pháp lý / kết cấu ở cuối tin rao dài. Trần 4.000 chỉ để chặn tin rác cực dài.
-  const tin = text.slice(cheDoChot ? -6000 : 0, cheDoChot ? undefined : 4000);
+  // 14/10/2026: nơi gọi nối tin cũ của chủ nhà TRƯỚC tin mới — cắt đầu 4.000 làm rơi chính tin đang đọc; giữ 12.000 chữ MỚI NHẤT.
+  const tin = text.slice(cheDoChot ? -6000 : -12000);
   const dsPhuong = danhSachPhuongChoAi(tin);
   // "Bộ nhớ" (chủ dự án: "để AI có cache để đọc lại nguyên tin nhắn của khách để ko mất"): nguyên văn các tin chủ nhà nhắn
   // trước tin này, nơi gọi đã giới hạn ~6.000 chữ.
