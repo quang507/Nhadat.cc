@@ -66,9 +66,9 @@ const CamXuc = z.object({
 // Đợt 2 chuyển luật sang AI (02/10/2026, chủ dự án: "lấy hết các luật bên kia qua cho AI"): ý định của tin và vai người rao
 // trước đây do từ khoá quyết (`laNgungRao`, `laRaoLai`, hoãn, `tinHieuMoiGioi`) — "mấy bên môi giới hối chị… sợ lắm" từng báo
 // admin đổi nhãn MÔI GIỚI. AI đọc theo nghĩa, code kiểm trích dẫn (`docYDinh`, `docVai`); từ khoá chỉ đỡ khi model chết.
-export const Y_DINH = ["binh_thuong", "ban_roi", "ngung_rao", "rao_lai", "hoan", "du_roi"] as const;
+export const Y_DINH = ["binh_thuong", "ban_roi", "ngung_rao", "rao_lai", "hoan", "du_roi", "da_noi_roi"] as const;
 const YDinh = z.object({
-  loai: z.enum(Y_DINH).describe("binh_thuong; ban_roi = căn ĐÃ BÁN / đã cọc / đã chốt được; ngung_rao = thôi không bán / không cho thuê nữa, rút tin; rao_lai = bán / cho thuê LẠI căn đã gỡ, 'chưa bán đâu, vẫn bán'; hoan = bận, để sau / mai nói tiếp, chưa trả lời được lúc này; du_roi = chủ nhà bảo ĐỦ thông tin rồi / đăng luôn đi / không cần hỏi thêm (KHÔNG phải câu tả nhà có chữ 'hết rồi', 'xây kín hết rồi', 'đang cho thuê'). Nói về người KHÁC ('hàng xóm bán rồi') hay hỏi ('bán được chưa em') → binh_thuong."),
+  loai: z.enum(Y_DINH).describe("binh_thuong; ban_roi = căn ĐÃ BÁN / đã cọc / đã chốt được; ngung_rao = thôi không bán / không cho thuê nữa, rút tin; rao_lai = bán / cho thuê LẠI căn đã gỡ, 'chưa bán đâu, vẫn bán'; hoan = bận, để sau / mai nói tiếp, chưa trả lời được lúc này; du_roi = chủ nhà bảo ĐỦ thông tin rồi / đăng luôn đi / không cần hỏi thêm (KHÔNG phải câu tả nhà có chữ 'hết rồi', 'xây kín hết rồi', 'đang cho thuê'); da_noi_roi = chủ nhà bảo ĐÃ trả lời / đã nói ở tin trước, trỏ về điều đã nhắn ('nói rồi mà', 'đã trả lời rồi này', 'cái giá hồi nãy đó', 'như anh nhắn ở trên') mà tin này KHÔNG tự chứa câu trả lời. Nói về người KHÁC ('hàng xóm bán rồi') hay hỏi ('bán được chưa em') → binh_thuong."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ thể hiện ý định đó. binh_thuong thì null."),
 });
 export const VAI_NGUOI_RAO = ["khong_noi", "chinh_chu", "moi_gioi"] as const;
@@ -258,6 +258,8 @@ Không bao giờ đưa giá, diện tích, vị trí, phường, pháp lý, lo�
 bán lại căn đã gỡ hoặc rút lời "bán rồi" (rao_lai), đang bận / để sau (hoan). Nhắc chuyện người khác, hỏi, kể → binh_thuong.
 Chủ nhà BẢO ĐĂNG / lên tin / chốt — "ok đăng đi", "đăng luôn đi em", "lên tin giúp anh", "cứ đăng như vậy trước", "đủ rồi em, đăng đi" —
 dù bot đang HỎI thông tin hay đang đưa bản nháp → du_roi (trich_dan là chính cụm đó), KHÔNG phải ban_roi, KHÔNG phải binh_thuong.
+Chủ nhà bảo ĐÃ TRẢ LỜI RỒI, trỏ về tin trước ("nói rồi mà", "chị nhắn ở trên rồi", "cái giá hồi nãy đó", "như lúc nãy") mà tin này không có câu trả lời → da_noi_roi
+(trich_dan là cụm đó); tin vừa phàn nàn vừa nói lại giá trị ("Phường Hạnh Thông, chị nói rồi mà") thì tin ĐÃ trả lời → binh_thuong, giá trị vào tra_loi.
 Chủ nhà bảo THÔI HỎI mà không nói "đăng" — "đủ rồi em", "nhiêu đó thôi cháu", "vậy được rồi, khỏi hỏi nữa" — đáp NGAY sau câu bot hỏi
 mà không trả lời câu đó → cũng là du_roi.
 Chủ nhà bảo SỬA / chỉnh lại ("sửa lại giúp mình", "bạn chỉnh lại nhé", "đổi lại địa chỉ") → binh_thuong, KHÔNG phải du_roi.

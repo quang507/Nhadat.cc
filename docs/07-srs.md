@@ -5206,6 +5206,42 @@ thì luật đỡ); (5) `traLoiThuocOKhac` chỉ so cụm AI trích. Luật ch�
 giả nói ngược AI thật (LUNG-06, ZZZZY-01/02: AI giả "không trả lời" câu lửng; ZZZZY-07: AI giả `so_can` 0 cho tin rao 2 căn) — sửa AI giả cho
 đọc như AI thật, kết quả mong đợi giữ nguyên. e2e 1420/1420, kiểu sạch. Số căn (3) và fact từng căn (4) kiểm trên production.
 
+### SRS-5.1zzzzzzz18 · Đợt 3 gỡ đoán nghĩa bằng regex: vai người lạ, "đã trả lời rồi", hỏi bù vỏ tin rỗng (14/10/2026)
+
+**Ca gốc.** (a) Chủ dự án: "tiếp" (đợt 3 của SRS-5.1zzzzzzz17). Bảng "còn lại" của đợt 2 xếp cổng vai lên đầu vì nó quyết cả đường đi: câu
+người lạ bị luật xếp là "câu rao" thì mở hồ sơ bán, tạo tin, hỏi "nhà mình ở đâu" — với người đang đi TÌM nhà. (b) Zalo thật 14/10/2026 11:22:
+tester đã có căn hộ Bình Chánh lên kệ, nhịp hỏi bù nhắn "Dạ em cảm ơn chị đã gửi tin nha. Chung cư mình nằm đường nào, khu nào chị ạ?" — về
+một vỏ tin rỗng (mở từ câu "cần bán căn hộ" trước bài rao), và cảm ơn "đã gửi tin" giữa cuộc trò chuyện đã sống cả giờ.
+
+**Lớp lỗi.** (a) "Máy đoán Ý bằng từ khoá" ở cổng vai: luật (`wantsSellLuat`, `hoiMuaTho`, `vaiDapLuat`, chữ "chính chủ / ký gửi") KẾT LUẬN
+thì model phân vai không bao giờ được hỏi — "mình cần tìm căn nhà chính chủ bán gấp quận 5 giá 5 tỷ" có "bán nhà" + giá nên thành câu rao;
+mỗi lần vá là thêm một từ vào regex (lịch sử: "chào bạn" → "ban", "ban công", "cũng được"). Cùng lớp: "đã trả lời rồi" đoán bằng danh sách
+cụm ≤ 8 chữ (`laNoiDaTraLoi`) — cách nói khác ("anh nhắn ở tin trước rồi đó") trượt, câu vừa phàn nàn vừa trả lời ("sổ hồng riêng, anh nói rồi
+mà") bị bắt nhầm. (b) Nhịp hỏi bù chọn tin theo TỪNG TIN, không nhìn người rao còn tin nào khác; câu mở "lần đầu" đoán bằng việc tin đó chưa
+có câu hỏi nào, không phải việc hai bên đã nói chuyện chưa.
+
+**Chỗ cùng lớp.** Sửa đợt này: cổng vai người lạ (bốn luật trên), `laNoiDaTraLoi`, câu mở + chọn tin của `ask-seller`. **Giữ (có lý do):**
+`moCauChoThue` chỉ chạy khi AI ĐÃ chạy mà im về loại giao dịch (lưới đỡ một khuôn câu mở đầu, SRS-5.1zzzzzt); FR-164 bắt lời sửa bằng nhãn
+đã qua AI (chỉ giữ ô AI cũng đọc ra, lấy giá trị AI — SRS-5.1zb); nhãn môi giới lúc MỞ hồ sơ (`tinHieuMoiGioi`) vì AI `vai` gán lại ngay lượt
+đó; mọi đường phường / quận / địa chỉ (chủ dự án 14/10). **Còn lại:** `phanLoaiCauTraLoi` / `catDapAn` cho câu địa chỉ (thuộc đường địa chỉ —
+giữ theo lời chủ dự án), `docHoiLai` trả `undefined` khi trích lệch, chọn tin cũ trả lời câu treo khi khách nói "đã nói rồi" (vẫn so bằng luật).
+
+**Sửa.** (1) Chế độ `boc_tach_ai = ai`: người lạ có câu luật ĐÃ kết luận vai (rao / mua khi chưa có hồ sơ mua / đáp câu hỏi vai) cũng qua
+lượt model phân vai; model trả được (`donVai` khác null, cụm làm bằng có nguyên trong tin) thì MODEL quyết, mọi kết luận từ khoá (kể cả "chính
+chủ / ký gửi") không tính; model hỏng thì luật đỡ như cũ. Prompt phân vai thêm "đọc theo NGHĨA, không bắt từ khoá" kèm các ca từng cắn; đọc
+tin tới 6.000 chữ (trước 600). Chi phí: +1 truy vấn đọc công tắc và +1 lượt model nhỏ, CHỈ với người lạ có câu luật đã kết luận. (2) `y_dinh`
+thêm `da_noi_roi` (khách bảo đã trả lời ở tin trước mà tin này không chứa câu trả lời; kiểm trích dẫn qua `docYDinh`); chat-reply theo AI,
+`laNoiDaTraLoi` chỉ khi AI không chạy. (3) `ask-seller` drip: vỏ tin rỗng (`laVoTinRong` — không giá / diện tích / địa chỉ / phường / quận /
+dự án) mà người rao còn tin khác đang mở → không hỏi bù vỏ đó (không sửa, không xoá vỏ — dữ liệu tin chỉ đổi qua chat); câu mở nay
+`moDauHoiBu` nói rõ hỏi về căn nào ("Dạ, em hỏi thêm một ý về căn hộ ở … nha."), bỏ "cảm ơn … đã gửi tin".
+
+**Kiểm (đỏ khi tắt).** e2e `VAI-07` (ca mới: "mình cần tìm căn nhà chính chủ bán gấp …" → model "mua" thắng luật rao), `VAI-08` (model
+"chưa rõ" → hỏi vai, không mở hồ sơ bán), `VAI-09/10` (câu rao thật vẫn mở hồ sơ; model hỏng → luật đỡ), `DNR-01` (cách nói mới "anh nhắn ở
+tin trước rồi đó"), `DNR-02` (vừa phàn nàn vừa trả lời → không "chưa thấy"). Tắt bản sửa (`vaiAiQuyet = false`, trả `laNoiDaTraLoi`) → 4 ca
+đỏ (VAI-07/08, DNR-01/02). `bot/tests/hoi-bu.mjs` HB-01…09 (ca gốc vỏ BDS-CH-XX-0001; HB-08/09 soi nguồn `ask-seller`, đỏ khi gỡ cổng hoặc
+trả câu mở cũ). Mock AI phân vai ở ba khối e2e trả cụm làm bằng KHÔNG có trong tin ("ừ", "ban nha") — model thật trích nguyên văn (`donVai`
+đòi vậy); sửa mock trả cụm có trong tin. TOIUU-02/03 nới +1 truy vấn (đọc công tắc). e2e 1426/1426.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

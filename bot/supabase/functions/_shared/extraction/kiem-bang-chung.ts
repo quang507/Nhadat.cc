@@ -1580,9 +1580,9 @@ export function trichCoTrongTin(td: string, tin: string): boolean {
  * Đợt 2 chuyển luật sang AI (02/10/2026): ý định của tin (đã bán / ngưng rao / rao lại / hoãn) — AI đọc theo nghĩa, code chỉ
  * nhận khi cụm trích có trong tin. `undefined` ở nơi gọi = AI không chạy (từ khoá đỡ); null = AI nói không có ý định nào.
  */
-export function docYDinh(yd: { loai?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi"; trich: string } | null {
+export function docYDinh(yd: { loai?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi" | "da_noi_roi"; trich: string } | null {
   const l = yd?.loai;
-  if (l !== "ban_roi" && l !== "ngung_rao" && l !== "rao_lai" && l !== "hoan" && l !== "du_roi") return null;
+  if (l !== "ban_roi" && l !== "ngung_rao" && l !== "rao_lai" && l !== "hoan" && l !== "du_roi" && l !== "da_noi_roi") return null;
   const td = (yd?.trich_dan ?? "").trim();
   return trichCoTrongTin(td, tin) ? { loai: l, trich: td } : null;
 }
@@ -1656,7 +1656,7 @@ export function docDongY(v: { la?: string | null; trich_dan?: string | null; dan
 export type YLuot = "dang" | "gat" | "hoan" | "ngung_rao" | "ban_roi" | "khong_dang";
 export function yLuotLech(
   dongY: { la: "dong_y" | "khong_dong_y"; dangDi: boolean; trich?: string } | null | undefined,
-  yDinh: { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi"; trich?: string } | null | undefined,
+  yDinh: { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi" | "da_noi_roi"; trich?: string } | null | undefined,
 ): [YLuot, YLuot] | null {
   if (!dongY || !yDinh) return null;
   const dung = yDinh.loai === "hoan" || yDinh.loai === "ngung_rao" || yDinh.loai === "ban_roi";

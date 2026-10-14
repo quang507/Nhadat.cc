@@ -23,6 +23,7 @@ import { loaiDoc } from "../_shared/tin-nhap.ts";
 import { boGachCheo, doiTuXung, giuCauDungTen } from "../_shared/extraction/van-tra-loi.ts";
 import { cachGoiKhach, hocXungHoTuLichSu, suyTuXungHo } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { khongBietCua } from "../_shared/extraction/kiem-bang-chung.ts";
+import { laVoTinRong, moDauHoiBu } from "../_shared/extraction/hoi-bu.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -58,7 +59,7 @@ Deno.serve(async (req) => {
       // làm PostgREST trả 300 PGRST201 — và nhánh dưới từng gộp mọi lỗi select
       // thành "listing không tồn tại" (404): hỏi bù CHẾT IM từ 09/09 tới 15/09,
       // 313 lượt, sổ lỗi ghi sai nguyên nhân nên không ai truy.
-      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, boc_tach, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly, xung_ho, nhom_tuoi)",
+      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, project_id, boc_tach, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly, xung_ho, nhom_tuoi)",
     )
     .eq("id", listing_id)
     .maybeSingle();
@@ -71,6 +72,18 @@ Deno.serve(async (req) => {
     return jsonResponse({
       error: "listing chưa có property_type - chưa xác định được checklist required_facts",
     }, 422);
+  }
+
+  // SRS-5.1zzzzzzz18 (Zalo thật 14/10 11:22): vỏ tin rỗng (mở từ câu "cần bán căn hộ" trước bài rao) mà người rao còn tin khác
+  // đang mở → nhịp hỏi bù KHÔNG hỏi vỏ đó: chủ nhà đã rao căn thật ở tin kia, hỏi "chung cư mình nằm đường nào" về cái vỏ là hỏi
+  // lại điều đã nói. Không sửa / xoá vỏ ở đây — dữ liệu tin chỉ đổi qua chat.
+  if (drip && listing.seller_id && laVoTinRong(listing)) {
+    const { data: tinKhac, error: tkErr } = await db.from("listings").select("id")
+      .eq("seller_id", listing.seller_id).neq("id", listing_id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"]).limit(1);
+    if (tkErr) await ghiLoi(db, "ask-seller tin khac cua nguoi rao", tkErr.message);
+    else if ((tinKhac ?? []).length) {
+      return jsonResponse({ message: null, asked: [], note: "drip: vỏ tin rỗng, người rao có tin khác đang mở - không hỏi bù vỏ này" });
+    }
   }
 
   const { data: missingTho, error: mErr } = await db
@@ -195,7 +208,7 @@ Deno.serve(async (req) => {
 
   const cachGoi = cachGoiKhach(seller?.xung_ho, seller?.nhom_tuoi);
   const cauDrip = drip
-    ? `${isFirst ? `Dạ em cảm ơn ${cachGoi} đã gửi tin nha. ` : "Dạ, em hỏi thêm một ý nha. "}${cauHoiMau(toAsk[0].fact_key, cachGoi, undefined, listing.property_type)}`
+    ? `${moDauHoiBu(loaiDoc(listing.property_type), listing.location_raw || listing.ward || listing.district)}${cauHoiMau(toAsk[0].fact_key, cachGoi, undefined, listing.property_type)}`
     : null;
   const anthropic = cauDrip ? null : await anthropicClient(db);
   // FR-171 e: một tin ~30 từ + tối đa 3 câu hỏi ngắn — `low`/512 là đủ, như
