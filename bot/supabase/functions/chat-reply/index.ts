@@ -5676,11 +5676,17 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     // 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo): cổng "tin có nhiều căn" từng do regex quyết — "căn 1 …, 4x12, 6.9 tỷ; căn 2 …"
     // cắt theo dấu phẩy nên không thấy căn nào, trong khi AI đã trả `so_can = 2` và đánh số `can`. Chế độ `ai`: AI đọc ra ≥ 2 căn
     // có đánh số → chia theo AI (`canTheoAi`); regex chỉ đỡ khi AI không chạy / không đánh số.
-    if (nhieuCanTrongTin.length < 2 && laCheDoAi && bongAi) {
-      const k = await bongAi;
-      if (k?.ket) {
-        const tuAi = canTheoAi(textBongAi, kiemDeXuat(k.truong, textBongAi).dat, (k.ket as { so_can?: number }).so_can ?? null);
-        if (tuAi.length >= 2) { console.log(`chat-reply: AI đọc ${tuAi.length} căn, regex ${nhieuCanTrongTin.length} — chia theo AI`); nhieuCanTrongTin = tuAi; }
+    // 14/10/2026 (SRS-5.1zzzzzzz17): chiều ngược cũng vậy — AI đọc tin và nói rõ MỘT căn (`so_can` ≤ 1) thì regex đếm "căn A…, căn B…"
+    // không được chia tin; "có mấy căn" là ý theo NGHĨA.
+    const kCan = laCheDoAi && bongAi ? await bongAi : null;
+    const datCanAi = kCan?.ket ? kiemDeXuat(kCan.truong, textBongAi).dat : null;
+    if (kCan?.ket && datCanAi) {
+      const soCanAi = (kCan.ket as { so_can?: number }).so_can ?? null;
+      const tuAi = canTheoAi(textBongAi, datCanAi, soCanAi);
+      if (tuAi.length >= 2) { console.log(`chat-reply: AI đọc ${tuAi.length} căn, regex ${nhieuCanTrongTin.length} — chia theo AI`); nhieuCanTrongTin = tuAi; }
+      else if (typeof soCanAi === "number" && soCanAi <= 1 && nhieuCanTrongTin.length >= 2) {
+        console.log(`chat-reply: regex đếm ${nhieuCanTrongTin.length} căn, AI đọc ${soCanAi} — không chia`);
+        nhieuCanTrongTin = [];
       }
     }
     // ─── 15/09/2026 (bắn thật N2): người rao nhiều căn nói FACT theo số thứ tự — "căn 2 sổ
@@ -5703,8 +5709,14 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           if (!l) continue;
           await ganNhanChoTin({}, { lid: l.id, text: g.manh });
           nhanTheoCanDaGan = true;
-          const nhieu = nhanDienNhieuFact(g.manh);
-          const mot = nhieu.length ? null : nhanDienFact(g.manh);
+          // SRS-5.1zzzzzzz17: AI đã đọc tin → fact của "căn N" là các ô AI đánh số `can = N` (qua kiểm trích dẫn); luật tìm-chuỗi trên
+          // mảnh chỉ đỡ khi AI không chạy.
+          // AI không đánh số căn nào (`can` trống hết) thì chưa có cách gán ô cho từng căn — luật đỡ như cũ.
+          const factAiCan = datCanAi?.some((d) => d.can != null)
+            ? docAiChinh(datCanAi.filter((d) => d.can === g.thu).map((d) => ({ ...d, can: null })), null).ghi.map((f) => ({ question: f.question, answer: f.answer }))
+            : null;
+          const nhieu = factAiCan ?? nhanDienNhieuFact(g.manh);
+          const mot = nhieu.length || factAiCan ? null : nhanDienFact(g.manh);
           for (const f of nhieu.length ? nhieu : mot ? [mot] : []) {
             const { error: fcErr } = await ghiFact(client, { p_listing_id: l.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
             if (fcErr) { await ghiLoi(client, "chat-reply ghi_fact_listing(theo can)", fcErr.message); continue; }
@@ -7086,10 +7098,13 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // câu trả lời câu lửng theo NGHĨA (`tra_loi` — câu bot vừa hỏi nguyên văn chính là câu lửng), code chỉ chuyển câu AI viết lại
           // gọn ("không có lửng") thành có / thêm / không. Từ khoá trên chữ khách chỉ còn đỡ khi AI không chạy.
           const tlL = laCheDoAi && bongAi ? kiemTraLoiCau((await bongAi)?.traLoi, text, cauBotThat) : null;
-          const dapL0 = (tlL?.co && tlL.giaTri ? docTraLoiLung(tlL.giaTri) : null) ?? docTraLoiLung(dapAn);
+          // 14/10/2026 (SRS-5.1zzzzzzz17, đợt 2 gỡ đoán nghĩa): AI đã đọc (tlL khác null) thì AI quyết — AI nói "không trả lời câu lửng"
+          // là không trả lời, luật từ khoá trên chữ khách không được ghi số tầng thay. Luật chỉ đỡ khi AI không chạy.
+          const cauLung = tlL ? (tlL.co && tlL.giaTri ? tlL.giaTri : null) : dapAn;
+          const dapL0 = cauLung ? docTraLoiLung(cauLung) : null;
           // SRS-5.1zzzzzg: khách đã nói CÓ lửng ("3 tầng có lửng") → "không" là lửng NGOÀI số tầng, nhà vẫn có lửng.
-          // Trừ khi khách nói rõ "không có lửng" (rút lại) — khi đó vẫn là không lửng.
-          const dapL = gL.co_lung === true && dapL0 === "khong" && !/\b(?:khong|ko|k|chua|hong)\s+(?:co\s+)?(?:gac\s+)?(?:lung|gac)\b/.test(boDau(dapAn)) ? "them" : dapL0;
+          // Trừ khi câu trả lời nói rõ "không có lửng" (rút lại) — khi đó vẫn là không lửng (soi trên câu AI viết lại khi AI chạy).
+          const dapL = gL.co_lung === true && dapL0 === "khong" && !/\b(?:khong|ko|k|chua|hong)\s+(?:co\s+)?(?:gac\s+)?(?:lung|gac)\b/.test(boDau(cauLung ?? "")) ? "them" : dapL0;
           if (dapL) {
             // Khách nói lại SỐ tầng trong câu đáp ("Nhà a 4 tầng tính cả lửng") → số khách vừa nói thắng số bot hỏi.
             const kcL = ketCauTheoLung(soTangTrongDapLung(dapAn) ?? gL.n, dapL);
@@ -7598,7 +7613,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // đọc "dài 16m" trần sẽ lấy 16 làm ngang), rồi coi câu là LỆCH để câu treo giữ nguyên.
       let suaKtDaGhi = false;
       {
-        const sua = gonLoiSua(dapAn);
+        // 14/10/2026 (SRS-5.1zzzzzzz17): AI đã đọc tin thì lời sửa kích thước do AI quyết (ô `mat_tien` / `chieu_dai` / `cap_nhat`, qua
+        // kiểm trích dẫn) — luật từ khoá "sửa lại / chứ không phải" chỉ đỡ khi AI không chạy.
+        const aiDocTinNay = laCheDoAi && !!bongAi && !!(await bongAi)?.ket;
+        const sua = aiDocTinNay ? { laSua: false, ngang: null, dai: null, con: dapAn } : gonLoiSua(dapAn);
         if (sua.laSua && (sua.ngang || sua.dai) && !kqDuyet && !/^dien_tich/.test(pendingReq.question) && pendingReq.question !== "mat_tien") {
           const { data: kt } = await client.from("listings").select("frontage_m, length_m").eq("id", pendingReq.listing_id).maybeSingle();
           const cu = kt as { frontage_m?: number | string | null; length_m?: number | string | null } | null;
@@ -7689,7 +7707,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           ? kiemTraLoiCau(kqAi.traLoi, text, cauBotThat, { cauHoi: pendingReq.question, loai: pendingReq.listings?.property_type ?? null }) : null;
         // SRS-5.1zzw: một cụm chỉ trả lời một ô — cụm trích của câu trả lời mà cùng lượt đã thuộc ô KHÁC (đề xuất AI + fact luật) thì
         // AI nói "có trả lời" cũng không tính ("anh đứng tên, không thế chấp" khi hỏi gấp / hỏi hẻm). Câu treo đi đường lệch như AI nói không.
-        const traLoiAi1 = traLoiAi0?.co && traLoiThuocOKhac(kqAi?.traLoi?.trich_dan, pendingReq.question, datAi, nhanDienNhieuFact(text), traLoiAi0.giaTri)
+        const traLoiAi1 = traLoiAi0?.co && traLoiThuocOKhac(kqAi?.traLoi?.trich_dan, pendingReq.question, datAi, laCheDoAi ? [] /* SRS-5.1zzzzzzz17: chỉ cụm AI trích */ : nhanDienNhieuFact(text), traLoiAi0.giaTri)
           ? (console.log("chat-reply: tra_loi thuoc o khac", pendingReq.question), { co: false, giaTri: null })
           : traLoiAi0;
         // SRS-5.1zzzzzd: hai lượt AI nói ngược nhau — bóc tách đưa câu trả lời ("ko biết cái" cho ô thổ cư) trong khi lượt ý ngắn đọc ra

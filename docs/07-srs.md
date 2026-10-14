@@ -5182,6 +5182,30 @@ bỏ câu đó khi tin đang lên kệ; `nhanXetKhongCanCu` không bỏ nó. `bo
 sạch. Prompt (c) và lưới (b) cần lượt thật: tester gửi câu gộp "3 pn, 2wc" lúc hỏi phòng ngủ; sau khi tin lên kệ nhắn "thêm tiện ích giúp chị".
 Chưa làm: đọc nội dung LINK trang web khách gửi (conic.vn → bot chỉ "em cảm ơn") — hiện chỉ đọc link Google Drive (SRS-5.1zzm).
 
+### SRS-5.1zzzzzzz17 · Đợt 2 gỡ đoán nghĩa bằng regex: lửng, lời sửa kích thước, số căn, fact từng căn, cụm ô khác (14/10/2026)
+
+**Ca gốc.** Chủ dự án: "đang làm về phần regex — bạn làm tiếp đi" (nối SRS-5.1zzzzzzz15). Bảng kiểm kê của đợt 1 còn những chỗ luật tìm-chuỗi
+GHI dữ liệu dù AI đã đọc tin.
+
+**Lớp lỗi.** "Máy đoán Ý bằng từ khoá" chạy SAU khi AI đã đọc: AI nói không / một căn / không trả lời, luật vẫn ghi theo chữ khách.
+
+**Chỗ cùng lớp (đợt này sửa).** (1) Câu lửng: AI nói khách KHÔNG trả lời câu lửng, `docTraLoiLung(dapAn)` vẫn ghi kết cấu theo chữ "có gác lửng".
+(2) `gonLoiSua`: "sửa lại, dài 16 chứ không phải 15" ghi ô `mat_tien` bằng regex dù AI đọc tin. (3) Số căn: regex `nhanDienNhieuCan` đếm ≥ 2
+căn thì chia tin, kể cả khi AI nói `so_can` ≤ 1. (4) Fact theo "căn N": `tachTheoCan` + `nhanDienNhieuFact` ghi fact bằng regex, không dùng ô AI
+đánh số `can`. (5) `traLoiThuocOKhac` để fact regex phủ quyết câu trả lời của AI. **Giữ lại (có lý do):** xưng hô (`batXungHo` — AI `tu_xung`
+ghi đè cùng lượt), nhắc hẹn `PROMISE_RE` (chỉ đặt lời nhắc, không ghi dữ liệu tin), `nangXacNhanChac` (AI đề xuất trước, từ điển chỉ xác nhận),
+từ điển nhãn FR-211 (một nguồn có chủ đích), mọi đường phường / quận / địa chỉ (chủ dự án 14/10). **Còn lại đợt sau:** cổng `wantsSellLuat` /
+`hoiMuaTho` / vai trước lượt AI, FR-164 bắt câu sửa bằng nhãn regex, `laNoiDaTraLoi`, `phanLoaiCauTraLoi` cho câu địa chỉ, `docHoiLai` trả
+`undefined` khi trích lệch, `moCauChoThue`.
+
+**Sửa.** Chế độ `ai` + AI đã đọc tin: (1) câu lửng chỉ theo `tra_loi` của AI; (2) lời sửa kích thước để AI (`mat_tien` / `chieu_dai` /
+`cap_nhat`); (3) `so_can` ≤ 1 thì không chia dù regex đếm ≥ 2; (4) fact "căn N" = ô AI `can = N` qua `docAiChinh` (AI không đánh số căn nào
+thì luật đỡ); (5) `traLoiThuocOKhac` chỉ so cụm AI trích. Luật chỉ chạy khi AI không chạy.
+
+**Kiểm (đỏ khi tắt).** e2e `ZZZZZZZZZ17-01` (AI nói không trả lời câu lửng, chữ khách có "có gác lửng" → không ghi kết cấu). Bốn ca cũ dựng AI
+giả nói ngược AI thật (LUNG-06, ZZZZY-01/02: AI giả "không trả lời" câu lửng; ZZZZY-07: AI giả `so_can` 0 cho tin rao 2 căn) — sửa AI giả cho
+đọc như AI thật, kết quả mong đợi giữ nguyên. e2e 1420/1420, kiểu sạch. Số căn (3) và fact từng căn (4) kiểm trên production.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

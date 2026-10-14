@@ -3673,7 +3673,8 @@ fresh(seedKho);
       rL8.body.replies.some((x) => /5 tầng đó có tính cả gác lửng không/.test(x) && !/kết cấu/.test(x)), JSON.stringify(rL8.body.replies));
     const L6 = await moL("lung-6");
     L6.boc_tach = { ...(L6.boc_tach ?? {}), lung_goi_y: { n: 6, dv: "tầng" } };
-    globalThis.__model.parse = rongL();
+    // SRS-5.1zzzzzzz17: AI giả trả lời câu lửng như AI thật (trước đây trả "không trả lời", luật từ khoá ghi đè).
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { ...rongL()(p), tra_loi: { co_tra_loi: true, gia_tri: "4 tầng, có tính cả lửng", trich_dan: "4 tầng tính cả lửng" } } : OUT();
     const rL6 = await send({ external_user_id: "lung-6", text: "Nhà a 4 tầng tính cả lửng" });
     const LL6 = db().t.listings.find((x) => x.id === L6.id);
     check("LUNG-06 bot hỏi '6 tầng đó có tính cả gác lửng', khách đáp 'Nhà a 4 tầng tính cả lửng' → số khách nói thắng: 'trệt + lửng + 2 lầu'",
@@ -10516,13 +10517,22 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
 
   // (MQ1) lửng phủ định, câu đáp dài.
-  for (const [ma, cau] of [["01 (ca gốc)", "không có gác lửng ạ, 4 tầng đầy đủ thôi"], ["02 (cách nói mới)", "nhà ko có gác lửng gì hết em, đủ 4 tầng luôn"]]) {
+  // SRS-5.1zzzzzzz17: AI giả đọc câu lửng như AI thật (tra_loi có trích dẫn) — trước đây AI giả nói "không trả lời" và luật từ khoá ghi đè ý AI.
+  for (const [ma, cau, trich] of [["01 (ca gốc)", "không có gác lửng ạ, 4 tầng đầy đủ thôi", "không có gác lửng"], ["02 (cách nói mới)", "nhà ko có gác lửng gì hết em, đủ 4 tầng luôn", "ko có gác lửng"]]) {
     const { uid, L } = dung({ tin: { floors: 4, floors_text: null, ward: null, boc_tach: { lung_goi_y: { n: 4 } } }, cauTreo: "phuong", xung: "anh" });
-    const a = await goi(uid, cau);
+    const a = await goi(uid, cau, { tra_loi: { co_tra_loi: true, gia_tri: "không có gác lửng", trich_dan: trich } });
     const Lr = db().t.listings.find((x) => x.id === L.id);
     check(`ZZZZY-${ma} câu lửng «${cau}» → kết cấu 'trệt + 3 lầu', không ghi nguyên câu vào ô kết cấu, hỏi lại câu phường`,
       Lr.floors_text === "trệt + 3 lầu" && !fq(L, "ket_cau").some((x) => /lửng/.test(x ?? "")) && /trệt \+ 3 lầu/.test(a.rep) && treo(L).includes("phuong"),
       JSON.stringify({ ft: Lr.floors_text, kc: fq(L, "ket_cau"), rep: a.rep, treo: treo(L) }));
+  }
+
+  // SRS-5.1zzzzzzz17 (đỏ khi tắt): AI đọc câu và nói KHÔNG trả lời câu lửng → luật từ khoá không được ghi kết cấu thay AI.
+  {
+    const { uid, L } = dung({ tin: { floors: 4, floors_text: null, ward: null, boc_tach: { lung_goi_y: { n: 4 } } }, cauTreo: "phuong", xung: "anh" });
+    await goi(uid, "nhà hàng xóm có gác lửng, nhà anh thì chưa tính", { tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } });
+    const Lr = db().t.listings.find((x) => x.id === L.id);
+    check("ZZZZZZZZZ17-01 AI nói khách không trả lời câu lửng → không ghi kết cấu theo từ khoá 'có gác lửng'", !Lr.floors_text, JSON.stringify({ ft: Lr.floors_text }));
   }
 
   // (MQ2) xoá ý ở dòng "Thêm" lúc chờ duyệt → bỏ mảnh có thật, gửi lại bản nháp; lượt chốt sau không thêm lại.
@@ -10564,7 +10574,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     ["08 (cách nói mới, luật đỡ)", "được rồi em, lên tin đi. Còn 2 căn: 1 căn q7 60m2 5 tỷ, 1 căn q8 45m2 3 tỷ", null]]) {
     const { uid, L } = dung({ cauTreo: "duyet_tin", xung: "anh", loaiNguoi: "nmg" });
     globalThis.__cauHinh = cheDo ? { test_reset_hello: "1", boc_tach_ai: cheDo, bao_lai_da_luu: "admin" } : { test_reset_hello: "1" };
-    const d = await goi(uid, cau, { dong_y: "dong_y", dong_y_trich: cau.split(/[.,]/)[0] });
+    // SRS-5.1zzzzzzz17: AI đếm căn như AI thật (tin rao 2 căn → so_can 2); AI nói 0 / 1 căn thì code không chia tin theo regex.
+    const d = await goi(uid, cau, { dong_y: "dong_y", dong_y_trich: cau.split(/[.,]/)[0], so_can: 2 });
     const Lr = db().t.listings.find((x) => x.id === L.id);
     check(`ZZZZY-${ma} chờ duyệt căn 1, «${cau.slice(0, 40)}…» → căn 1 đóng dấu duyệt + lên kệ, câu duyệt đóng, vẫn mở 2 tin mới`,
       !!Lr.chu_duyet_at && Lr.status === "dang_ban" && !treo(L).includes("duyet_tin") && /Em mở 2 tin riêng/.test(d.rep) && /lên kệ/.test(d.rep),
