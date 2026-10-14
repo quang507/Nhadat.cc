@@ -5583,7 +5583,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
     const dangXinCanMoi = /(?:địa chỉ|diện tích|giá) (?:của |cho )?căn (?:khác|mới)/i.test(botCuoi);
     // 14/10/2026 (test tay: "em rao thêm cho chị tiện ích trong khu chung cư này chứ" → bot hỏi "căn đó hay căn khác"): căn ĐÓ hay căn
     // KHÁC là câu hỏi về NGHĨA — chế độ `ai` lấy `can_khac` của AI (đọc cả câu, có khối căn đang có); từ khoá chỉ đỡ khi AI không nói.
-    const canKhacAi = laCheDoAi ? await canKhacLuot() : undefined;
+    const canKhacAi = await canKhacLuot(); // undefined khi AI không chạy (canKhacLuot tự kiểm laCheDoAi)
     const laCanKhac = canKhacAi !== undefined ? canKhacAi
       : /căn khác|căn mới|nhà khác|cái khác|khác ạ|khác em|khác cháu|^\s*khác\b|căn nữa|căn thứ/i.test(text) ||
         /\bcan khac|can moi|nha khac|^\s*khac\b/.test(tKD);
