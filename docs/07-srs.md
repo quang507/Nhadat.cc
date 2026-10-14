@@ -5122,6 +5122,40 @@ Nguyễn Văn Cừ chứ không phải chỗ đó, em sửa lại giúp chị" l
 tầm 10 phút") — bỏ chặn luật thì đỏ; `vi-du-boc-rao.mjs` 131/131 (hai ví dụ mới qua `kiemDeXuat`). Bốn ca LQ + ZH dựng tin bằng AI giả trả rỗng cho
 câu rao CÓ nói quận (dựa vào luật lấp) → dữ liệu dựng ca gán quận như AI thật đọc ra. e2e 1419/1419, phát lại 5/5 đạt.
 
+### SRS-5.1zzzzzzz15 · Đợt 1 gỡ code đoán nghĩa: "chưa ok" không phải gật, AI nhận nguyên tin, căn đó / căn khác và dự án do AI (14/10/2026)
+
+**Ca gốc.** Zalo thật 14/10 10:09–10:49 (tester …4980, bài rao Conic Boulevard). (a) Bot chờ duyệt bản nháp, khách "chị thấy chưa ok" → 🤖 "đồng ý
+bản nháp, em đăng tin", tin lên kệ (sổ `boc_tach_bong`: `y_dinh du_roi` + `tra_loi` "chấp thuận đăng", trích "ok"). (b) "em bổ sung xong cho chị xem
+bản nháp trước khi rao nhé" → "chị gửi nội dung tin qua đây". (c) "Bạn có thông tin về Conic Boulevard không?" → bot không trả lời dù kho có dự
+án. (d) "em rao thêm cho chị tiện ích trong khu chung cư này chứ" → "căn đó hay căn khác". (e) Căn hộ "ngay mặt tiền Quốc lộ 1" → bản nháp
+"Đường vào: mặt tiền", tiêu đề "Mặt tiền 60m²". Chủ dự án: "xoá hết mấy cái code đi đọc bằng AI hết", "sao nó ko nhận được nguyên tin của khách".
+
+**Lớp lỗi.** Hai lớp. (1) Máy quyết Ý bằng CHỮ: model bắt chữ "ok" bỏ chữ "chưa" (thiếu ví dụ phủ định trong prompt); cổng "có dấu hiệu tên dự
+án" là danh sách từ khoá (tên "Conic Boulevard" không chứa chữ nào trong đó → không tra kho); "căn đó / căn khác", "căn hộ" ở nhánh nhiều căn,
+"vùng ngoài" (chữ "Hà Nội" ở bất kỳ đâu trong tin làm bot từ chối căn) đều quyết bằng regex DÙ AI đã đọc. (2) AI không nhận nguyên tin: cửa
+vào cắt 4.000 chữ, gộp cụm giữ 4.000 chữ ĐẦU (rơi tin mới nhất), bộ bóc tách cắt 4.000 chữ đầu của "tin cũ + tin mới" (rơi chính tin đang đọc),
+lượt ý ngắn cắt 1.500, lượt gán mảnh cắt 800.
+
+**Chỗ cùng lớp.** Agent kiểm kê ~40 chỗ luật còn quyết khi AI đã chạy (bảng đầy đủ ở PR). Đợt 1 sửa các chỗ đã cắn khách hôm nay + chỗ cắt tin.
+Giữ nguyên (chủ dự án 14/10: "địa chỉ và quận dự án vẫn cần"): phường / quận / địa chỉ lấy từ kho dự án và từ điển đường. Còn lại cho đợt sau:
+`wantsSellLuat`, `hoiMuaTho`, nhận vai bằng từ khoá trước lượt AI; `gonLoiSua` ghi `mat_tien`; FR-164 bắt câu sửa bằng nhãn regex; `PROMISE_RE`;
+`laNoiDaTraLoi`; `phanLoaiCauTraLoi` cho câu địa chỉ / phường; `docHoiLai` trả `undefined` khi trích lệch.
+
+**Sửa.** (1) Prompt `doc-y-luot.ts`: "ok / được / ổn" sau "chưa / không / ko / hông" là `khong_dong_y`, không bao giờ `dong_y`; xin BOT gửi bản nháp là
+`hoi_noi_dung`, không phải `gui_noi_dung_sau`. Prompt `boc-rao.ts`: phủ định đó không phải `du_roi`; căn hộ "mặt tiền Quốc lộ" là vị trí dự án →
+`tien_ich_gan`, không `loai_duong_vao`. Luật đỡ `laDongY` / `laChiLenhDang` đã đúng với phủ định (kiểm tay). (2) Cổng từ khoá dự án (chế độ `ai`)
+thay bằng AI: tra kho khi AI đọc ra ô `du_an` (tra bằng chính tên đó), khi AI hiểu khách HỎI về một dự án (`hoi_lai.chu_de = du_an`), hoặc đang hỏi
+tên dự án; GẮN dự án vào tin chỉ khi AI đọc ra ô `du_an` hoặc đang hỏi tên dự án. Không tra trên mọi tin — `match_projects` khớp gần đúng, tên đường giống tên dự
+án (ZH-10) sẽ kéo kiến thức dự án sai vào lời bot. Tin đã lên kệ (không câu treo) vẫn mang dự án của căn đang neo. Từ khoá chỉ đỡ khi AI không chạy. (3) Căn đó / căn khác = `can_khac` của AI; AI nói
+"không phải căn khác" thì không phải rao suông. (4) Vùng ngoài: chế độ `ai` chỉ soi trong các cụm AI trích làm địa chỉ. (5) Nhánh nhiều căn: AI
+đọc loại căn thì AI quyết căn hộ. (6) Trần chữ: cửa vào 12.000; gộp cụm giữ 12.000 chữ MỚI NHẤT; bóc tách giữ 12.000 chữ cuối; ý ngắn 6.000; gán
+mảnh 6.000 (max_tokens 2.000).
+
+**Kiểm (đỏ khi tắt).** Theo lệnh chủ dự án ("deploy lên đi để test thẳng giờ ko e2e") đợt này kiểm trên production: tester gửi lại "chị thấy chưa
+ok" lúc chờ duyệt (phải không đăng), hỏi "có thông tin về <dự án> không" (phải trả lời từ kho), dán bài rao dài > 4.000 chữ (phần cuối phải được
+đọc). Sửa prompt không có bài offline đỏ khi tắt — model giả của e2e không đọc prompt. Offline: `bun run kieu:bot` sạch, `vi-du-boc-rao.mjs` 131/131,
+e2e 1419/1419 (SEC-06 nâng trần sổ 4.000 → 12.000; ZH-10 đỏ ở bản tra-mọi-tin đầu tiên, nhờ đó đổi sang tra theo AI).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

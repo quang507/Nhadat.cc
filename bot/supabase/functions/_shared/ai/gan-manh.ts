@@ -49,13 +49,13 @@ export async function ganManhBangModel(
   try {
     const r = await ai.messages.parse({
       model,
-      max_tokens: 600,
+      max_tokens: 2000, // 14/10/2026: tin mới không còn cắt ở 800 chữ, mảnh trích dài hơn
       output_config: { effort: "low", format: FORMAT_MANH },
       system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
       messages: [{
         role: "user",
         content: `HỘI THOẠI GẦN ĐÂY:\n${vao.hoiThoai.slice(-6000)}\n\nDANH SÁCH TIN ĐANG RAO:\n${vao.dsTin}\n\n` +
-          `CÂU ĐANG TREO: ${vao.cauTreo ?? "(không có)"}\n\nTIN MỚI: "${(vao.text ?? "").slice(0, 800)}"`,
+          `CÂU ĐANG TREO: ${vao.cauTreo ?? "(không có)"}\n\nTIN MỚI: "${(vao.text ?? "").slice(0, 6000)}"`,
       }],
     });
     const k = docLong(ManhBoc, r.parsed_output);

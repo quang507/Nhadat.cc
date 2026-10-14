@@ -819,7 +819,7 @@ r = await send({ external_user_id: "sec-06", text: `tìm nhà quận 5 tầm 5 t
 const guiModel = parseCalls().pop();
 check("SEC-06 text 9.000 ký tự → chuỗi vào model bị cắt ≤ 4.000",
   !guiModel || JSON.stringify(guiModel.params.messages).length < 9000, String(JSON.stringify(guiModel?.params?.messages ?? "").length));
-check("SEC-06 tin lưu sổ cũng đã cắt", (db().t.messages.find((m) => m.sender === "buyer")?.body?.length ?? 0) <= 4000,
+check("SEC-06 tin lưu sổ cũng đã cắt (trần 12.000 từ 14/10, SRS-5.1zzzzzzz15)", (db().t.messages.find((m) => m.sender === "buyer")?.body?.length ?? 0) <= 12000,
   String(db().t.messages.find((m) => m.sender === "buyer")?.body?.length));
 {
   // Body vượt trần: đo bằng content-length như cửa thật.

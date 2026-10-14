@@ -65,7 +65,9 @@ có GẬT với điều bot vừa nói không. Đọc theo NGHĨA, có viết t�
   "Đăng giúp chị (theo) nội dung này / nội dung sau nhé" mà câu bot vừa nói KHÔNG phải bản nháp tin và tin này không kèm nội dung căn
   (giá, diện tích, địa chỉ…) → KHÔNG phải dong_y_dang: chủ nhà sắp gửi nội dung → khong_noi + yeu_cau gui_noi_dung_sau. Bot vừa gửi
   bản nháp tin thì "đăng theo nội dung này nhé" là dong_y_dang.
-- khong_dong_y: "không phải", "sai rồi", "không đúng", "chưa", "khoan đã".
+- khong_dong_y: "không phải", "sai rồi", "không đúng", "chưa", "khoan đã". Chữ "ok / được / ổn" đứng sau "chưa / không / ko /
+  hông" là PHỦ ĐỊNH: "chị thấy chưa ok", "chưa ổn em", "không ok lắm", "ko được đâu" → khong_dong_y, KHÔNG BAO GIỜ dong_y — đọc
+  nghĩa CẢ câu, không bắt riêng chữ "ok". Gật nhầm bản nháp là đăng tin khách chưa duyệt.
 - khong_noi: tin chỉ đưa thông tin căn nhà, hỏi lại bot, kể chuyện khác, hoặc không rõ. Góp ý SỬA bản nháp / đưa TIÊU ĐỀ khác
   ("tiêu đề như vầy hay hơn: …", "đổi tít thành …") là khong_noi — chưa duyệt; câu tiêu đề vào tieu_de. Bảo SỬA / LÀM LẠI / nói
   chưa đúng ý ("sửa lại giúp mình nhé", "phần quy mô vẫn chưa đúng ý mình", "sửa lại theo nội dung này giúp mình", "làm lại đi em")
@@ -84,7 +86,8 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
 - hoi_bao_lau_ban: hỏi bao lâu thì bán được / mất mấy tháng / có bán nhanh không.
 - hoi_noi_dung: xin XEM LẠI / cho xin NỘI DUNG tin đăng, bản tin, bài rao của mình ("cho bác xin nội dung tin đăng của bác", "gửi lại
   tin cho anh coi với", "đưa lại bản tin mà bạn rao đi", "tin đăng ghi sao em", "bài rao của chị như nào"). Hỏi tin đăng Ở ĐÂU →
-  hoi_noi_dang; hỏi đăng CHƯA → hoi_trang_thai.
+  hoi_noi_dang; hỏi đăng CHƯA → hoi_trang_thai. Chủ nhà xin BOT gửi bản nháp ("em bổ sung xong cho chị xem bản nháp trước khi rao
+  nhé", "gửi bản nháp chị coi") → hoi_noi_dung, KHÔNG phải gui_noi_dung_sau (người sắp gửi là bot, không phải chủ nhà).
 - xin_sua: bảo SỬA / LÀM LẠI bản nháp, KHÔNG ĐỒNG Ý / chưa ưng bản nháp, hay nói một phần CHƯA ĐÚNG Ý mà KHÔNG đưa giá trị mới và không
   chỉ ra ý cần bỏ ("sửa lại giúp mình nhé", "bản nháp trên mình không đồng ý", "chị thấy chưa được", "phần quy mô vẫn chưa đúng ý mình", "làm
   lại tiêu đề đi em", "chưa được, sửa lại"). Có giá trị mới ("sửa giá thành 9 tỷ") là lời sửa dữ liệu → khong; chỉ ra ý cần bỏ → xin_bo_o.
@@ -166,7 +169,7 @@ export async function docYLuotBangModel(
     messages: [{
       role: "user",
       // SRS-5.1zzzzzv: đang chờ duyệt thì nơi gọi nối cả bản nháp 📋 vào "Câu BOT vừa nói" (để đọc "dòng X chỉ cần để…") — trần 1800 chữ.
-      content: `${hoiThoaiTruoc?.trim() ? `Hội thoại trước đó (cũ → mới), đọc để hiểu tin chủ nhà đang nói về điều gì:\n${hoiThoaiTruoc.trim().slice(0, 6000)}\n\n` : ""}${botVuaNoi?.trim() ? `Câu BOT vừa nói: "${botVuaNoi.trim().slice(0, 1800)}"\n` : ""}Tin chủ nhà: "${(tin ?? "").slice(0, 1500)}"`,
+      content: `${hoiThoaiTruoc?.trim() ? `Hội thoại trước đó (cũ → mới), đọc để hiểu tin chủ nhà đang nói về điều gì:\n${hoiThoaiTruoc.trim().slice(0, 6000)}\n\n` : ""}${botVuaNoi?.trim() ? `Câu BOT vừa nói: "${botVuaNoi.trim().slice(0, 1800)}"\n` : ""}Tin chủ nhà: "${(tin ?? "").slice(0, 6000)}"`,
     }],
   });
   // Mỗi ô đọc RIÊNG: ô này hỏng không kéo ô kia (ô hỏng = undefined = luật đỡ đúng việc đó).
