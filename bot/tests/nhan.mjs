@@ -84,6 +84,12 @@ la("nhà mới xây năm ngoái, 4 tấm", ["moi_sua"]);
 // 25/09/2026 (bắn thật lx-21): "có sân thượng" / "có sẵn" không phải sân vườn.
 la("có sân thượng nữa em", ["san_thuong"]);
 la("nội thất có sẵn", []);
+// SRS-5.1zzzzzzw (Zalo thật 14/10/2026): "đăng cho thuê" (đăng tin) không phải "đang cho thuê" (có dòng tiền). Câu có dấu đọc đúng chữ;
+// câu không dấu vẫn như cũ (không phân biệt được).
+la("Cho chị đăng cho thuê nhà", []);
+la("Em muốn Đăng cho thuê căn này", []);
+la("nhà đang cho thuê 12 triệu", ["dong_tien"]);
+la("nha dang cho thue 12 trieu", ["dong_tien"]);
 
 console.log(hong ? `\nNHÃN: ${hong}/${tong} CA HỎNG` : `\nNHÃN: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

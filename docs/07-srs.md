@@ -4802,6 +4802,67 @@ lượt soát `kiem-khen.ts`) bỏ đi; nên câu mới nói rõ nhận định 
 **Kiểm.** `luat-khong-mau-thuan.mjs` (luật giọng vẫn cấm gạch dài / "anh/chị", vẫn cấm gắn lợi ích), e2e toàn bộ. Prompt DB (`bot_prompts.tone_rules`)
 khớp md5 code trước khi sửa — sau merge chạy `dong-bo-prompt.yml` (`day`, `chi_khoa=tone_rules`) để DB nhận bản mới.
 
+### SRS-5.1zzzzzzu · Lượt đã đưa tin lên kệ không được nhường im (14/10/2026)
+
+**Nguồn.** Người test thật 14/10 14:24 (tin cho thuê Dương Bá Trạc, Q8): "đăng giúp chị nội dung này nhé" → AI đọc là "đủ rồi, đăng đi", tin đủ
+điểm nên lượt đó ĐÓNG DẤU DUYỆT (tin lên kệ); bài rao tới 10 giây sau → lượt nhường trước khi gửi (`truoc_gui`): câu báo lên kệ, câu phí, câu
+xin đánh giá đều bỏ. Lượt bài rao thấy tin đã đăng nên chỉ nói "Dạ em ghi … vào tin rồi ạ. Có khách quan tâm là em báo anh chị liền." Chủ nhà
+không biết tin đã lên kệ; thả tim xong thì bot không còn việc gì để làm.
+
+**Lớp lỗi.** Cơ chế nhường lượt (SRS-5.1zzzzzq) coi mọi lượt là "chưa làm gì không rút lại được" — nhưng một lượt có thể đã làm việc KHÔNG rút
+lại được (đóng dấu duyệt, đóng câu treo + `chu_noi_du_at`) rồi mới nhường, và bỏ luôn lời nói ra việc đó. Chỗ cùng lớp: (1) câu chờ mở trong lượt —
+đã rút (SRS-5.1zzzzzzp, nay gom thành `rutCauMoLuot`); (2) đóng dấu duyệt ở bốn chỗ (đăng đi `guiBanNhap(…, dangLuon)`, duyệt kèm rao căn mới, đăng
+luôn chưa đủ điểm, duyệt bản nháp) — sửa lần này; (3) nhánh "đủ rồi" NGOÀI vòng hỏi thiếu cả cửa "khách sắp gửi nội dung" (`gui_noi_dung_sau`) lẫn
+cửa kiểm tin mới hơn mà nhánh trong vòng hỏi đã có (SRS-5.1zzzzzq / 5.1zzzzzv) — sửa lần này; (4) nhánh "đủ rồi" trong vòng hỏi đóng câu treo rồi
+có thể nhường sau đó (kẽ hở thời gian giữa lần kiểm và lúc gửi) — CÒN, ghi lại: đóng câu treo rút lại được bằng tay, không làm tin lên kệ.
+
+**Quy tắc.** Đóng dấu duyệt thành công → `daDuyetLuot = true`; khi đó cổng nhường trước khi gửi không nhường, lời báo lên kệ luôn tới chủ nhà.
+Đường "đăng đi" kiểm tin mới hơn NGAY TRƯỚC khi đóng dấu (sau lượt chốt tin AI ~10 s): có thì nhường (`superseded_luc: truoc_dang`), không đăng,
+rút câu chờ lượt đó mở. Nhánh "đủ rồi" ngoài vòng hỏi: AI đọc `gui_noi_dung_sau` → mời gửi nội dung; có tin mới hơn → nhường (`du_roi`).
+
+**Kiểm (đỏ khi tắt).** e2e ZZZZZZU-01 (ca gốc: tin mới hơn tới trước khi đóng dấu → không đăng), ZZZZZZU-02 (cách nói mới: tin mới hơn tới sau khi
+đóng dấu → vẫn gửi câu lên kệ), ZZZZZZU-03 (ca gốc 14:20: không câu chờ, AI đọc "sắp gửi nội dung" → mời gửi, không đóng dấu).
+
+### SRS-5.1zzzzzzv · Ghi xong khi tin chưa lên kệ luôn có việc kế (14/10/2026)
+
+**Nguồn.** Cùng người test, 14:20: chủ nhà dán bài rao khi tin chưa lên kệ và không còn câu chờ (câu địa chỉ bị lượt "đăng giúp chị theo nội dung
+này nhé" đóng) → đường bắt lời sửa (FR-164, nhãn "Giá:", "phòng ngủ", "Diện tích") ghi ba ô rồi kết lượt bằng "Dạ em ghi giá 6 triệu, số phòng ngủ 2,
+diện tích 3.5x6.5 rồi ạ." — không câu hỏi, không bản nháp. Đường "thông số rời" khi hết câu mà chưa đủ điểm thì nói "Có khách quan tâm là em báo
+anh chị liền" như thể tin đã đăng. Giá THUÊ "6 triệu" còn bị bỏ ở lượt AI đọc không kèm dòng tin (`docAiChinh(…, null)` coi là giá bán, ngoài khoảng).
+
+**Lớp lỗi.** Mỗi đường ghi tự quyết "ghi xong thì nói gì", và hai đường quên rằng tin CHƯA lên kệ thì luôn còn việc kế. Chỗ cùng lớp: đường trả lời câu
+treo (đã có `hetCauTruocNhap`), đường tạo tin (đã có), đường sửa FR-164 khi không câu chờ (sửa), đường fact rời (sửa). Lớp phụ: kiểm khoảng giá đọc loại
+giao dịch từ dòng tin, nơi gọi không đưa dòng tin thì tin thuê thành tin bán — năm chỗ gọi `docAiChinh(…, null)`; sửa ở gốc (`chonDeGhi` lấy loại
+giao dịch từ chính đề xuất khi không có dòng tin) và đường sửa đọc lại kèm dòng tin.
+
+**Quy tắc.** MỘT hàm `tiepSauGhi` (chat-reply): tin chưa lên kệ → câu kế tiền định; hết câu → bản nháp; chưa đủ điểm → "Tin mình chỉ cần thêm … là đủ
+điều kiện lên kệ" + câu hỏi mục thiếu đầu. Đường sửa ghi luôn các ô KHÁC AI đọc từ cùng bài rao (kể cả giá ở cột lõi) trước khi chọn câu kế.
+
+**Kiểm (đỏ khi tắt).** e2e ZZZZZZV-01 (ca gốc: bài rao, không câu chờ → có câu kế, không hỏi lại giá vừa nói), ZZZZZZV-02 (cách nói mới: thông số rời,
+thiếu giá, hết câu → "chỉ cần thêm giá", không "Có khách quan tâm").
+
+### SRS-5.1zzzzzzw · Nhãn "đang cho thuê, có dòng tiền" (14/10/2026)
+
+**Nguồn.** "Cho chị đăng cho thuê nhà" → nhãn tìm kiếm "đang cho thuê, có dòng tiền" (nhãn cho người MUA đầu tư) gắn vào tin CHO THUÊ.
+
+**Lớp lỗi.** Khớp từ khoá trên chữ bỏ dấu: "đăng" và "đang" cùng là "dang". Chỗ cùng lớp: `khop-cau-tra-loi.ts` hiện trạng (đã sửa 29/09, K9),
+`re-nhanh.ts` DANG_CHO_THUE_DAU (đã sửa), `extraction/nhan.ts` (sửa lần này — câu có dấu giữ chữ "đăng" khác đi trước khi bỏ dấu).
+
+**Quy tắc.** `ganNhan` phân biệt "đăng" khi câu gõ có dấu; câu không dấu đọc như cũ. Tin `deal = cho_thue` không nhận nhãn `dong_tien`.
+
+**Kiểm (đỏ khi tắt).** `bot/tests/nhan.mjs` ca "Cho chị đăng cho thuê nhà" (gốc), "Em muốn Đăng cho thuê căn này" (cách nói mới), đối chứng "nhà
+đang cho thuê 12 triệu" vẫn kích.
+
+### SRS-5.1zzzzzzx · Bong bóng 🤖 in hết ô tin này nói (14/10/2026)
+
+**Nguồn.** Chủ dự án 14/10 ("phải in ra hết"): bài rao gửi lại y như cũ → 🤖 chỉ in "quận" trong khi câu chữ kể mười một ô.
+
+**Thay đổi.** Đổi quyết định SRS-5.1zzzzo một phần: ô lượt này ghi lại ĐÚNG giá trị tin đã mang vẫn in nếu chính tin này nói ra (cụm tìm lại được
+trong tin khách), kèm "(như cũ)". Ô do lượt chốt tin đọc lại từ lịch sử (không có trong tin này) vẫn không in. Bất biến e2e KHÔNG ĐỔI đổi theo: in ô
+không đổi thì phải mang "(như cũ)".
+
+**Kiểm.** e2e ZZZZZZX-01 (bài rao gửi lại: giá / phòng ngủ "(như cũ)", WC mới không có dấu), bất biến KHÔNG ĐỔI trên mọi lượt.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -1146,7 +1146,9 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
     switch (d.khoa) {
       case "gia": {
         const t = docTien(v) ?? docTien(d.trich_dan);
-        const thue = dong?.deal === "cho_thue";
+        // SRS-5.1zzzzzzv (Zalo thật 14/10, "Cho thuê Nhà … Giá: 6tr"): nơi gọi không có dòng tin (`dong` null) thì loại giao dịch lấy từ CHÍNH
+        // đề xuất của lượt (`loai_giao_dich` đã qua kiểm trích dẫn) — trước đây coi là tin bán, "6 triệu" ra ngoài khoảng, giá thuê bị bỏ.
+        const thue = dong?.deal ? dong.deal === "cho_thue" : dat.some((x) => x.khoa === "loai_giao_dich" && chuanSo(x.gia_tri).replace(/\s+/g, "_") === "cho_thue");
         if (t == null) { bo.push({ ...d, ly_do: "khong_doc_duoc_tien" }); continue; }
         if (thue ? (t < 1e6 || t > 1e10) : (t < 1e8 || t > 1e12)) { bo.push({ ...d, ly_do: "gia_ngoai_khoang" }); continue; }
         answer = v;

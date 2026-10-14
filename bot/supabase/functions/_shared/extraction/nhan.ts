@@ -79,7 +79,11 @@ const NHA_KHAC = /\b(?:hang xom|nha ben|ben canh|ke ben|doi dien|nha ke)\b/;
 export function ganNhan(text: string | null | undefined): string[] {
   // 18/09 (bắn 10 tin thật): dấu phẩy phải CÒN là ranh giới — "gần chợ, xe hơi vào" từng thành
   // "gan cho xe hoi" và lookahead "chợ xe" của gan_cho chặn mất nhãn. Dấu câu → " , ".
-  const kd = boDau(text ?? "").replace(/[,.;:!?()\/]+/g, " , ").replace(/[^a-z0-9%,\s]+/g, " ").replace(/\s+/g, " ").trim();
+  // SRS-5.1zzzzzzw (Zalo thật 14/10/2026: "Cho chị đăng cho thuê nhà" → nhãn "đang cho thuê, có dòng tiền"): bỏ dấu thì "đăng" (đăng
+  // tin) = "đang" (đang cho thuê). Câu gõ CÓ dấu giữ chữ "đăng" khác đi trước khi bỏ dấu; câu không dấu vẫn đọc như cũ (cùng cách
+  // `khop-cau-tra-loi.ts` hiện trạng và `re-nhanh.ts` DANG_CHO_THUE_DAU).
+  const kd = boDau((text ?? "").replace(/(?<![\p{L}])đăng(?![\p{L}])/giu, "dawng"))
+    .replace(/[,.;:!?()\/]+/g, " , ").replace(/[^a-z0-9%,\s]+/g, " ").replace(/\s+/g, " ").trim();
   if (!kd) return [];
   const ra: string[] = [];
   for (const [khoa, n] of Object.entries(TU_DIEN_NHAN)) {
