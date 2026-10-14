@@ -202,7 +202,7 @@ import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai
 import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { coMuiBDS, donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
-import { boKeRieng, canTheoAi } from "../_shared/extraction/kiem-bang-chung.ts";
+import { boKeRieng, canTheoAi, cungNoiDungDiaChi } from "../_shared/extraction/kiem-bang-chung.ts";
 import { coCauHoi, coMenhDeDaDang, damBaoCauHoi, suaTenRiengLechDau } from "../_shared/extraction/van-tra-loi.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { type ConThieu, dapBaoLauBan, dapHoiVeTin, hoiVeTin, LEGAL_VI, type LoaiHoiTin, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
@@ -6453,6 +6453,9 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
             : g.question === "loai_giao_dich" ? lr.deal ?? null : hienCo.get(g.question) ?? (g.question === "vi_tri" ? lr.location_raw ?? null : null);
           const moi = g.question === "vi_tri" && cu ? (chonViTri(cu, g.answer) ?? g.answer) : g.answer;
           if (cu && gon(cu) === gon(moi)) continue;
+          // SRS-5.1zzzzzzk: địa chỉ lượt chốt đọc ra chỉ khác bản đã ghi ở thứ tự / hoa thường ("đường huỳnh tấn phát số 1235" ↔ "1235 Huỳnh
+          // Tấn Phát") → giữ bản đã ghi (đã qua từ điển đường, số nhà đứng trước), không ghi đè bằng bản thô.
+          if (g.question === "vi_tri" && cu && cungNoiDungDiaChi(cu, moi)) continue;
           // SRS-5.1zzzh: giá cùng số tiền, chỉ khác cách viết ("21 tỉ 300 triệu" / "21 tỷ 300 triệu") → không ghi lại.
           if (cu && g.question === "gia" && docTien(cu) != null && docTien(cu) === docTien(moi)) continue;
           // SRS-5.1zzzzo: giá trị câu rao giữ ở CỘT (phường, giá, diện tích, số tầng — tạo tin không ghi fact cho chúng) là "đang có", không
@@ -7165,7 +7168,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         // phải gật gợi ý. Gật trơn hay gọi tên quận của phường gợi ý thì nhận như cũ (LQ-02/03).
         const quanTinGoiY = pendingReq.listings?.district ?? null;
         const chonQuanTin = !!goiYPhuong?.doi_quan && nhacTenQuan(dapAn, quanTinGoiY) && !nhacTenQuan(dapAn, goiYPhuong.quan);
-        const nhanGoiY = !!goiYPhuong && !chonQuanTin &&
+        // SRS-5.1zzzzzzk (Zalo thật 14/10 10:37: bot gợi ý "thuộc Phường Tân Thuận, đúng không cô?", cô đáp "Phường Phú Thuận nhé" → lượt ý
+        // ngắn đọc "nhé" là gật → tin ghi Tân Thuận): khách GỌI TÊN một phường KHÁC phường gợi ý thì không bao giờ là gật gợi ý — tên phường
+        // khách nói là câu trả lời, đi đường thường (`phuongCot`). Kiểm cấu trúc, không đoán ý: chỉ khi tên đó tra ra một phường thật.
+        const quanDoiChieu = goiYPhuong?.quan ?? quanTinGoiY;
+        const tachKhach = goiYPhuong ? tachTienToPhuong(dapAn) : null;
+        const phuongKhach = goiYPhuong ? ((tachKhach ? phuongCot(tachKhach.ten_day_du, quanDoiChieu) : null) ?? phuongNhacTrongCau(dapAn, quanDoiChieu)) : null;
+        const noiPhuongKhac = !!goiYPhuong && !!phuongKhach && tenDayDu(phuongKhach) !== goiYPhuong.phuong;
+        if (noiPhuongKhac) console.log("chat-reply: khach goi ten phuong khac phuong goi y, khong coi la gat", goiYPhuong?.phuong, "->", tenDayDu(phuongKhach!));
+        const nhanGoiY = !!goiYPhuong && !chonQuanTin && !noiPhuongKhac &&
           (await gatLuot(() => laDongY(dapAn)) || (!!goiYPhuong.doi_quan && nhacTenQuan(dapAn, goiYPhuong.quan)));
         if (goiYPhuong && nhanGoiY) { dapAn = goiYPhuong.phuong; nhanGoiYPhuong = true; }
         // SRS-5.1zzzzzi (12/10/2026): bot vừa kể 2–3 phường của con đường ("…thuộc Phường An Đông, Phường Chợ Quán hay Phường Chợ Lớn"),

@@ -10,6 +10,7 @@ import { anCauDaDap } from "../supabase/functions/_shared/extraction/van-tra-loi
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { diaChiTuYThem, boSungDiaChiTuKienThuc } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
+import { cungNoiDungDiaChi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { chiLechChinhTa, gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
@@ -322,6 +323,12 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
 }
 
 {
+  // SRS-5.1zzzzzzk (Zalo thật 14/10): lượt chốt đọc "đường huỳnh tấn phát số 1235" ↔ đã ghi "1235 Huỳnh Tấn Phát" → cùng nội dung, không ghi đè.
+  ok("cungNoiDungDiaChi: '1235 Huỳnh Tấn Phát' ↔ 'đường huỳnh tấn phát số 1235' → cùng nội dung", cungNoiDungDiaChi("1235 Huỳnh Tấn Phát", "đường huỳnh tấn phát số 1235"));
+  ok("cungNoiDungDiaChi: '12 Trần Bình Trọng' ↔ 'Đường Trần Bình Trọng số 12' → cùng nội dung", cungNoiDungDiaChi("12 Trần Bình Trọng", "Đường Trần Bình Trọng số 12"));
+  ok("cungNoiDungDiaChi: '12 Trần Bình Trọng' ↔ 'hẻm 12 Trần Bình Trọng' → KHÁC (thêm hẻm là sửa thật)", !cungNoiDungDiaChi("12 Trần Bình Trọng", "hẻm 12 Trần Bình Trọng"));
+  ok("cungNoiDungDiaChi: '1235 Huỳnh Tấn Phát' ↔ '1237 Huỳnh Tấn Phát' → KHÁC (đổi số nhà)", !cungNoiDungDiaChi("1235 Huỳnh Tấn Phát", "1237 Huỳnh Tấn Phát"));
+  ok("cungNoiDungDiaChi: rỗng → không", !cungNoiDungDiaChi("", "đường X") && !cungNoiDungDiaChi(null, null));
   ok("chonViTri: luật 'hẻm 6m 12 Trần Hưng Đạo' + AI 'Trần Hưng Đạo' → '12 Trần Hưng Đạo' (số nhà luật + tên AI)",
     chonViTri("hẻm 6m 12 Trần Hưng Đạo", "Trần Hưng Đạo") === "12 Trần Hưng Đạo", chonViTri("hẻm 6m 12 Trần Hưng Đạo", "Trần Hưng Đạo"));
   ok("chonViTri: AI sửa chính tả 'Phạm Thế Hiển' ≠ luật 'pham the hier' → tin AI", chonViTri("hem 4m pham the hier", "Phạm Thế Hiển") === "Phạm Thế Hiển");
