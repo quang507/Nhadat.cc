@@ -4620,6 +4620,23 @@ cùng nội dung; `chotTinAi` gặp `vi_tri` cùng nội dung với bản đã g
 03 (gật kèm đúng tên gợi ý → Tân Thuận); `kiem-bang-chung.mjs` `cungNoiDungDiaChi` 5 ca (cùng nội dung hai chiều viết; thêm "hẻm" / đổi số
 là khác). Tắt (1): PHUONGKHAC-01 đỏ. Cách nói mới chưa bắn: "không, Phú Thuận cháu ơi", "Phú Thuận chứ không phải Tân Thuận".
 
+### SRS-5.1zzzzzzl · Thả cảm xúc không thay lượt đang chạy (14/10/2026)
+
+**Nguồn.** Người test thật 11:26 (giờ VN): dán bài rao dài (812 chữ, Cao Lỗ) → lượt chạy 40 s (bóc tách 12 s, viết, soát, đọc dự án); giây
+thứ 4 khách thả ❤️. `kiemTinMoiHon` thấy một dòng `messages` mới hơn → lượt rao **nhường** (`superseded_luc = truoc_gui`, 14 fact đã ghi,
+không gửi chữ nào); lượt thả tim trả `tha_cam_xuc`, cũng không gửi gì. Khách chờ 12 phút, hỏi chủ dự án "còn tiền hok? hay nhiều quá nó đọc
+ko nổi", gửi lại lần hai mới có trả lời.
+
+**Lớp lỗi.** "Tin mới hơn" được định nghĩa bằng SỰ CÓ MẶT của một dòng `messages` của khách, không bằng việc dòng đó có mang nội dung cần
+trả lời hay không. Cùng lớp: gộp cụm đầu lượt (SRS-5.1zzzzzq) đã loại thả cảm xúc / ảnh khỏi cụm (`laThaCamXuc`, `laTinMedia`) — nhưng kiểm
+"trước khi gửi" thì chưa. Ảnh / file tới giữa lượt vẫn nhường như cũ: lượt của ảnh có lời riêng và đi tiếp câu hỏi (14/10 10:36 đã thấy).
+
+**Quy tắc.** `kiemTinMoiHon` (cả nhánh bán lẫn mua) đọc `body` các tin mới hơn và chỉ coi là "mới hơn" khi có ít nhất một tin KHÔNG phải thả
+cảm xúc. Thả cảm xúc không bao giờ thay lượt đang chạy.
+
+**Kiểm.** e2e DAM-E7/E7b (bên mua: thả ❤️ / 👍 giữa lúc model chạy → vẫn gửi câu hỏi), CX-BAN-01 (bên bán ca gốc: trả lời kết cấu, thả tim
+giữa lượt → vẫn trả lời, câu đóng). Tắt: ba ca đỏ (lượt nhường). Cách nói mới chưa bắn: thả 😂 / 😮 (mọi mã `/-…` Zalo đều qua `laThaCamXuc`).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
