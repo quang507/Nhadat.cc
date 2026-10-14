@@ -11019,6 +11019,24 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
       lr(L).ward !== "Phường An Phú Đông" && lr(L).district === "Quận Gò Vấp" && /phường/i.test(c.rep), JSON.stringify({ ward: lr(L).ward, q: lr(L).district, rep: c.rep }));
   }
 
+  // SRS-5.1zzzzzzk (Zalo thật 14/10 10:37, cô bán nhà Huỳnh Tấn Phát): bot gợi ý "thuộc Phường Tân Thuận, đúng không cô?", cô đáp "Phường Phú
+  // Thuận nhé" → lượt ý ngắn đọc "nhé" là gật → tin ghi Phường Tân Thuận. Khách gọi tên phường KHÁC phường gợi ý thì không phải gật.
+  {
+    const TIN_Q7 = { ...TIN_GV, location_raw: "1235 Huỳnh Tấn Phát", street: "Huỳnh Tấn Phát", district: "Quận 7",
+      boc_tach: { phuong_goi_y: { phuong: "Phường Tân Thuận", quan: "Quận 7", duong: "Huỳnh Tấn Phát" } } };
+    const { uid, L } = dung({ tin: TIN_Q7, cauTreo: "phuong", xung: "cô", botNoi: ["Cháu tra thấy đường Huỳnh Tấn Phát số 1235 thuộc Phường Tân Thuận (Quận 7 cũ), đúng không cô ạ?"] });
+    const k = await goi(uid, "Phường Phú Thuận nhé", { dong_y: "dong_y", dong_y_trich: "nhé", truong: [T("phuong", "Phường Phú Thuận", "Phường Phú Thuận")],
+      tra_loi: { co_tra_loi: true, gia_tri: "Phường Phú Thuận", trich_dan: "Phường Phú Thuận" } });
+    check("PHUONGKHAC-01 (ca gốc) gợi ý Tân Thuận, cô đáp 'Phường Phú Thuận nhé' (AI đọc 'nhé' là gật) → ghi Phường Phú Thuận, KHÔNG ghi phường gợi ý, gợi ý xoá",
+      lr(L).ward === "Phường Phú Thuận" && lr(L).boc_tach?.phuong_goi_y !== undefined && !lr(L).boc_tach?.phuong_goi_y?.phuong,
+      JSON.stringify({ ward: lr(L).ward, bt: lr(L).boc_tach, rep: k.rep }));
+    const { uid: uid2, L: L2 } = dung({ tin: TIN_Q7, cauTreo: "phuong", xung: "cô", botNoi: ["Cháu tra thấy đường Huỳnh Tấn Phát số 1235 thuộc Phường Tân Thuận (Quận 7 cũ), đúng không cô ạ?"] });
+    await goi(uid2, "đúng rồi cháu", { dong_y: "dong_y", dong_y_trich: "đúng rồi" });
+    check("PHUONGKHAC-02 (đối chứng) gật trơn 'đúng rồi cháu' → ghi phường gợi ý Tân Thuận như cũ", lr(L2).ward === "Phường Tân Thuận", JSON.stringify({ ward: lr(L2).ward }));
+    const { uid: uid3, L: L3 } = dung({ tin: TIN_Q7, cauTreo: "phuong", xung: "cô", botNoi: ["Cháu tra thấy đường Huỳnh Tấn Phát số 1235 thuộc Phường Tân Thuận (Quận 7 cũ), đúng không cô ạ?"] });
+    await goi(uid3, "ừ Tân Thuận đó cháu", { dong_y: "dong_y", dong_y_trich: "ừ", truong: [T("phuong", "Phường Tân Thuận", "Tân Thuận")] });
+    check("PHUONGKHAC-03 (đối chứng) gật kèm gọi ĐÚNG tên phường gợi ý → vẫn nhận gợi ý", lr(L3).ward === "Phường Tân Thuận", JSON.stringify({ ward: lr(L3).ward }));
+  }
   // (4) Đang hoãn: khách nói bận / hẹn lại → một câu chờ, không xin lỗi lại, không hỏi.
   for (const [ma, cau] of [["07 (ca gốc)", "anh đang bận, tối nói tiếp nhé"], ["08 (cách nói mới)", "tối nhắn anh nhé"]]) {
     const { uid } = dung({ tin: { ...TIN_GV, ward: "Phường Gò Vấp" }, cauTreo: "do_rong_duong", xung: "anh",

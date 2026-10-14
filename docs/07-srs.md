@@ -4594,6 +4594,32 @@ giữ nguyên (chọn lọc ≤ 4 ý, không lặp ô đã có, hiện trạng t
 **Kiểm.** `tin-nhap-rao.mjs` (dòng gộp đúng thứ tự, không còn 🏫; TIENICH-1, TIENICH-AI-1/2, TIENICH-CHON-1…3, ZZZZZ-T2 đổi kỳ vọng), e2e
 ZZZZZZ-01/01b (phần tiện ích chọn lọc nằm đầu dòng Thêm, không dòng 🏫).
 
+### SRS-5.1zzzzzzk · Khách gọi tên phường khác phường gợi ý không phải gật; lượt chốt tin không ghi đè địa chỉ cùng nội dung (14/10/2026)
+
+**Nguồn.** Người test thật (cô, nhà Huỳnh Tấn Phát, 10:17–10:38 giờ VN, tin `BDS-NP-XX-0001`). (1) Bot gợi ý "Cháu tra thấy đường Huỳnh Tấn Phát
+số 1235 thuộc Phường Tân Thuận (Quận 7 cũ), đúng không cô ạ?", cô đáp "Phường Phú Thuận nhé" → lượt ý ngắn đọc "nhé" là `dong_y` →
+`nhanGoiY` lấy phường gợi ý → tin ghi **Phường Tân Thuận** (fact 10:37:01 "Phường Phú Thuận" rồi 10:37:02 "Phường Tân Thuận" đè lên). Dữ
+liệu sai lên tin công khai. (2) Lượt đầu ghi địa chỉ "1235 Huỳnh Tấn Phát" (đã qua từ điển đường); lượt CHỐT TIN trước bản nháp đọc lại cả
+hội thoại ("đường huỳnh tấn phát" / "số 1235") và ghi đè `vi_tri` = "đường huỳnh tấn phát số 1235" → `location_raw` thô, cột `street` thành
+"huỳnh tấn phát số 1235", 📍 in chữ thường. (3) "Phí ok" → model viết "Cương cũ có gì cần hỗ trợ thêm không ạ?" — lỗi chữ của chính model ở
+lượt viết (sổ `van_kich` không có van nào ở lượt đó); chưa có cách chặn tất định, ghi nhận.
+
+**Lớp lỗi.** (1) Tín hiệu GẬT của AI được dùng mà không đối chiếu với NỘI DUNG câu: câu vừa gật vừa gọi tên một phường khác thì phần
+gọi tên là câu trả lời. Cùng lớp SRS-5.1zzzzzb (gọi tên quận tin đang ghi không phải gật gợi ý lệch quận) — nay phủ cả tên PHƯỜNG. Chỗ
+cùng lớp còn lại: gật + dữ liệu ở câu duyệt đã được `gatTach` tách (`ca = false` khi có dữ liệu). (2) Lượt chốt coi mọi giá trị AI đọc ra
+khác chuỗi là "sửa", trong khi địa chỉ chỉ khác thứ tự / hoa thường; cùng lớp SRS-5.1zzzzo (`giaTriKhongDoi` so cột + fact) nhưng
+`giaTriKhongDoi` so chuỗi gọn, không biết hai cách viết của một địa chỉ.
+
+**Quy tắc.** (1) `chat-reply` nhánh câu phường: `phuongKhach` = phường tra ra từ chính câu khách (`tachTienToPhuong` → `phuongCot`, hoặc
+`phuongNhacTrongCau`, cùng quận gợi ý); khác `goiYPhuong.phuong` → `noiPhuongKhac`, không nhận gợi ý dù AI nói gật; câu đi đường thường,
+gợi ý xoá (`capNhatQuanTuPhuong` không goiY). Gật trơn hay gật kèm đúng tên phường gợi ý vẫn nhận như cũ. (2) `kiem-bang-chung.ts`
+`cungNoiDungDiaChi(a, b)`: cùng tập chữ sau khi bỏ dấu, bỏ từ nối địa chỉ (đường / số / ở / tại / nhà), bỏ dấu câu, không kể thứ tự →
+cùng nội dung; `chotTinAi` gặp `vi_tri` cùng nội dung với bản đã ghi thì giữ bản đã ghi (thêm "hẻm", đổi số nhà vẫn là sửa thật).
+
+**Kiểm.** e2e PHUONGKHAC-01 (gợi ý Tân Thuận, "Phường Phú Thuận nhé" + AI gật → ghi Phú Thuận, gợi ý xoá), 02 (gật trơn → Tân Thuận như cũ),
+03 (gật kèm đúng tên gợi ý → Tân Thuận); `kiem-bang-chung.mjs` `cungNoiDungDiaChi` 5 ca (cùng nội dung hai chiều viết; thêm "hẻm" / đổi số
+là khác). Tắt (1): PHUONGKHAC-01 đỏ. Cách nói mới chưa bắn: "không, Phú Thuận cháu ơi", "Phú Thuận chứ không phải Tân Thuận".
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

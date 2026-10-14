@@ -1304,6 +1304,18 @@ function laTenDuongNgayHayMa(t: string): boolean {
   return /^[A-Za-zĐđ]\d{1,2}$/u.test(t.trim());
 }
 
+/**
+ * SRS-5.1zzzzzzk (Zalo thật 14/10 10:32): lượt chốt tin đọc lại cả hội thoại ("đường huỳnh tấn phát" / "số 1235") và ghi đè địa chỉ đã chuẩn
+ * "1235 Huỳnh Tấn Phát" bằng "đường huỳnh tấn phát số 1235" (cột tên đường thành "huỳnh tấn phát số 1235"). Hai địa chỉ CÙNG NỘI DUNG khi
+ * cùng tập số nhà và cùng tập chữ sau khi bỏ dấu, bỏ từ nối địa chỉ ("đường", "số", "ở", "tại", "nhà") — khác nhau chỉ ở thứ tự / hoa thường
+ * / dấu. Cùng nội dung thì bản đã có (đã qua từ điển đường, có số nhà đứng trước) thắng; nội dung khác (thêm hẻm, đổi số) mới là sửa.
+ */
+export function cungNoiDungDiaChi(a: string | null | undefined, b: string | null | undefined): boolean {
+  const tu = (s: string) => boDau(s).replace(/[,;.()]/g, " ").split(/\s+/).filter((t) => t && !/^(?:duong|so|o|tai|nha|can|dia chi)$/.test(t)).sort();
+  const ta = tu(a ?? ""), tb = tu(b ?? "");
+  return ta.length > 0 && ta.length === tb.length && ta.every((t, i) => t === tb[i]);
+}
+
 export function chonViTri(luat: string | null | undefined, ai: string | null | undefined): string | null {
   const l = luat?.trim() || null, a = ai?.trim() || null;
   if (!a) return l;
