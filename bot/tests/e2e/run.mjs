@@ -6687,7 +6687,36 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     check("DAM-E6 (ca gốc 11:12:49/56) tin 'ngân sách tầm 15 tỷ' vào trong lúc model chạy → lượt này nhường TRƯỚC KHI GỬI, không hỏi lại giá",
       r.body.superseded === true && r.body.superseded_luc === "truoc_gui" && r.body.replies.length === 0 && !db().t.messages.some((m) => m.sender === "bot" && /khoảng giá nào/.test(m.body)),
       JSON.stringify(r.body));
+    // SRS-5.1zzzzzzl (người test thật 14/10 11:26, bên bán tin rao dài 40 s): THẢ CẢM XÚC tới trong lúc model chạy KHÔNG phải tin mới hơn —
+    // lượt vẫn gửi (cú thả tim không mang chữ, lượt của nó cũng im → nhường là khách chờ mãi).
+    for (const [ma, cx] of [["E7 (ca gốc)", "[khách thả cảm xúc /-heart]"], ["E7b (cách nói mới)", "[khách thả cảm xúc /-strong]"]]) {
+      globalThis.__model.parse = (p) => {
+        if (!laSoatMua(p)) { const cv = db().t.conversations.find((c) => c.buyer_id === db().t.buyers.find((b) => b.zalo_user_id === "dam-1")?.id); db().insert("messages", { conversation_id: cv.id, sender: "buyer", body: cx, zalo_msg_id: `dam-cx-${ma}` }); }
+        return laSoatMua(p) ? { nhan_xet: [] } : OUT({ replies: ["Dạ, anh chị có khoảng giá nào cho căn hộ không ạ?"] });
+      };
+      r = await send({ external_user_id: "dam-1", text: "mình cần mua căn hộ" });
+      check(`DAM-${ma} «${cx}» vào trong lúc model chạy → KHÔNG nhường lượt, vẫn gửi câu hỏi`,
+        r.body.superseded !== true && r.body.replies.length >= 1 && /khoảng giá nào/.test(r.body.replies.join(" ")), JSON.stringify(r.body));
+    }
     globalThis.__rpc = rpcCu;
+  }
+  // SRS-5.1zzzzzzl, bên BÁN (ca gốc): đang hỏi kết cấu, chủ nhà trả lời, giữa lúc model chạy khách thả tim → lượt vẫn gửi, fact vẫn ghi.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "ket_cau", status: "pending" });
+    const parseCu = globalThis.__model.parse;
+    globalThis.__model.parse = (p) => {
+      const cv = db().t.conversations.find((c) => c.seller_id === sC.id);
+      if (cv && !db().t.messages.some((m) => m.zalo_msg_id === "cx-ban-1")) db().insert("messages", { conversation_id: cv.id, sender: "seller", body: "[khách thả cảm xúc /-heart]", zalo_msg_id: "cx-ban-1" });
+      return OUT({ replies: ["Dạ em ghi 1 trệt 2 lầu rồi ạ. Nhà mình mấy phòng ngủ vậy anh?"] });
+    };
+    r = await send({ external_user_id: "z-ccrb", text: "1 trệt 2 lầu" });
+    check("CX-BAN-01 chủ nhà trả lời kết cấu, thả tim tới giữa lượt → KHÔNG nhường, bot vẫn trả lời, câu kết cấu đóng",
+      r.body.superseded !== true && r.body.replies.length >= 1 && !pend("ket_cau", tin.id), JSON.stringify({ body: r.body, treo: db().t.info_requests.filter((x) => x.listing_id === tin.id && x.status === "pending").map((x) => x.question) }));
+    globalThis.__model.parse = parseCu;
   }
   // (2) chủ nhà HỎI VỀ CHÍNH TIN CỦA MÌNH → trả lời tiền định từ DB, hỏi lại câu treo; học xưng hô "anh nói".
   fresh(seedKho);

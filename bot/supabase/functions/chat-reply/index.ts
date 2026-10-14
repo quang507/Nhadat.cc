@@ -2152,10 +2152,13 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       const seqChu = (msgSRow as { seq?: number } | null)?.seq;
       if (typeof seqChu === "number") {
         kiemTinMoiHon = async () => {
-          const { data, error } = await client.from("messages").select("seq").eq("conversation_id", convSId)
-            .in("sender", ["buyer", "seller"]).gt("seq", seqChu).limit(1);
+          // SRS-5.1zzzzzzl (người test thật 14/10 11:26): tin rao dài chạy 40 s, giữa chừng khách THẢ TIM → cú thả tim bị đếm là "tin mới
+          // hơn", lượt rao nhường (không gửi gì), lượt thả tim tự nó cũng im → khách chờ 12 phút không thấy bot. Thả cảm xúc không mang
+          // chữ để trả lời và lượt của nó không gửi gì, nên không bao giờ được thay lượt đang chạy (`laThaCamXuc`, cùng cách gộp cụm).
+          const { data, error } = await client.from("messages").select("seq, body").eq("conversation_id", convSId)
+            .in("sender", ["buyer", "seller"]).gt("seq", seqChu).limit(5);
           if (error) { await ghiLoi(client, "chat-reply kiem tin moi hon (ban)", error.message); return false; }
-          return (data ?? []).length > 0;
+          return ((data ?? []) as Array<{ body: string | null }>).some((m) => !laThaCamXuc(m.body ?? ""));
         };
       }
     }
@@ -9703,10 +9706,11 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
   if (insMsgSeq != null) {
     const seqToi = insMsgSeq;
     kiemTinMoiHon = async () => {
-      const { data, error } = await client.from("messages").select("seq").eq("conversation_id", convId)
-        .in("sender", ["buyer", "seller"]).gt("seq", seqToi).limit(1);
+      // SRS-5.1zzzzzzl: thả cảm xúc không thay lượt đang chạy (xem bản người bán).
+      const { data, error } = await client.from("messages").select("seq, body").eq("conversation_id", convId)
+        .in("sender", ["buyer", "seller"]).gt("seq", seqToi).limit(5);
       if (error) { await ghiLoi(client, "chat-reply kiem tin moi hon (mua)", error.message); return false; }
-      return (data ?? []).length > 0;
+      return ((data ?? []) as Array<{ body: string | null }>).some((m) => !laThaCamXuc(m.body ?? ""));
     };
   }
 
