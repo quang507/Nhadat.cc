@@ -84,3 +84,19 @@ import { tienIchNoiBatHopLe } from "../supabase/functions/_shared/extraction/khe
   ok3("TICH-4 gon có tên riêng KHÔNG có trong gốc ('Aeon Mall') → in ý gốc", tienIchNoiBatHopLe([{ goc: "Chợ Bình Chánh ~ 20 phút", gon: "chợ Bình Chánh, Aeon Mall 20 phút" }], Y)[0]?.in === "Chợ Bình Chánh ~ 20 phút");
   ok3("TICH-5 không có / rỗng → []", tienIchNoiBatHopLe(null, Y).length === 0 && tienIchNoiBatHopLe([], Y).length === 0);
 }
+
+// SRS-5.1zzzzzzo (14/10/2026): trần token đầu ra của lượt khen phải đủ cho KHUÔN ĐẦY — khuôn đã thêm tieu_de / tien_ich / quy_mo /
+// tien_ich_noi_bat (4 × goc + gon) mà trần giữ 300 từ lúc chỉ có `khen` → JSON cắt giữa chuỗi ("Unterminated string … position 503", sổ lỗi
+// 13/10 09:03 và 14/10 04:47), cả lượt ném, bản nháp mất tiêu đề AI + gom tiện ích. Khuôn đầy ước ~1.400 ký tự tiếng Việt ≈ 700 token.
+// Đỏ khi: ai hạ trần xuống dưới 900, hay thêm trường vào khuôn mà quên trần (soi độ dài mô tả khuôn làm số đo thô).
+{
+  const ok4 = (ten, dk, ct = "") => { console.log(`${dk ? "✓" : "✗"} ${ten}${dk || !ct ? "" : `\n    ${ct}`}`); if (!dk) process.exitCode = 1; };
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../supabase/functions/_shared/ai/khen-nhap.ts", import.meta.url), "utf8");
+  const tran = Number(/max_tokens:\s*(\d+)/.exec(src)?.[1] ?? 0);
+  ok4("TRAN-1 lượt khen bản nháp: max_tokens ≥ 900 (khuôn đầy ~700 token; 300 từng cắt JSON hai lần trên tin thật)", tran >= 900, `max_tokens = ${tran}`);
+  // Mỗi trường trong khuôn là một chuỗi tiếng Việt khách đọc được; đếm trường z.string/z.array → trần phải ≥ 120 token mỗi trường
+  // (ước thô: trường dài nhất là tien_ich_noi_bat 4 × ~120 ký tự). Thêm trường mà không nâng trần là đỏ.
+  const soTruong = (src.match(/^\s+[a-z_]+:\s*z\./gm) ?? []).length;
+  ok4(`TRAN-2 khuôn có ${soTruong} trường → trần ≥ ${soTruong * 120} token`, tran >= soTruong * 120, `max_tokens = ${tran}`);
+}

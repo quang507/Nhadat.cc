@@ -4682,6 +4682,48 @@ phường → có/không, gật → phường + quận), 06/06b (cửa ghiFact: 
 Phát"), 07 (nhà phố khớp dự án → không chép phường kho). Kỳ vọng đổi theo thiết kế mới: PH-13 (kể phường kèm quận thay câu Nominatim),
 DUONG-01 (cửa tra thêm một lần bằng tên đã sửa). Tắt (b): 06 đỏ; tắt (d): 01 đỏ; tắt (e): 02 đỏ, ZZZZZI-03 đỏ; tắt (f): 07 đỏ.
 
+### SRS-5.1zzzzzzn · Tiện ích quanh tin: cả ba máy Overpass hỏng từ 09/10, thêm máy openstreetmap.fr (14/10/2026)
+
+**Nguồn.** Soát sổ lỗi sau lượt người test 11:50: `geocode-listings` 9 dòng / 24 giờ "1 tin không nạp được tiện ích, mọi máy hỏng —
+overpass-api.de → HTTP 406; overpass.private.coffee → Signal timed out; maps.mail.ru → HTTP 504", liên tục từ 09/10 07:11 (22 dòng). Project
+mới (`rqxmmqmctpklqcmbfxuj`, 08/10) **chưa tin nào** có `tien_ich_at` — hai tin thật 14/10 (Q5 và Cao Lỗ) đều trống, bản nháp chỉ in tiện ích
+chủ nhà kể. Đo bằng `net.http_get` từ chính DB 14/10 05:32 UTC (cùng câu Overpass, 8 máy): overpass-api.de 504 (từ edge là 406 — chặn dải IP
+hạ tầng, từ 11/09 chưa bao giờ qua), private.coffee quá 20 s, mail.ru 504, kumi.systems quá 20 s, **openstreetmap.fr 200 + 10 điểm quanh Cao Lỗ**,
+osm.ch 200 nhưng 0 điểm (chỉ dữ liệu Thuỵ Sĩ), osm.jp lỗi chứng chỉ, nchc.org.tw không phân giải được.
+
+**Lớp lỗi.** Dịch vụ công cộng miễn phí mất dần từng máy mà không có gì nói ra: mỗi máy hỏng là "đường đi đúng thiết kế" (14/09, chỉ
+`console.log`), sổ lỗi chỉ nhận một dòng tổng mỗi tick — đúng, nhưng dòng đó lặp 9 lần / ngày suốt 5 ngày mà không ai đọc thành "tính năng
+tiện ích đã chết". Cùng lớp: Nominatim (một máy, có cache) — chưa thấy hỏng kéo dài; `bot_health_tick` đếm lỗi theo giờ nên 🩺 vẫn kêu
+"1 lỗi" mỗi giờ, tiếng ồn quen tai (cùng hình với vòng tự nuôi 08/09, CLAUDE.md §6).
+
+**Quy tắc.** Danh sách `OVERPASS` (geocode-listings) thêm `overpass.openstreetmap.fr` và đặt lên ĐẦU (máy đã biết hỏng đứng sau để lượt
+thường không tốn tới 35 s ngân sách mỗi máy); giữ ba máy cũ làm dự phòng; không thêm máy chỉ có dữ liệu vùng (osm.ch) vì 200 rỗng sẽ ghi
+"không có tiện ích" oan. Thêm / bớt máy phải đo từ hạ tầng Supabase (pg_net hoặc edge), không đo từ máy văn phòng — 11/09 đã đo lệch một lần.
+
+**Chỗ cùng lớp còn để ngỏ.** Chưa có còi riêng cho "tính năng X hỏng N ngày liên tục" (sổ lỗi đếm theo giờ, không theo chuỗi ngày); để OPEN,
+không thêm còi trong lần sửa này.
+
+**Kiểm.** `bot/tests/tien-ich.mjs` mục 4: danh sách có .fr, .fr đứng trước overpass-api.de, không có osm.ch, ≥ 3 máy. Tắt (bỏ .fr): đỏ. Sau
+deploy `geocode-listings`: tick kế phải điền `tien_ich_at` cho hai tin 14/10 và sổ lỗi không còn dòng "mọi máy hỏng".
+
+### SRS-5.1zzzzzzo · Lượt khen bản nháp: trần token đầu ra theo khuôn đầy (14/10/2026)
+
+**Nguồn.** Sổ lỗi `chat-reply khen ban nhap`: "Failed to parse structured output: Unterminated string in JSON at position 530" (13/10 09:03) và
+"… position 503" (14/10 04:47 — tin Cao Lỗ của người test, bài rao dài 9 ý tiện ích). Bản nháp vẫn ra nhưng mang tiêu đề máy "Chỉ 10 tỷ mặt tiền
+tại Tân Hưng" và không gom tiện ích nổi bật.
+
+**Lớp lỗi.** Trần `max_tokens: 300` đặt 13/10 sáng khi khuôn `KhenNhap` chỉ có `khen` + `dua_tren`; cùng ngày khuôn thêm `quy_mo`
+(5.1zzzzzn), `tien_ich` (5.1zzzzzo), `tieu_de` (5.1zzzzzr), `tien_ich_noi_bat` 4 × (goc + gon) (5.1zzzzzz) mà trần không ai xem lại — khuôn đầy
+~1.400 ký tự tiếng Việt ≈ 700 token. JSON bị cắt thì `parse` ném, `khenChoNhap` trả rỗng TOÀN BỘ (mất cả tiêu đề AI, gom tiện ích), không chỉ
+câu khen. Cùng lớp: các lượt structured output khác có trần cố định (`boc-gan` 300, `phan-vai` 150, `boc-du-an` 400, `phan-loai-anh` 400,
+`doc-y-luot` 500, `gan-manh` 600) — khuôn của chúng chưa đổi từ lúc đặt trần, sổ lỗi 7 ngày không có dòng cắt JSON nào khác; ai thêm trường
+vào một khuôn thì phải xem lại trần của chính lượt đó.
+
+**Quy tắc.** `khen-nhap.ts` `max_tokens: 1000`; thêm trường vào khuôn là xem lại trần (bài kiểm đếm trường × 120 token làm số đo thô).
+
+**Kiểm.** `bot/tests/khen-nhap.mjs` TRAN-1 (≥ 900), TRAN-2 (≥ số trường × 120). Tắt (hạ về 300): đỏ. Sau deploy: bài rao dài nhiều tiện ích phải ra
+tiêu đề AI + "📝 Thêm" gom ≤ 4 ý, sổ lỗi không còn dòng `khen ban nhap`.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -28,10 +28,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Supabase thì chạy. Có máy phụ để một lần bận không làm trễ cả lượt.
 // Lượt chạy thật đầu tiên (11/09) cả hai máy đều hỏng: máy chính trả 406 (gọi
 // từ DB thì 504 "too busy"), máy phụ quá 35 s. Thêm máy thứ ba.
+// 14/10/2026 (SRS-5.1zzzzzzn): từ 09/10 CẢ BA máy hỏng mọi tick (overpass-api.de 406 từ
+// edge — chặn dải IP hạ tầng; private.coffee quá giờ / 500; mail.ru 504), project mới chưa
+// có tin nào nạp được tiện ích. Đo bằng pg_net từ chính DB 14/10: openstreetmap.fr trả 200
+// kèm dữ liệu TP.HCM (10 điểm quanh Cao Lỗ) — đặt lên ĐẦU để lượt thường không tốn 35 s
+// chờ máy đã biết hỏng; osm.ch trả 200 nhưng chỉ dữ liệu Thuỵ Sĩ (0 điểm), osm.jp lỗi
+// chứng chỉ, nchc.org.tw không phân giải được → không thêm. `bot/tests/tien-ich.mjs` soi danh sách.
 const OVERPASS = [
+  "https://overpass.openstreetmap.fr/api/interpreter",
   "https://overpass-api.de/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
 ];
 const CHAN_THOI_GIAN_MS = 110_000; // dưới wall-clock 150s; chạy lại là tiếp
 // 14/09/2026: chặn 110 s chỉ xét GIỮA hai tin — một tin vào bước tiện ích lúc 100 s

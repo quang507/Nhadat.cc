@@ -58,9 +58,13 @@ type ClientModel = {
 export async function vietKhenNhapBangModel(
   ai: ClientModel, model: string, banTin: string, cachGoi: string, yThem: string[] = [],
 ): Promise<{ khen: string | null; duaTren: string[]; quyMo: string[]; tienIch: string[]; tienIchNoiBat: Array<{ goc: string; gon: string }>; tieuDe: string | null; usage: unknown }> {
+  // SRS-5.1zzzzzzo (14/10/2026): trần 300 đặt lúc khuôn chỉ có `khen` + `dua_tren`; khuôn đã thêm tieu_de, tien_ich, quy_mo,
+  // tien_ich_noi_bat (4 × goc + gon) mà trần giữ nguyên → bài rao dài làm JSON bị cắt giữa chuỗi ("Unterminated string … position 503",
+  // sổ lỗi 13/10 09:03 và 14/10 04:47 — tin Cao Lỗ của người test), và cả lượt ném: mất luôn tiêu đề AI + gom tiện ích, không chỉ câu khen.
+  // Ước lượng khuôn đầy ~1.400 ký tự tiếng Việt ≈ 700 token; đặt 1.000. `bot/tests/khen-nhap.mjs` soi trần này không tụt.
   const r = await ai.messages.parse({
     model,
-    max_tokens: 300,
+    max_tokens: 1000,
     output_config: { effort: "low", format: FORMAT },
     system: [{ type: "text", text: LUAT_KHEN, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: `Cách gọi chủ nhà: "${cachGoi}"\nBẢN TIN:\n${banTin.slice(0, 2500)}\nÝ THÊM:\n${yThem.length ? yThem.map((y) => `- ${y}`).join("\n") : "(không có)"}` }],
