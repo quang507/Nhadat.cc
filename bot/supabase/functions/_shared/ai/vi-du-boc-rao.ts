@@ -22,6 +22,27 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // SRS-5.1zzzzzzz14 (Zalo thật 14/10/2026, Conic Boulevard: "vào quận 5 khoản 20 phút, qua Phú Mỹ Hưng Q7 cũng 20 phút" → quận 5 thành địa chỉ;
+    // chủ dự án: "Nó là thông tin bổ sung mà… để AI đọc schematic thôi"). Cách nói khác ca gốc.
+    cau_dang_hoi: null,
+    tin: "Bán căn hộ 3 tỷ 2, ra quận 1 chỉ 15 phút",
+    so_can: 1,
+    truong: [t("loai_giao_dich", "ban", "Bán căn hộ"), t("loai_bds", "chung_cu", "căn hộ"), t("gia", "3 tỷ 2", "3 tỷ 2"),
+      t("tien_ich_gan", "ra quận 1 chỉ 15 phút", "ra quận 1 chỉ 15 phút")],
+    kien_thuc: [],
+    luu_y: "Nơi ĐI TỚI kèm thời gian là tiện ích, không phải nơi căn nằm → KHÔNG đưa quan.",
+  },
+  {
+    // SRS-5.1zzzzzzz10 (Zalo thật 14/10/2026 10:04: chờ duyệt, "căn của mình tại địa chỉ Ấp 18 … bạn sửa lại giúp mình" → AI để địa chỉ trong tra_loi).
+    // Cách nói khác ca gốc.
+    cau_dang_hoi: "duyet_tin",
+    tin: "nhà chị ở 45 Nguyễn Văn Cừ chứ không phải chỗ đó, em sửa lại giúp chị",
+    so_can: 0,
+    truong: [t("duong", "45 Nguyễn Văn Cừ", "45 Nguyễn Văn Cừ"), t("ten_duong", "Nguyễn Văn Cừ", "45 Nguyễn Văn Cừ")],
+    kien_thuc: [],
+    luu_y: "Chờ duyệt mà đưa địa chỉ đúng → truong, không để ở tra_loi.",
+  },
+  {
     // SRS-5.1zzzzzza (Zalo thật 13/10/2026 16:44–16:53): "Điều chỉnh cho mình giá 6,950 tỷ" / "Sửa cho chị giá từ 1,2 tỷ thành 6,950 tỷ" lúc chờ
     // duyệt → model trả rỗng bốn lần. Lệnh sửa kèm giá trị là lời sửa dữ liệu. Cách nói khác ca gốc.
     cau_dang_hoi: "duyet_tin",

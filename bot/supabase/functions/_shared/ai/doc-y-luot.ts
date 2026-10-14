@@ -19,7 +19,7 @@ export const YEU_CAU = [
   "hoi_khach", "hoi_gia", "hoi_dien_tich", "hoi_dia_chi", "hoi_tang", "hoi_huong", "hoi_phap_ly", "hoi_trang_thai", "hoi_ban_chua",
   "hoi_noi_dang", "hoi_bao_lau_ban", "hoi_noi_dung", "xin_so_khach", "xin_xoa_du_lieu", "xin_bo_o", "xin_sua", "gui_noi_dung_sau", "khong",
 ] as const;
-export const O_BO = ["do_rong_hem", "gia", "phuong", "dien_tich", "so_phong_ngu", "ket_cau", "phap_ly", "huong", "vi_tri", "bo_sung"] as const;
+export const O_BO = ["do_rong_hem", "gia", "phuong", "quan", "dien_tich", "so_phong_ngu", "ket_cau", "phap_ly", "huong", "vi_tri", "bo_sung"] as const;
 /** SRS-5.1zzl (05/10/2026, demo AOND thao tác phá dữ liệu chờ xác nhận): ngưng rao NHIỀU căn / chỉ giữ vài căn. */
 export const KIEU_NHL = ["chi_giu", "an_het"] as const;
 const YLuot = z.object({
@@ -32,7 +32,7 @@ const YLuot = z.object({
   dong_y_trich: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà thể hiện ý ở dong_y. khong_noi thì null."),
   yeu_cau: z.enum(YEU_CAU).describe("Chủ nhà đang HỎI / XIN gì (xem LUẬT YÊU CẦU). Không thì khong."),
   yeu_cau_trich: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà thể hiện yêu cầu. khong thì null."),
-  yeu_cau_o: z.enum(O_BO).nullable().describe("CHỈ khi yeu_cau = xin_bo_o: ô chủ nhà xin bỏ (hẻm, giá, phường, diện tích, phòng ngủ, số tầng, pháp lý, hướng, địa chỉ; bo_sung = một ý ở dòng \"Thêm\" của bản nháp). Không rõ ô nào thì null."),
+  yeu_cau_o: z.enum(O_BO).nullable().describe("CHỈ khi yeu_cau = xin_bo_o: ô chủ nhà xin bỏ / nói là sai (hẻm, giá, phường, quận, diện tích, phòng ngủ, số tầng, pháp lý, hướng, địa chỉ; bo_sung = một ý ở dòng \"Thêm\" của bản nháp). Không rõ ô nào thì null."),
   // SRS-5.1zzzzy: xin bỏ ý ở dòng "Thêm" — chỉ ra cụm, code chỉ bỏ mảnh có thật trong ghi chú đang lưu (`boYGhiChu`).
   bo_y: z.array(z.string()).nullable().describe("CHỈ khi yeu_cau_o = bo_sung: các ý chủ nhà xin bỏ khỏi dòng \"Thêm\", chép theo lời khách (\"con chị ở Úc\", \"sẽ tăng giá\"). Không thì null."),
   // SRS-5.1zzzzz (11/10/2026, khách mô phỏng: "ko biết cụ thể đường, chỉ biết xã thôi" → luật ghi địa chỉ = "Ko biết cụ thể đường";
@@ -93,7 +93,9 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
   dung (có giá, diện tích, địa chỉ…) → khong.
 - xin_so_khach: xin số điện thoại / Zalo / liên hệ của NGƯỜI MUA để tự gọi.
 - xin_xoa_du_lieu: xin xoá tin / căn / hồ sơ / dữ liệu / tài khoản khỏi hệ thống (không phải ngưng rao vì bán rồi).
-- xin_bo_o: xin bỏ / xoá MỘT chi tiết đã ghi nhầm mà KHÔNG đưa giá trị mới ("xoá cái hẻm 4m ghi nhầm đi"). Có giá trị mới
+- xin_bo_o: xin bỏ / xoá MỘT chi tiết đã ghi nhầm mà KHÔNG đưa giá trị mới ("xoá cái hẻm 4m ghi nhầm đi"), hay nói MỘT chi tiết
+  đang ghi / đang in trên bản nháp là SAI mà không đưa giá trị đúng ("căn chung cư không phải ở quận 5" → yeu_cau_o quan; "không phải
+  hẻm đâu em" → do_rong_hem; "phường đó sai rồi" → phuong). Có giá trị mới
   ("bỏ hẻm 4m, hẻm đúng là 3m5") là lời sửa → khong. Xin bỏ ý ở dòng "Thêm" của bản nháp ("xoá mấy câu về con chị ở Úc đi",
   "bỏ cái sẽ tăng giá ra") → xin_bo_o, yeu_cau_o = bo_sung, bo_y là các ý đó — kể cả khi cùng tin có gật ("đồng ý rồi, nhưng xoá…").
   Chủ nhà bảo một dòng của bản nháp CHỈ CẦN / chỉ để / giữ lại một phần ("Quy mô chỉ cần để: trệt + 4 lầu · 6 phòng ngủ · 4 WC là

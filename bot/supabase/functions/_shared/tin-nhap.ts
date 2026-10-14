@@ -271,6 +271,18 @@ export function tieuDeTinLe(l: TinNhapRow, fact: (k: string) => string | null): 
  * tên chung cư á"): tiêu đề căn hộ có tên chung cư (ô `du_an_ten`). Một chỗ chèn cho cả tiêu đề code ghép lẫn tiêu đề AI viết; tên đã có
  * trong tiêu đề thì giữ nguyên. Bỏ chữ dẫn "dự án / chung cư" khách gõ kèm để không thành "căn hộ chung cư dự án …".
  */
+/**
+ * SRS-5.1zzzzzzz13: tên dự án KHO (bảng `projects`, nạp từ web — còn mã HTML như "Chung Cư CONIC &#8211; Đông Nam Á") thành chữ in được cho
+ * bản nháp. Rỗng / quá dài → null (không in).
+ */
+export function tenDuAnKho(ten: string | null | undefined): string | null {
+  const t = String(ten ?? "")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
+    .replace(/\s+/g, " ").trim();
+  return t.length >= 2 && t.length <= 80 ? t : null;
+}
+
 export function themTenChungCu(tieuDe: string, l: Pick<TinNhapRow, "property_type">, fact: (k: string) => string | null): string {
   if (l.property_type !== "chung_cu") return tieuDe;
   const ten = (fact("du_an_ten") ?? "").replace(/^\s*(?:dự án|du an|chung cư|chung cu|khu căn hộ|cc)\s+/iu, "").replace(/\s+/g, " ").trim();

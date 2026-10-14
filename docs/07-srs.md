@@ -5024,6 +5024,104 @@ nguyên luật cũ).
 **Kiểm.** `fr177-hoi-nhu-moi-gioi-gioi.mjs` (20 tên, không "•ai", không trùng, không tên địa danh; tất định theo ID); e2e V1.1b (lời chào xưng
 đúng tên theo Zalo ID), 1408/1408 đạt. Sau merge đẩy `tone_rules` lên `bot_prompts`.
 
+### SRS-5.1zzzzzzz10 · Lời sửa lúc duyệt bản nháp phải vào đúng ô (14/10/2026)
+
+**Ca gốc.** Zalo thật 14/10 10:03–10:05, căn hộ Conic Boulevard, đang chờ duyệt bản nháp: (a) "căn của mình tại địa chỉ Ấp 18 Khu dân cư 584 -
+Huỳnh Bá Chánh, Tân Nhựt, Hồ Chí Minh bạn sửa lại giúp mình" → 🤖 "Hiểu: tự nói là chính chủ", bot hỏi lại "anh nói giúp em chỗ cần sửa"; (b) "Căn
+chung cư không phải ở quận 5" → "Không trích xuất được gì", bot nhắc nhắn "ok". Sổ `boc_tach_bong` cho thấy AI đọc ĐÚNG địa chỉ nhưng đặt nó vào
+`tra_loi` của "câu" `duyet_tin`, `truong` rỗng — code ghi ô từ `truong`, nên không có gì để ghi.
+
+**Lớp lỗi.** Câu treo KHÔNG phải câu hỏi một ô (chờ duyệt) được đưa cho AI y như câu hỏi ô ("Câu bot vừa hỏi chủ nhà: duyet_tin"), nên AI coi mọi
+thứ khách nói là "câu trả lời" của nó. Cùng gốc với (b): lời nói một ô SAI mà không đưa giá trị mới không có ô nào nhận (yêu cầu `xin_bo_o` thiếu ô
+quận).
+
+**Chỗ cùng lớp.** Mọi đường AI bóc tách lúc câu treo không phải ô: hiện chỉ `duyet_tin` (bảng `CAU_KHONG_PHAI_O` trong `boc-rao.ts` — câu treo mới
+cùng kiểu thì thêm vào đó). `y_dinh` đọc "sửa lại giúp mình" là `du_roi` (cùng lượt) — prompt nay nói rõ bảo sửa là `binh_thuong`. Câu hỏi
+`xac_nhan_*` đã có nhánh riêng, không qua đường ghi ô.
+
+**Sửa.** (1) `bocRaoBangModel`: câu treo trong `CAU_KHONG_PHAI_O` thì dòng ngữ cảnh nói thẳng "bot đang chờ duyệt bản nháp — không phải câu hỏi
+một ô, tra_loi = false, lời sửa vào truong"; LUAT mục 5 thêm ví dụ câu đưa địa chỉ đúng lúc duyệt. (2) `chat-reply`: AI vẫn đặt nội dung vào
+`tra_loi` mà `truong` rỗng ở câu treo không phải ô → gọi lại MỘT lần với `nhacLai` chỉ đúng chỗ sai (cùng khuôn gọi lại SRS-5.1zzzzzzh; AI vẫn
+quyết ô, code vẫn kiểm trích dẫn). (3) `O_BO` (`doc-y-luot.ts`) + `O_XIN_BO` thêm ô `quan`; luật `xin_bo_o` nhận "nói một chi tiết đang ghi là
+SAI mà không đưa giá trị đúng" → bot đọc lại "tin mình đang ghi Quận 5, nhắn quận đúng là em sửa".
+
+**Kiểm (đỏ khi tắt).** e2e `TTA-ca gốc`, `TTA-cách nói mới` ("nhà chị ở 45 Nguyễn Văn Cừ chứ không phải chỗ đó") — tắt lượt gọi lại thì đỏ;
+`TTA-quan-ca gốc`, `TTA-quan-cách nói mới` ("quận 5 là sai rồi em") — bỏ ô `quan` khỏi `O_BO` thì đỏ.
+
+### SRS-5.1zzzzzzz11 · Một căn không thành hai tin; tên căn chỉ nhắc khi thật sự nhiều căn (14/10/2026)
+
+**Ca gốc.** Zalo thật 14/10 09:53–10:00: "Anh cần bán gấp chung cư mặt tiền quốc lộ 1A" mở tin RỖNG; bot hỏi tên chung cư bằng lời model (không
+mở câu treo); bài rao kế mở tin THỨ HAI. Người một căn thành "hai tin", bốn câu hỏi liền đều "Căn Phường Tân Tạo mình bao nhiêu phòng ngủ / ở tầng
+mấy / sổ thế nào / hiện ở hay để trống" — chủ dự án: "lặp lại cái căn phường Tân Tạo suốt nghe hơi ngu".
+
+**Lớp lỗi.** Hai lớp. (a) "Tin rỗng đang điền" chỉ được dò qua câu treo (ba chỗ chép cùng một điều kiện `pendingReq.listings && laTinRong`) — lượt
+không có câu treo thì tin rỗng đang neo bị bỏ qua, bài rao mở tin mới. (b) `nhieuCan` đếm MỌI tin của người này (kể cả tin rỗng / đã đóng) và tên
+căn được chèn vào MỌI câu hỏi, dù đang hỏi liền mạch một căn.
+
+**Chỗ cùng lớp.** `laTinRongDangDien` (kiểm trích dẫn ý cuộc rao), `tinRongCu` (giữ loại / giao dịch / gấp của tin rỗng), `tinRongId` (điền thay
+vì mở) — nay cả ba đọc MỘT biến `tinRongDangDien`. `nhieuCan` còn dùng cho điểm người rao và nhãn "nhiều căn thì gọi bằng địa chỉ" (giữ nguyên:
+đếm tin là đúng ở đó); chỉ chỗ GỌI TÊN căn trong câu hỏi đổi.
+
+**Sửa.** `tinRongDangDien`: tin của câu treo nếu rỗng; không câu treo thì tin đang NEO của người này nếu rỗng. Tên căn (`neo`) chỉ khi có từ hai
+tin đang mở CÓ DỮ LIỆU và câu bot vừa nói chưa nhắc tên căn đó; prompt r2 chỉ dặn nói tên căn khi vừa chuyển căn.
+
+**Kiểm (đỏ khi tắt).** e2e `TTB-ca gốc` (bài rao Sky Garden vào tin rỗng đang neo, không câu treo → một tin), `TTB-cách nói mới` ("căn hộ 2pn 75m2
+giá 3 tỷ 2 nha em") — bỏ nhánh tin neo thì ra hai tin.
+
+### SRS-5.1zzzzzzz12 · Căn hộ dự án kho lấy quận của dự án (14/10/2026)
+
+**Ca gốc.** Cùng hội thoại 09:54: bài rao Conic Boulevard (kho: Huyện Bình Chánh) có câu "vào quận 5 khoản 20 phút" → AI trích "vào quận 5",
+tin thành "Phường Tân Tạo, Quận 5": phường của dự án, quận của câu chỉ đường, hai cột lệch nhau trên tin công khai.
+
+**Lớp lỗi.** Một ô (quận) có hai nguồn cùng nghĩa (chữ khách / dự án kho) mà thứ tự ưu tiên đặt chữ khách trước kể cả khi căn nằm TRONG dự án,
+trong khi phường lại lấy theo dự án — hai cột của cùng một địa chỉ lấy từ hai nguồn khác nhau.
+
+**Chỗ cùng lớp.** `phuongTuDuAn` (SRS-5.1zzzzzzm) đã chặn phường dự án cho nhà phố / đất; nay quận dự án cũng chỉ thắng cho căn HỘ. Prompt quận
+thêm ví dụ câu chỉ đường ("vào quận 5 khoảng 20 phút", "qua Phú Mỹ Hưng Q7 cũng 20 phút"). Bảng `phuong_cu` có xã cũ bị chia (Xã Tân Kiên → Tân
+Tạo + Tân Nhựt, dòng Tân Tạo ghi `toan_bo = true`) — dữ liệu cần soát riêng, chưa sửa ở đây.
+
+**Sửa.** `quanDoc`: căn hộ (`chung_cu`) đã khớp dự án kho có quận → quận của dự án đứng trước chữ quận trong bài rao.
+
+**Kiểm (đỏ khi tắt).** e2e `TTC-01`.
+
+### SRS-5.1zzzzzzz13 · Bản nháp căn hộ dùng tên dự án kho khi chưa có ô tên chung cư (14/10/2026)
+
+**Ca gốc.** Cùng hội thoại 10:00: căn hộ đã gắn dự án Conic Boulevard (`project_id`), bản nháp không có tên chung cư ở tiêu đề lẫn 📍 — SRS-
+5.1zzzzzzz8 chỉ in ô `du_an_ten`, mà ô đó chỉ có khi khách trả lời câu hỏi tên chung cư (câu đó được bỏ qua vì `project_id` đã có).
+
+**Lớp lỗi.** Tên dự án có hai nguồn cùng nghĩa (ô của chủ nhà / dự án kho đã gắn) nhưng bản nháp chỉ đọc một.
+
+**Chỗ cùng lớp.** `listing_missing_facts` coi `project_id` là đủ cho câu `du_an_ten` (20261014b) — đúng; tiêu đề AI viết (`khen-nhap.ts`) đọc dòng
+📍 nên đi theo.
+
+**Sửa.** `guiBanNhap`: căn hộ có `project_id` mà chưa có ô `du_an_ten` → thêm ô ảo từ `projects.name` (qua `tenDuAnKho`, giải mã HTML như
+"&#8211;"); ô của chủ nhà luôn thắng. Mọi dòng bản nháp đọc cùng ô.
+
+**Kiểm (đỏ khi tắt).** e2e `TTD-ca gốc` ("Conic Boulevard"), `TTD-cách nói mới` (tên kho "Chung Cư CONIC &#8211; Đông Nam Á" → in "CONIC, Đông Nam
+Á"). Cả bộ e2e chat-reply 1417/1417 đạt; tắt năm bản sửa thì 9 ca mới đỏ.
+
+### SRS-5.1zzzzzzz14 · Địa danh trong câu chỉ đường là tiện ích, không phải địa chỉ — AI quyết theo nghĩa (14/10/2026)
+
+**Ca gốc.** Zalo thật 14/10 09:54, bài rao Conic Boulevard "…vào quận 5 khoản 20 phút, qua Phú Mỹ Hưng Q7 cũng 20 phút…" → 🤖 "địa chỉ: làm chuẩn
+Phường Tân Tạo, Quận 5". Chủ dự án: "nó lấy luôn cái tiện ích làm địa chỉ luôn rồi. Nó là thông tin bổ sung mà", rồi "xoá code đi để AI đọc
+schematic thôi" — bản đầu (luật regex "địa danh + N phút" ở `kiemDeXuat` và bỏ vế chỉ đường ở `dia_ban.ts`) đã GỠ, không vào main.
+
+**Lớp lỗi.** "Địa danh này là nơi căn NẰM hay nơi ĐI TỚI" là ý theo NGHĨA. Hai đường quyết nó bằng chữ: (a) AI trích "vào quận 5" vào ô quận (đọc
+sai nghĩa — prompt có luật nhưng thiếu ví dụ); (b) luật `bocQuan` đọc quận ĐẦU TIÊN cả câu rao, kể cả khi AI đã đọc câu và không đưa quận.
+
+**Chỗ cùng lớp.** `capNhatQuan` (câu trả lời) đã AI-trước từ SRS-5.1zb; nay câu rao (`quanLuat`) cũng vậy. Phường / đường của câu rao do AI đưa
+(qua kiểm trích dẫn) — không luật đoán khi AI chạy.
+
+**Sửa.** (1) `quanLuat`: AI đã đọc câu rao (chế độ `ai`) thì luật không đọc quận; AI không đưa quận = chưa biết quận, bot hỏi. Luật chỉ đỡ khi AI
+không chạy. (2) Dạy AI bằng VÍ DỤ MẪU (`vi-du-boc-rao.ts`, FR-208 g): "ra quận 1 chỉ 15 phút" → `tien_ich_gan`, không `quan`; và "nhà chị ở 45
+Nguyễn Văn Cừ chứ không phải chỗ đó, em sửa lại giúp chị" lúc chờ duyệt → `duong` + `ten_duong` (SRS-5.1zzzzzzz10). Prompt quận thêm ví dụ câu chỉ
+đường. Không thêm luật tìm-chuỗi nào. (3) Tin rỗng nhận câu rao: quận AI trích từ tin TRƯỚC của chủ nhà ("có mấy căn quận 5 cần đăng") được nhận như loại / giao dịch
+(`kiemYCuocRao` thêm khoá `quan`) — ca phát lại `mp-moi-gioi-3-can` cho thấy AI production đã đọc đúng quận đó, chỉ lớp kiểm bỏ đi, luật regex lấp.
+
+**Kiểm (đỏ khi tắt).** e2e `TTE-ca gốc (nhà phố)` ("ra quận 1 chỉ 5 phút", AI không đưa quận → không Quận 1), `TTE-cách nói mới` ("đi Bình Thạnh
+tầm 10 phút") — bỏ chặn luật thì đỏ; `vi-du-boc-rao.mjs` 131/131 (hai ví dụ mới qua `kiemDeXuat`). Bốn ca LQ + ZH dựng tin bằng AI giả trả rỗng cho
+câu rao CÓ nói quận (dựa vào luật lấp) → dữ liệu dựng ca gán quận như AI thật đọc ra. e2e 1419/1419, phát lại 5/5 đạt.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
