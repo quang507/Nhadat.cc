@@ -16,7 +16,13 @@ insert into ca values
   -- 20261010b (SRS-5.1zzzzt, bắn thật thu-thuong16): cụm "căn hộ <dự án>" không phải tên đường.
   ('căn hộ sunrise city', boc_ten_duong('căn hộ sunrise city'), null),
   ('can ho the sun avenue, quan 2', boc_ten_duong('can ho the sun avenue, quan 2'), null),
-  ('căn hộ tầng 5, Nguyễn Hữu Thọ (bỏ cụm căn hộ, lấy cụm đường sau)', boc_ten_duong('căn hộ tầng 5, Nguyễn Hữu Thọ'), 'Nguyễn Hữu Thọ');
+  ('căn hộ tầng 5, Nguyễn Hữu Thọ (bỏ cụm căn hộ, lấy cụm đường sau)', boc_ten_duong('căn hộ tầng 5, Nguyễn Hữu Thọ'), 'Nguyễn Hữu Thọ'),
+  -- 20261014a (SRS-5.1zzzzzzm, người test thật 14/10): số nhà ĐỨNG CUỐI với chữ "số" không phải tên đường.
+  ('đường huỳnh tấn phát số 1235', boc_ten_duong('đường huỳnh tấn phát số 1235'), 'huỳnh tấn phát'),
+  ('huỳnh tấn phát số 1235', boc_ten_duong('huỳnh tấn phát số 1235'), 'huỳnh tấn phát'),
+  ('Lê Văn Việt số 449/12', boc_ten_duong('Lê Văn Việt số 449/12'), 'Lê Văn Việt'),
+  ('đường số 59 (giữ: "số 59" là tên đường)', boc_ten_duong('đường số 59'), 'số 59'),
+  ('hẻm 120 Trần Hưng Đạo số 5 (hẻm giữ, số cuối bỏ)', boc_ten_duong('hẻm 120 Trần Hưng Đạo số 5'), 'Trần Hưng Đạo');
 do $$ declare r record; n int := 0; begin
   for r in select * from ca loop
     if r.co is distinct from r.mong then raise warning 'SAI: % — có %, mong %', r.ten, r.co, r.mong; n := n + 1; end if;

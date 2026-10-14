@@ -2782,6 +2782,8 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 |---|---|---|---|---|
 | `tenPhuongCot` | `listings.ward`, fact `phuong` | cửa code này | `chuan_hoa_phuong` + trigger DB (20261009b); `kiemDeXuat` ô phường; `phuongNhacTrongCau` / `ghiPhuongTrongCau` / Nominatim gợi ý; `viTriLaPhuong` | DB chỉ CHẶN (không chuẩn hoá), cùng một tập tên (`ghi-phuong-mot-cua.mjs`: mọi đầu ra của cửa thuộc `wards`) → không bao giờ xoá giá trị cửa đã nhận; các hàm kia chỉ ĐỌC ra ứng viên, mọi ứng viên vẫn qua cửa; `viTriLaPhuong` là bản TS đúng điều kiện DB đổi vi_tri → phuong (bảng `khong-duoc-kich.json`) |
 | `viTriGhiDuoc` / `O_NGUYEN_VAN` | chữ LƯU ô vị trí | kiem-bang-chung / khop-phuong | `duongHienThi` | Một bên quyết chữ lưu, một bên quyết chữ in; bộ in không bao giờ ghi DB |
+| `chuanHoaViTri` trong `ghiFact` (SRS-5.1zzzzzzm) | fact `vi_tri` → `location_raw`, qua đó `street` | cửa ghi-fact.ts + dia-chi.ts | `suaTenDuong` (luật, gợi ý hỏi xác nhận), `viTriTuDuong` (AI, cụm nguyên văn), `chotTinAi`, SQL `boc_ten_duong` | Mọi đường đều đi qua cửa SAU khi quyết giá trị; cửa chỉ đổi thứ tự / dấu / hoa thường (không đổi chữ cái), SQL chỉ rút tên từ chuỗi cửa đã chuẩn |
+| `cauHoiPhuongGoiY` bảng `duong` trước (SRS-5.1zzzzzzm) | phường GỢI Ý / danh sách kể | chat-reply | hẻm (`tim_hem`), hai đường (`phuong_giao_hai_duong`), Nominatim, `phuongTuDuAn` (kho dự án, chỉ căn hộ) | Thứ tự cố định: hẻm → hai đường → bảng `duong` → Nominatim chỉ khi bảng rỗng và chưa biết quận; gợi ý chỉ ghi khi khách gật / chọn (một quyết định ở nhánh câu phường) |
 | `diaChiHienThi` | địa chỉ in cho khách (📝 🤖 📋, câu hỏi phường, "căn …", ĐÃ BIẾT) | bộ in | `donViGiaDep` (giá), trigger `listings_chuan_hoa_cot` (gọt dấu phẩy location_raw) | Khác trường; trigger chỉ gọn chuỗi lưu |
 | `soatNhanXet` (kiem-khen) | câu nhận xét trong lời bot | lượt soát AI + `nhanXetKhongCanCu` | TONE_RULES / SELLER_FEWSHOT; `boKhenKhongCanCu`, `boMenhDeKhenSai` (lưới đỡ); `damBaoCauHoi` | Prompt nay dạy đúng điều lượt soát giữ (`luat-khong-mau-thuan.mjs` đỏ khi ví dụ dạy "khách chuộng / dễ bán"); lưới đỡ chỉ bỏ thêm, không thêm lại; không lưới nào bỏ câu có "?" → câu hỏi của `damBaoCauHoi` còn nguyên |
 | `cauPhi(vaiPhi)` | con số phí | prompts.ts | `chanPhiChuaXacNhan`, FEE_RULES (model), `thongBaoNhan`, `daNoiPhiRoi`, `boCauTrung` / bong bóng trấn an | Lưới chỉ thay bằng chính câu `cauPhi`; FEE_RULES đã nói "chưa rõ thì không số"; `thongBaoNhan` không nói số; lưới không đụng câu hỏi |
@@ -4636,6 +4638,49 @@ cảm xúc. Thả cảm xúc không bao giờ thay lượt đang chạy.
 
 **Kiểm.** e2e DAM-E7/E7b (bên mua: thả ❤️ / 👍 giữa lúc model chạy → vẫn gửi câu hỏi), CX-BAN-01 (bên bán ca gốc: trả lời kết cấu, thả tim
 giữa lượt → vẫn trả lời, câu đóng). Tắt: ba ca đỏ (lượt nhường). Cách nói mới chưa bắn: thả 😂 / 😮 (mọi mã `/-…` Zalo đều qua `laThaCamXuc`).
+
+### SRS-5.1zzzzzzm · Địa chỉ một cửa: vi_tri chuẩn hoá ở `ghiFact`, phường tra bảng `duong` trước và kể ra cho chọn, câu trả lời phường một quyết định (14/10/2026)
+
+**Nguồn.** Chủ dự án sau SRS-5.1zzzzzzk: "do code nên lạc xa vậy à, vậy thì nghĩ cách sửa từ gốc đi". Hai người test thật cùng ngày:
+(1) nhà Huỳnh Tấn Phát 10:17–10:38 — địa chỉ "1235 Huỳnh Tấn Phát" bị lượt chốt ghi lại "đường huỳnh tấn phát số 1235", cột `street` thành
+"huỳnh tấn phát số 1235"; chưa biết quận nên bot tra Nominatim, Nominatim trả MỘT phường (Tân Thuận) cho con đường bảng `duong` biết chạy
+qua Phú Thuận · Tân Mỹ · Tân Thuận (Quận 7) + Xã Nhà Bè → hỏi có/không một phường đoán; khách "Phường Phú Thuận nhé" → hai chỗ ghi cùng lượt
+(tên AI đọc rồi gật gợi ý), Tân Thuận đè. (2) nhà phố Cao Lỗ 11:26 — bài rao nhắc nhiều địa danh → `match_projects` khớp một dự án Quận 7,
+phường của dự án (Tân Hưng) chép vào tin nhà phố, tin lên kệ "📍 Cao Lỗ, Phường Tân Hưng" (quận trống).
+
+**Lớp lỗi.** Địa chỉ (đường · số nhà · phường) KHÔNG CÓ MỘT CHỦ: vi_tri có ba đường ghi mỗi đường một kiểu chữ (luật qua `suaTenDuong`, AI
+ghi cụm nguyên văn, lượt chốt ghi cụm nối lại) và cột `street` do SQL đoán lại từ chuỗi thô; phường gợi ý có bốn đường tra (hẻm, hai đường,
+bảng `duong` chỉ khi biết quận, Nominatim khi chưa biết) nên Nominatim một kết quả thành câu có/không; câu trả lời phường có hai chỗ ghi
+trong một lượt; phường còn một đường ghi thứ năm từ kho dự án cho cả nhà phố. SRS-5.1zzzzzzk vá đúng hai ca (so chuỗi, chặn gật) — là vá
+từng ca. Cùng lớp SRS-5.1zzzzj (mỗi trường một chủ) nhưng mới phủ `ward` và chữ in; nay phủ cả vi_tri / street / phường gợi ý / nguồn kho.
+
+**Quy tắc.** (a) `_shared/extraction/dia-chi.ts` (thuần): `tachManhDiaChi` / `chuanHoaViTri` — số nhà đứng trước tên đường, bỏ chữ "số" /
+"đường" thừa khi có số nhà, tiền tố hẻm giữ chỗ, tên đường theo từ điển khi khớp ĐÚNG, đuôi sau dấu phẩy giữ nguyên; chỉ đổi thứ tự / dấu /
+hoa thường, không đổi chữ cái tên riêng (FR-208 h). (b) `ghiFact` (cửa duy nhất) chuẩn hoá MỌI fact `vi_tri` qua đó, tra `tim_duong`
+(khớp đúng → `sua` / `khop` một tên; khớp gần là việc của gợi ý hỏi xác nhận ở chat-reply, không phải của cửa; RPC hỏng → vẫn ghi chữ khách).
+(c) SQL `boc_ten_duong` (20261014a) bỏ "số N" đứng CUỐI — lớp chặn cuối cho đường ghi ngoài chat-reply. (d) `cauHoiPhuongGoiY`: bảng
+`duong` LUÔN tra trước, bất kể quận (`phuongQuanCuaDuong`: cặp phường · quận cũ khác nhau, chỉ phường có trong `wards` TP.HCM — Bà Rịa /
+Bình Dương nay thuộc TP.HCM nên lọc bằng bảng, không bằng tên tỉnh); 1 → hỏi xác nhận có/không (gợi ý mang quận); 2–4 → kể cho chọn kèm quận
+cũ khi nhiều quận (`cauChonPhuongQuan`), cất `phuong_lua_chon` + `phuong_lua_chon_quan` để lúc chọn ghi luôn quận; > 4 → kể các quận; từ
+điển không có → Nominatim chỉ khi chưa biết quận. `duLieuTra` (khối DỮ LIỆU TRA CỨU cho model) đi cùng đường. (e) Câu trả lời câu phường khi
+bot vừa gợi ý / kể: MỘT quyết định theo thứ tự — khách GỌI TÊN một phường (AI đọc `truong` / `tra_loi` có trích dẫn; luật đỡ: tiền tố "phường
+…" / `phuongNhacTrongCau`) qua `phuongCot` → câu trả lời, kể cả khi kèm "nhé / đúng rồi"; trong danh sách thì quận theo danh sách, ngoài danh
+sách chỉ nhận khi khách THẬT SỰ gõ tên đó ("cái đầu" → AI đoán Bến Thành: không nhận); tên phường trùng tên QUẬN đang được nhắc như quận
+("bình thạnh mà em", "tân phú em") là quận, nhường đường chọn quận / gật gợi ý (5.1zzzzzb); không gọi tên gì mà gật → phường gợi ý (chỉ khi
+gợi ý một phường). Thay `noiPhuongKhac` (5.1zzzzzzk) và nhánh chọn 5.1zzzzzi. (f) `phuongTuDuAn` chỉ ghi phường kho dự án cho căn hộ
+(`chung_cu`); nhà phố / đất chỉ "gần" dự án — phường tra từ tên đường.
+
+**Chỗ cùng lớp còn để ngỏ.** Thứ tự hỏi: `required_facts` để phường (ưu tiên 22) sau phòng ngủ, nên bản nháp sớm có thể ra trước khi có
+phường (ca 10:32 — bản nháp in địa chỉ không phường, câu phường tới sau "ok"); đổi ưu tiên là đổi kỳ vọng hàng trăm ca e2e → để chủ dự án
+quyết (OPEN). Mock e2e không dựng cột `street` từ `location_raw` như trigger thật — ca SQL `ten-duong.sql` đo phần đó.
+
+**Kiểm.** `bot/tests/dia-chi.mjs` 28 ca (tách / chuẩn hoá / tên để tra; cách nói mới "Lê Văn Việt số 449", "nhà số 45 đường Nguyễn Trãi" giữ);
+`tra-phuong.mjs` `phuongQuanCuaDuong` / `cauChonPhuongQuan`; SQL `ten-duong.sql` 5 ca "số N" cuối (chạy trên Postgres tạm với 20261014a);
+e2e ZZZZZZM-01 (chưa quận, 4 phường TP.HCM + 1 Đồng Nai → kể 4 kèm quận, không đoán), 02/02b/02c ("Phường Phú Thuận nhé" AI + gật / AI im /
+tra_loi "phú thuận" → Phú Thuận, Quận 7, danh sách xoá), 03 (chọn Nhà Bè → quận Nhà Bè), 04 (gật trơn trước danh sách → treo), 05/05b (một
+phường → có/không, gật → phường + quận), 06/06b (cửa ghiFact: "đường huỳnh tấn phát số 1235" / "số 1235 huynh tan phat" → "1235 Huỳnh Tấn
+Phát"), 07 (nhà phố khớp dự án → không chép phường kho). Kỳ vọng đổi theo thiết kế mới: PH-13 (kể phường kèm quận thay câu Nominatim),
+DUONG-01 (cửa tra thêm một lần bằng tên đã sửa). Tắt (b): 06 đỏ; tắt (d): 01 đỏ; tắt (e): 02 đỏ, ZZZZZI-03 đỏ; tắt (f): 07 đỏ.
 
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 

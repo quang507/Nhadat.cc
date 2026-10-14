@@ -5663,9 +5663,11 @@ fresh(seedKho);
   // Không dấu, khớp ĐÚNG → ghi có dấu ngay, không hỏi, không gợi ý.
   fresh(seedDuong);
   let rp = await send({ external_user_id: "duong-1", text: "bán nhà hẻm 4m pham the hien quận 8, 60m2, 5 tỷ" });
-  check("DUONG-01 'pham the hien' khớp đúng từ điển → location_raw 'hẻm 4m Phạm Thế Hiển', không gợi ý, tra 1 lần bằng tên đường trần",
+  // SRS-5.1zzzzzzm: cửa ghiFact tra từ điển thêm một lần bằng tên ĐÃ SỬA (không gọi lại bằng cụm dài, không tra tên lạ).
+  check("DUONG-01 'pham the hien' khớp đúng từ điển → location_raw 'hẻm 4m Phạm Thế Hiển', không gợi ý, tra bằng tên đường trần (lượt luật) rồi cửa ghiFact tra lại tên đã sửa",
     rp.body.role === "seller" && tin().location_raw === "hẻm 4m Phạm Thế Hiển" && !tin().boc_tach?.duong_goi_y &&
-      rpcDuong().length === 1 && rpcDuong()[0].args.p_ten === "pham the hien" && rpcDuong()[0].args.p_quan === "Quận 8",
+      rpcDuong().length >= 1 && rpcDuong().length <= 2 && rpcDuong()[0].args.p_ten === "pham the hien" && rpcDuong()[0].args.p_quan === "Quận 8" &&
+      rpcDuong().every((x) => ["pham the hien", "Phạm Thế Hiển"].includes(x.args.p_ten)),
     JSON.stringify({ l: tin(), rpc: rpcDuong(), rep: rp.body.replies }));
 
   // Sai 1 ký tự → câu hỏi đầu là XÁC NHẬN tên đường; gợi ý cất; địa chỉ vẫn chữ khách gõ.
@@ -6037,8 +6039,10 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     await send({ external_user_id: "ph-adv", text: "a bán nhà" });
     const hoiDiaChi = db().t.info_requests.some((q) => q.question === "vi_tri" && q.status === "pending");
     rp = await send({ external_user_id: "ph-adv", text: "an duong vương" });
-    check("PH-13 'a bán nhà' → hỏi địa chỉ → 'an duong vương' (quận chưa rõ) → câu kế là phường/quận, kể 'Quận 5, Bình Tân, Quận 6', câu phường treo, không hỏi ô tô",
-      hoiDiaChi && /có ở nhiều nơi \(Quận 5, Bình Tân, Quận 6\)/.test(rp.body.replies.join(" ")) && pendPh() &&
+    // SRS-5.1zzzzzzm: chưa biết quận vẫn tra bảng `duong` trước — 3 phường ở 2 quận → kể từng phường kèm quận cũ (không còn câu Nominatim "có ở nhiều nơi").
+    check("PH-13 'a bán nhà' → hỏi địa chỉ → 'an duong vương' (quận chưa rõ) → câu kế kể Chợ Quán / An Đông (Quận 5 cũ), An Lạc (Bình Tân cũ) từ bảng đường, câu phường treo, không hỏi ô tô",
+      hoiDiaChi && /Chợ Quán/.test(rp.body.replies.join(" ")) && /An Đông \(Quận 5 cũ\)/.test(rp.body.replies.join(" ")) && /An Lạc \(Bình Tân cũ\)/.test(rp.body.replies.join(" ")) &&
+        !/có ở nhiều nơi/.test(rp.body.replies.join(" ")) && pendPh() &&
         !db().t.info_requests.some((q) => q.question === "do_rong_hem" && q.status === "pending") && !tin().ward,
       JSON.stringify({ hoiDiaChi, rep: rp.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
     // Bắn thật lx-29: "quận 5 em" → ward thành "quận 5". Chỉ nói quận → ghi quận, ward trống, hỏi phường theo bảng đường.
@@ -11720,6 +11724,125 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     await goiI(uid, tl, { dong_y: "dong_y", dong_y_trich: tl });
     check(`ZZZZZI-${ma} hỏi «…Phường Chợ Lớn, đúng không» rồi khách «${tl}» → ward Phường Chợ Lớn, không hỏi lại`,
       /Chợ Lớn/.test(cau) && lrI(L).ward === "Phường Chợ Lớn" && !treoI(L).includes("phuong"), JSON.stringify({ cau, w: lrI(L).ward, treo: treoI(L) }));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
+// ── SRS-5.1zzzzzzm (14/10/2026, người test thật — nhà Huỳnh Tấn Phát): ĐỊA CHỈ MỘT CỬA. (1) Chưa biết quận vẫn tra bảng `duong` trước:
+// đường qua 4 phường (3 Quận 7 + Nhà Bè; dòng Bà Rịa bị lọc) → KỂ 4 phường kèm quận, không đoán một phường; (2) khách gọi tên phường
+// (AI đọc, hay luật đỡ khi AI im) thắng gật — ghi phường + quận theo phường đó; (3) gật trơn trước danh sách 2–4 phường → câu còn treo;
+// (4) một phường → hỏi xác nhận có/không, gật → ghi phường + quận; (5) fact vi_tri qua cửa `ghiFact` chuẩn hoá "đường huỳnh tấn phát số 1235"
+// → "1235 Huỳnh Tấn Phát".
+{
+  const laBocL = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laYL = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan, cum_goc) => ({ khoa, gia_tri, trich_dan, can: null, ...(cum_goc ? { cum_goc } : {}) });
+  const rongL = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null },
+    dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, doc_lai: null, khong_biet: null };
+  const cuCH = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+  const bd = (x) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+  const HTP = [["Huỳnh Tấn Phát", "Phường Phú Thuận", "Quận 7"], ["Huỳnh Tấn Phát", "Phường Tân Mỹ", "Quận 7"], ["Huỳnh Tấn Phát", "Phường Tân Thuận", "Quận 7"],
+    // Dòng Đồng Nai: không có trong bảng `wards` TP.HCM → phải bị lọc (Bà Rịa / Bình Dương nay ĐÃ thuộc TP.HCM nên không dùng làm dòng ngoài).
+    ["Huỳnh Tấn Phát", "Xã Nhà Bè", "Huyện Nhà Bè"], ["Huỳnh Tấn Phát", "Phường Biên Hòa", "Đồng Nai", "Đồng Nai"]];
+  const LNH = [["Lương Nhữ Học", "Phường Chợ Lớn", "Quận 5"]];
+  const goiL = async (uid, text, ai) => {
+    globalThis.__model = { parse: (p) => (laBocL(p) || laYL(p)) ? (ai ? { ...rongL, ...ai } : (() => { throw new Error("AI im"); })()) : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text });
+    return (r.body?.replies ?? []).join(" | ");
+  };
+  let nL = 0;
+  const lrL = (L) => db().t.listings.find((x) => x.id === L.id);
+  const treoL = (L) => db().t.info_requests.filter((x) => x.listing_id === L.id && x.status === "pending").map((x) => x.question);
+  const dungL = (rows, dong) => {
+    fresh((d) => { seedKho(d); d.t.wards = napPhuongThat().map((w) => ({ ...w }));
+      d.t.duong = rows.map(([ten, phuong, q, tinh]) => ({ ten, ten_khong_dau: bd(ten), loai: "duong", quan_cu: q, phuong, tinh: tinh ?? "TP.HCM" })); });
+    const uid = `thu-zl-${++nL}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "cô", seller_type: "ccrb", seller_type_source: "admin" }).data;
+    const L = db().insert("listings", { code: `BDS-ZL-${nL}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", can_chu_duyet: true, boc_tach: { _thong_so_ai: true }, property_type: "nha_pho",
+      district: null, access_type: "mat_tien", alley_width_m: 5, area_m2: 54, price_vnd: 6.3e9, price_raw: "6,3 tỷ", ...dong }).data;
+    s.active_listing_id = L.id; daHtsd(L);
+    const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-14T03:00:00Z" }).data;
+    return { uid, L, c };
+  };
+  // Tin đã có địa chỉ, CHƯA biết quận; hai lượt trả lời pháp lý + kết cấu đưa bot tới câu phường.
+  const toiCauPhuongL = async (rows, duong) => {
+    const { uid, L, c } = dungL(rows, { location_raw: `1235 ${duong}`, street: duong });
+    db().insert("info_requests", { listing_id: L.id, question: "phap_ly", status: "pending" });
+    db().insert("messages", { conversation_id: c.id, sender: "bot", body: "Sổ hồng riêng hay sổ chung cô?", created_at: new Date().toISOString() });
+    await goiL(uid, "sổ hồng riêng", { truong: [T("phap_ly", "so_hong", "sổ hồng riêng")], tra_loi: { co_tra_loi: true, gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng riêng" } });
+    const cau = await goiL(uid, "1 trệt 2 lầu", { truong: [T("ket_cau", "1 trệt 2 lầu", "1 trệt 2 lầu"), T("so_tang", "3", "1 trệt 2 lầu")], tra_loi: { co_tra_loi: true, gia_tri: "1 trệt 2 lầu", trich_dan: "1 trệt 2 lầu" } });
+    return { uid, L, cau };
+  };
+  // (1) Ca gốc: chưa biết quận, đường qua 4 phường TP.HCM → kể đủ 4 kèm quận cũ, lọc Bà Rịa, KHÔNG "đúng không" một phường.
+  {
+    const { L, cau } = await toiCauPhuongL(HTP, "Huỳnh Tấn Phát");
+    const bt = lrL(L).boc_tach ?? {};
+    check("ZZZZZZM-01 «1235 Huỳnh Tấn Phát» chưa quận → câu phường kể Phú Thuận, Tân Mỹ, Tân Thuận (Quận 7 cũ) và Xã Nhà Bè (Huyện Nhà Bè cũ); không Biên Hòa; không đoán một phường",
+      /Phú Thuận/.test(cau) && /Tân Mỹ/.test(cau) && /Tân Thuận/.test(cau) && /Xã Nhà Bè \(Huyện Nhà Bè cũ\)/.test(cau) && /\(Quận 7 cũ\)/.test(cau) && !/Biên Hòa|Đồng Nai/.test(cau) &&
+        !/đúng không/.test(cau) && (bt.phuong_lua_chon ?? []).length === 4 && bt.phuong_lua_chon_quan?.["Xã Nhà Bè"] === "Huyện Nhà Bè" && !bt.phuong_goi_y && !lrL(L).ward && treoL(L).includes("phuong"),
+      JSON.stringify({ cau, bt, w: lrL(L).ward, treo: treoL(L) }));
+  }
+  // (2) Khách gọi tên phường kèm "nhé" (AI đọc gật lẫn tên) → tên phường thắng, ghi phường + quận của nó, danh sách xoá.
+  for (const [ma, tl, ai] of [
+    ["02 (ca gốc, AI đọc tên + gật)", "Phường Phú Thuận nhé", { truong: [T("phuong", "Phường Phú Thuận", "Phường Phú Thuận")], tra_loi: { co_tra_loi: true, gia_tri: "Phường Phú Thuận", trich_dan: "Phường Phú Thuận" }, dong_y: "dong_y", dong_y_trich: "nhé" }],
+    ["02b (AI im → luật đỡ)", "phường Phú Thuận cháu", null],
+    ["02c (cách nói mới: tra_loi)", "nhà cô ở phú thuận đó", { truong: [], tra_loi: { co_tra_loi: true, gia_tri: "Phường Phú Thuận", trich_dan: "phú thuận" } }],
+  ]) {
+    const { uid, L } = await toiCauPhuongL(HTP, "Huỳnh Tấn Phát");
+    const rep = await goiL(uid, tl, ai);
+    check(`ZZZZZZM-${ma} «${tl}» → ward Phường Phú Thuận, quận Quận 7, câu phường đóng, danh sách xoá`,
+      lrL(L).ward === "Phường Phú Thuận" && lrL(L).district === "Quận 7" && !treoL(L).includes("phuong") && lrL(L).boc_tach?.phuong_lua_chon === false && lrL(L).boc_tach?.phuong_lua_chon_quan === false,
+      JSON.stringify({ w: lrL(L).ward, q: lrL(L).district, treo: treoL(L), bt: lrL(L).boc_tach, rep: rep.slice(0, 200) }));
+  }
+  // (3) Chọn phường ở QUẬN KHÁC trong danh sách (Nhà Bè) → ghi đúng quận của phường đó.
+  {
+    const { uid, L } = await toiCauPhuongL(HTP, "Huỳnh Tấn Phát");
+    await goiL(uid, "bên Nhà Bè", { truong: [], tra_loi: { co_tra_loi: true, gia_tri: "Xã Nhà Bè", trich_dan: "Nhà Bè" } });
+    check("ZZZZZZM-03 «bên Nhà Bè» → ward Xã Nhà Bè, quận Huyện Nhà Bè", lrL(L).ward === "Xã Nhà Bè" && lrL(L).district === "Huyện Nhà Bè" && !treoL(L).includes("phuong"),
+      JSON.stringify({ w: lrL(L).ward, q: lrL(L).district, treo: treoL(L) }));
+  }
+  // (4) Gật trơn trước danh sách 4 phường → không có gì để gật, câu còn treo, không ghi.
+  {
+    const { uid, L } = await toiCauPhuongL(HTP, "Huỳnh Tấn Phát");
+    await goiL(uid, "ừ", { dong_y: "dong_y", dong_y_trich: "ừ" });
+    check("ZZZZZZM-04 «ừ» trước danh sách 4 phường → không ghi phường, câu còn treo", !lrL(L).ward && treoL(L).includes("phuong"), JSON.stringify({ w: lrL(L).ward, treo: treoL(L) }));
+  }
+  // (5) Chưa biết quận, đường chỉ MỘT phường TP.HCM → hỏi xác nhận có/không kèm quận; gật → ghi phường + quận.
+  {
+    const { uid, L, cau } = await toiCauPhuongL(LNH, "Lương Nhữ Học");
+    const bt = lrL(L).boc_tach ?? {};
+    check("ZZZZZZM-05 «Lương Nhữ Học» chưa quận → gợi ý Phường Chợ Lớn (Quận 5 cũ), đúng không", /Chợ Lớn/.test(cau) && /Quận 5/.test(cau) && bt.phuong_goi_y?.quan === "Quận 5", JSON.stringify({ cau, bt }));
+    await goiL(uid, "đúng rồi", { dong_y: "dong_y", dong_y_trich: "đúng rồi" });
+    check("ZZZZZZM-05b gật → ward Phường Chợ Lớn, quận Quận 5", lrL(L).ward === "Phường Chợ Lớn" && lrL(L).district === "Quận 5", JSON.stringify({ w: lrL(L).ward, q: lrL(L).district }));
+  }
+  // (6) Cửa ghiFact chuẩn hoá vi_tri: AI ghi cụm NGUYÊN VĂN "đường huỳnh tấn phát số 1235" → cột lưu "1235 Huỳnh Tấn Phát" (số nhà trước, tên từ điển).
+  for (const [ma, tl, cum] of [["06 (ca gốc)", "đường huỳnh tấn phát số 1235", "đường huỳnh tấn phát số 1235"], ["06b (cách nói mới)", "nhà ở số 1235 huynh tan phat", "số 1235 huynh tan phat"]]) {
+    const { uid, L, c } = dungL(HTP, { location_raw: null, street: null, district: "Quận 7" });
+    db().insert("info_requests", { listing_id: L.id, question: "vi_tri", status: "pending" });
+    db().insert("messages", { conversation_id: c.id, sender: "bot", body: "Nhà cô ở đường nào, số mấy vậy cô?", created_at: new Date().toISOString() });
+    const rep = await goiL(uid, tl, { truong: [T("duong", "1235 Huỳnh Tấn Phát", cum, cum), T("ten_duong", "Huỳnh Tấn Phát", cum, cum)], tra_loi: { co_tra_loi: true, gia_tri: "1235 Huỳnh Tấn Phát", trich_dan: cum } });
+    check(`ZZZZZZM-${ma} «${tl}» → location_raw "1235 Huỳnh Tấn Phát" (không "số", tên có dấu, số nhà trước)`, lrL(L).location_raw === "1235 Huỳnh Tấn Phát",
+      JSON.stringify({ lr: lrL(L).location_raw, facts: db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => [f.question, f.answer]), rep: rep.slice(0, 160) }));
+  }
+  // (7) Người test thật 11:26 (nhà phố Cao Lỗ, Quận 8): bài rao nhắc nhiều địa danh → kho dự án khớp một dự án Quận 7 → phường của dự án (Tân Hưng)
+  // từng chép vào tin nhà phố. Phường dự án chỉ là phường của CĂN HỘ trong dự án; nhà phố → không ghi, phường tra từ tên đường.
+  {
+    const rpcCu = globalThis.__rpc;
+    fresh((d) => { seedKho(d); d.t.wards = napPhuongThat().map((w) => ({ ...w }));
+      d.t.duong = [{ ten: "Cao Lỗ", ten_khong_dau: "cao lo", loai: "duong", quan_cu: "Quận 8", phuong: "Phường Chánh Hưng", tinh: "TP.HCM" }];
+      d.insert("projects", { name: "Sunrise City", ward: "Phường Tân Hưng", district: "Quận 7", location_raw: "Nguyễn Hữu Thọ, Phường Tân Hưng, Quận 7" }); });
+    globalThis.__rpc = { ...(rpcCu ?? {}), match_projects: (d) => ({ data: d.t.projects.filter((p) => /sunrise/i.test(p.name)), error: null }) };
+    const uid = "thu-zl-duan";
+    const rao = "Bán nhà mặt đường nội bộ Cao Lỗ, 3 tầng sân thượng, ngay Parc Mall, 10 phút tới Lotte Mart Quận 7, giá 10 tỷ";
+    const rep = await goiL(uid, rao, { so_can: 1, truong: [T("loai_giao_dich", "ban", "Bán nhà"), T("loai_bds", "nha_pho", "Bán nhà"), T("duong", "Cao Lỗ", "Cao Lỗ", "Cao Lỗ"), T("ten_duong", "Cao Lỗ", "Cao Lỗ", "Cao Lỗ"),
+      T("so_tang", "3", "3 tầng"), T("gia", "10 tỷ", "giá 10 tỷ")] });
+    const tin = db().t.listings.find((l) => l.seller_id === db().t.sellers.find((s) => s.zalo_user_id === uid)?.id);
+    check("ZZZZZZM-07 nhà phố rao nhắc địa danh khớp dự án Quận 7 → KHÔNG chép phường dự án (ward trống), không ghi fact du_an_kho",
+      !!tin && !tin.ward && !db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "phuong" && f.source === "du_an_kho"),
+      JSON.stringify({ w: tin?.ward, pt: tin?.property_type, facts: db().t.listing_facts.filter((f) => f.listing_id === tin?.id && f.question === "phuong"), rep: rep.slice(0, 200) }));
+    globalThis.__rpc = rpcCu;
   }
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };

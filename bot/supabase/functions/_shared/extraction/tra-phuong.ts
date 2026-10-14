@@ -153,3 +153,36 @@ export function phuongCuaDuongTrongQuan(dong: Array<{ phuong?: string | null; qu
   }
   return ra;
 }
+
+export type PhuongQuan = { phuong: string; quan: string };
+/**
+ * SRS-5.1zzzzzzm (14/10/2026): các cặp (phường mới, quận cũ) KHÁC NHAU của một tên đường từ bảng `duong`, CHƯA CẦN biết quận. Đã biết quận
+ * (`quanBiet`) → chỉ giữ quận đó. `hopLe(phuong, quan)` do nơi gọi đưa (bảng `wards` TP.HCM) để bỏ dòng tỉnh khác / dòng trống phường.
+ * Người test thật 14/10: chưa biết quận → bản cũ đi Nominatim, Nominatim trả MỘT phường cho con đường bảng `duong` biết có 4 phường
+ * (Phú Thuận, Tân Mỹ, Tân Thuận ở Quận 7 cũ, Xã Nhà Bè) → bot hỏi có/không một phường đoán, khách sửa, tin vẫn ghi phường đoán.
+ */
+export function phuongQuanCuaDuong(
+  dong: Array<{ phuong?: string | null; quan_cu?: string | null }>, quanBiet: string | null | undefined,
+  hopLe: (phuong: string, quan: string) => boolean,
+): PhuongQuan[] {
+  const ra: PhuongQuan[] = [];
+  for (const d of dong) {
+    const p = (d.phuong ?? "").trim(), q = (d.quan_cu ?? "").trim();
+    if (!p || !q || (quanBiet && q !== quanBiet) || !hopLe(p, q)) continue;
+    if (!ra.some((x) => x.phuong === p && x.quan === q)) ra.push({ phuong: p, quan: q });
+  }
+  return ra;
+}
+
+/**
+ * Câu CHỌN phường khi đường chạy qua 2–4 phường, có thể ở nhiều quận cũ: cùng một quận → như `cauChonPhuong`; nhiều quận → kể từng
+ * cụm kèm quận ("Phường Phú Thuận, Phường Tân Mỹ hay Phường Tân Thuận (Quận 7 cũ), hay Xã Nhà Bè (Huyện Nhà Bè cũ)").
+ */
+export function cauChonPhuongQuan(cachGoi: string, duong: string, ds: PhuongQuan[]): string {
+  const cac = ds.slice(0, 4);
+  const quan = [...new Set(cac.map((x) => x.quan))];
+  if (quan.length <= 1) return cauChonPhuong(cachGoi, duong, cac.map((x) => x.phuong));
+  const noi = (ten: string[]) => ten.length === 1 ? ten[0] : ten.length === 2 ? ten.join(" hay ") : ten.slice(0, -1).join(", ") + " hay " + ten[ten.length - 1];
+  const cum = quan.map((q) => `${noi(cac.filter((x) => x.quan === q).map((x) => x.phuong))} (${q} cũ)`);
+  return `Đường ${duong.trim()} đoạn nhà mình thuộc ${cum.join(", hay ")} vậy ${cachGoi}?`;
+}
