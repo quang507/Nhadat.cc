@@ -58,9 +58,9 @@ if (fs.existsSync(ENV_FILE)) {
 }
 
 const CHAT_REPLY_URL =
-  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/chat-reply";
+  process.env.CHAT_REPLY_URL || "http://127.0.0.1:8000/chat-reply";
 const ANON_KEY =
-  "sb_publishable_zmJBmEgFPn3bBKx_1ve6Pg_dXdo4haX"; // key công khai, chỉ gọi được function
+  "sb_publishable_f4wNO8jQcCDWn1QmNZQ7-g_BXDtYM3Y"; // key công khai, chỉ gọi được function
 
 // Nói thẳng lúc khởi động thay vì để nó chết lặng ở lượt gọi đầu. Cổng
 // BRIDGE_SECRET bật ở phía server rồi mà bridge không có secret thì mọi request
@@ -83,7 +83,7 @@ if (!process.env.BRIDGE_SECRET) {
 // ngay trong lúc đăng nhập — các hằng khai báo phía dưới lúc đó chưa tồn tại.
 // KHÔNG BAO GIỜ ném: mất mạng thì vẫn còn link http tạm + qr.png như cũ.
 const FEED_URL_DN =
-  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
+  "https://rqxmmqmctpklqcmbfxuj.supabase.co/functions/v1/escalation-feed";
 async function baoDangNhap(trang_thai, qr_png = null, ghi_chu = null) {
   // Giờ SỰ KIỆN, chụp trước khi gửi: server xếp các lệnh theo giờ này chứ không
   // theo giờ request tới — hai lệnh gửi sát nhau có thể tới ngược thứ tự.
@@ -290,12 +290,18 @@ const HAN_CHO_BO_NAO = 90_000; // lượt gọi có kèm model
 const HAN_CHO_NGAN = 10_000;   // hỏi lại / ghi sổ — trả về ngay
 
 // Gửi một tin (kèm ảnh nếu bộ não trả về) — dùng chung cho tin nhắn và reaction
-async function handleIncoming(threadId, text, imageUrl, msgId) {
-  console.log(`← [${threadId}] ${text || "[ảnh]"}`);
+async function handleIncoming(threadId, text, imageUrls, msgId, tep) {
+  const imgList = Array.isArray(imageUrls) ? imageUrls : (imageUrls ? [imageUrls] : []);
+  const imgDesc = imgList.length > 1 ? `[${imgList.length} ảnh]` : (imgList.length === 1 ? "[ảnh]" : "");
+  console.log(`← [${threadId}] ${text || (tep ? `[file ${tep.ten ?? ""}]` : (imgDesc || "[tin nhắn]"))}`);
   const payload = {
     external_user_id: String(threadId),
     text: typeof text === "string" ? text : "",
-    image_url: imageUrl,
+    image_urls: imgList,
+    image_url: imgList[0] || null,
+    // SRS-5.1zzj (05/10/2026): file (PDF / CSV / XLSX) người bán gửi qua Zalo cá nhân — bộ não tải về và đọc.
+    file_url: tep?.url,
+    file_name: tep?.ten,
     msg_id: msgId,
     channel: "zalo_personal_test",
   };
@@ -325,10 +331,13 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
 
   // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
   // giữa các bong bóng chỉ chừa 300ms cho Zalo giao đúng thứ tự.
+  // SRS-5.1zzm (05/10/2026): bộ não trả `nhip_go[]` khi `app_config.nhip_go = bat` → nghỉ "đang gõ" theo độ dài tin trước;
+  // không có thì 300 ms như cũ. Bridge không tự tính nhịp — cùng một nhịp với webhook OA.
+  const nhipGo = Array.isArray(out?.nhip_go) ? out.nhip_go.map((x) => Math.min(3000, Math.max(0, Number(x) || 0))) : [];
   let daGui = 0;
   try {
     for (const [i, bubble] of bubbles.entries()) {
-      if (i > 0) await new Promise((r) => setTimeout(r, 300));
+      if (i > 0) await new Promise((r) => setTimeout(r, nhipGo[i] ?? 300));
       rememberSent(bubble);
       await api.sendMessage(bubble, String(threadId), ThreadType.User);
       daGui = i + 1;
@@ -378,6 +387,45 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
   }
 }
 
+
+// --- BỘ ĐỆM GOM TIN NHẮN GIẬT CỤC (Debounce Buffer) ---
+// Khách gõ nhiều tin ngắn liên tiếp: chờ 2.5s gom thành 1 tin trọn vẹn trước khi chuyển AI xử lý.
+const bufferTin = new Map();
+const DEBOUNCE_MS = 2500;
+
+function queueIncoming(threadId, text, imageUrl, msgId, tep) {
+  const tid = String(threadId);
+  const hienTai = bufferTin.get(tid) || {
+    texts: [],
+    imageUrls: [],
+    timer: null,
+    tep: null,
+    lastMsgId: null,
+  };
+  if (text) hienTai.texts.push(text.trim());
+  if (imageUrl && !hienTai.imageUrls.includes(imageUrl)) {
+    hienTai.imageUrls.push(imageUrl);
+  }
+  if (tep) hienTai.tep = tep;
+  hienTai.lastMsgId = msgId || hienTai.lastMsgId;
+
+  if (hienTai.timer) clearTimeout(hienTai.timer);
+
+  hienTai.timer = setTimeout(async () => {
+    bufferTin.delete(tid);
+    const textGom = hienTai.texts.filter(Boolean).join("\n");
+    if (!textGom && !hienTai.imageUrls.length && !hienTai.tep) return;
+    try {
+      await handleIncoming(tid, textGom, hienTai.imageUrls, hienTai.lastMsgId, hienTai.tep);
+    } catch (e) {
+      if (laPhienChet(e)) return await phienChet(errDetail(e));
+      await ghiLoi("xử lý tin gom", errDetail(e));
+    }
+  }, DEBOUNCE_MS);
+
+  bufferTin.set(tid, hienTai);
+}
+
 api.listener.on("message", async (message) => {
   try {
     if (message.type !== ThreadType.User) return; // chỉ chat 1-1, bỏ qua nhóm
@@ -407,8 +455,35 @@ api.listener.on("message", async (message) => {
 
     let text = message.data?.content;
     let imageUrl;
-    if (text && typeof text === "object") {
-      if (text.href) { // FR-134: ảnh có href
+    let tep; // SRS-5.1zzj: file đính kèm {url, ten}
+    const msgType = String(message.data?.msgType ?? "");
+
+    // 1. Phân tích tin nhắn Vị trí (Location / GPS / Bản đồ)
+    if (/location|map/i.test(msgType) || (text && typeof text === "object" && (text.lat != null || text.latitude != null))) {
+      const lat = text?.lat ?? text?.latitude;
+      const lon = text?.lon ?? text?.lng ?? text?.longitude;
+      const diaChi = text?.address ?? text?.title ?? text?.description ?? "";
+      if (lat != null && lon != null) {
+        text = `[Vị trí GPS]: ${diaChi ? diaChi + " " : ""}(tọa độ: ${lat}, ${lon})`;
+      } else if (diaChi) {
+        text = `[Vị trí đã chia sẻ]: ${diaChi}`;
+      }
+    }
+    // 2. Phân tích tin nhắn Thoại (Voice / Audio)
+    else if (/voice|audio/i.test(msgType) || (text && typeof text === "object" && (text.voiceUrl || (text.href && /\.(m4a|aac|mp3|wav|ogg)$/i.test(text.href))))) {
+      const voiceUrl = text?.voiceUrl ?? text?.href ?? "";
+      text = "[Khách gửi tin nhắn thoại/ghi âm]";
+      if (voiceUrl) {
+        tep = { url: voiceUrl, ten: "tin_nhan_thoai.m4a" };
+      }
+    }
+    // 3. Phân tích tệp hoặc ảnh thông thường
+    else if (text && typeof text === "object") {
+      if (text.href && (/file/i.test(msgType) || /\.(pdf|csv|xlsx?|docx?)$/i.test(String(text.title ?? text.fileName ?? "")))) {
+        // zca-js: file chia sẻ cũng mang `href` + `title` — trước đây bị coi là ảnh, phân loại hỏng rồi rơi thành URL tạm.
+        tep = { url: text.href, ten: String(text.title ?? text.fileName ?? "").slice(0, 200) || undefined };
+        text = "";
+      } else if (text.href) { // FR-134: ảnh có href
         imageUrl = text.href;
         text = text.title ?? "";
       } else if (text.catId != null || text.id != null) {
@@ -417,12 +492,13 @@ api.listener.on("message", async (message) => {
         text = "";
       }
     }
-    if ((typeof text !== "string" || !text.trim()) && !imageUrl) return;
-    await handleIncoming(
+    if ((typeof text !== "string" || !text.trim()) && !imageUrl && !tep) return;
+    queueIncoming(
       message.threadId,
       text,
       imageUrl,
       message.data?.msgId ? String(message.data.msgId) : undefined,
+      tep,
     );
   } catch (e) {
     if (laPhienChet(e)) return await phienChet(errDetail(e));
