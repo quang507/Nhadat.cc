@@ -471,7 +471,8 @@ api.listener.on("message", async (message) => {
     }
     // 2. Phân tích tin nhắn Thoại (Voice / Audio)
     else if (/voice|audio/i.test(msgType) || (text && typeof text === "object" && (text.voiceUrl || (text.href && /\.(m4a|aac|mp3|wav|ogg)$/i.test(text.href))))) {
-      const voiceUrl = text?.voiceUrl ?? text?.href ?? "";
+      const voiceUrl = text?.voiceUrl || text?.href || message.data?.voiceUrl || message.data?.url || (typeof text === 'string' && text.startsWith('http') ? text : '');
+      console.log(`[Bridge Voice] Nhan tin nhan thoai tu ${message.threadId}: url=${voiceUrl || '(chua co link)'}`);
       text = "[Khách gửi tin nhắn thoại/ghi âm]";
       if (voiceUrl) {
         tep = { url: voiceUrl, ten: "tin_nhan_thoai.m4a" };
