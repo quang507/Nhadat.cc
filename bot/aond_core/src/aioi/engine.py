@@ -1480,8 +1480,8 @@ class Engine:
         clean_text = text.strip()
         cmd = clean_text.lower()
 
-        # Command: hello / reset / xoa — Clear session and all draft data
-        if cmd in ("hello", "/hello", "reset", "/reset", "xoa", "xóa", "/xoa", "clear", "/clear"):
+        # Explicit admin/dev reset command — Clear session and all draft data
+        if cmd in ("/reset", "/clear", "/xoa", "reset session", "xóa hết"):
             new_li = Listing(prop=Property())
             conv.listings = [new_li]
             conv.active_listing_id = new_li.listing_id
@@ -2724,16 +2724,16 @@ class Engine:
 
     def _drop_stub_listings(self, conv: Conversation) -> None:
         """Remove the leftover empty STARTER listing (a blank Listing() every conversation opens
-        with, that once lingered as junk 'căn 1 · nha_pho' in the rổ) once REAL căn exist — but
-        never drop the one the seller is actively building."""
-        if not any(not self._is_stub_listing(li) for li in conv.listings):
-            return  # nothing real yet — the seller is still starting their first căn
-        kept = [li for li in conv.listings
-                if not self._is_stub_listing(li) or li.listing_id == conv.active_listing_id]
-        if len(kept) != len(conv.listings):
-            conv.listings = kept or [Listing()]
-            if all(li.listing_id != conv.active_listing_id for li in conv.listings):
-                conv.active_listing_id = conv.listings[-1].listing_id
+        with, that once lingered as junk 'căn 1 · nha_pho' in the rổ) once REAL căn exist,
+        and ensure active_listing_id never stays stuck on an empty stub."""
+        real_listings = [li for li in conv.listings if not self._is_stub_listing(li)]
+        if real_listings:
+            if self._is_stub_listing(conv.active) or all(li.listing_id != conv.active_listing_id for li in real_listings):
+                conv.active_listing_id = real_listings[-1].listing_id
+            conv.listings = real_listings
+        elif not conv.listings:
+            conv.listings = [Listing()]
+            conv.active_listing_id = conv.listings[0].listing_id
 
     def sync_listing_json_to_sharepoint(self, listing: Listing) -> None:
         """Export the listing's structured data as `thong_tin.json` and upload it to
@@ -2919,17 +2919,22 @@ class Engine:
             conv.prop.is_rental = True
 
         intent = plan.get("user_intent")
-        has_seller_context = conv.role == "seller" or len(conv.prop.fields) >= 2
+        has_seller_context = (
+            conv.role == "seller"
+            or len(conv.prop.fields) >= 1
+            or bool(conv.prop.loai_hinh)
+            or any(not self._is_stub_listing(li) for li in conv.listings)
+        )
 
         # Định tuyến theo ngữ nghĩa thực tế (Semantic Intent do Gemini hiểu toàn câu):
-        # Chỉ chuyển sang buyer khi khách thực sự có nhu cầu tìm mua và chưa có hồ sơ bán dở dang.
+        # Chỉ chuyển sang buyer khi khách thực sự có nhu cầu tìm mua và HOÀN TOÀN KHÔNG có hồ sơ bán dở dang.
         if intent == "buy" and not has_seller_context:
             conv.role = "buyer"
             if conv.buyer_lead is None:
                 conv.buyer_lead = BuyerLead(user_key=conv.user_key)
             if plan.get("buyer_lead"):
                 conv.buyer_lead.update(plan["buyer_lead"])
-        elif intent == "sell":
+        elif intent == "sell" or has_seller_context:
             conv.role = "seller"
 
         changed: set[str] = set()
@@ -3059,8 +3064,6 @@ class Engine:
                 return
 
             # Multiple units of the SAME model ("2 căn 42 và 41") → one listing per mã số căn
-            # (an existing code UPDATES, never duplicates). A single add starts a fresh listing
-            # (filling the empty starter first) so its fields don't bleed onto the previous căn.
             if len(targets) >= 2:
                 changed.update(self._fan_out_units(conv, _data(exclude_code=True), targets))
             elif self._listing_empty(conv.active):
@@ -3069,16 +3072,20 @@ class Engine:
                 if targets:
                     data["ma_so_can"] = targets[0]
                 changed.update(conv.active.prop.update(data))
-            else:
-                # A genuinely NEW căn alongside existing ones: open a fresh listing pointed at
-                # the describing message and RE-READ its fields from that clean slice, so nothing
-                # bleeds from the previous căn.
+            elif has_new_can_keywords:
+                # A genuinely NEW căn explicitly stated by customer ("căn nữa", "căn khác", "thêm căn")
                 li = conv.new_listing()
                 li.history_start = max(0, len(conv.history) - 1)
                 data = self._extract_fields(conv)
                 if targets:
                     data["ma_so_can"] = targets[0]
                 changed.update(li.prop.update(data))
+            else:
+                # User is continuing, approving, or adding details to the ACTIVE căn
+                data = _data()
+                if targets:
+                    data.setdefault("ma_so_can", targets[0])
+                changed.update(conv.active.prop.update(data))
             receipts.append(("add", targets))
             return
         if kind == "set_status":

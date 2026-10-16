@@ -13,7 +13,7 @@ import time
 import urllib.request
 from typing import TYPE_CHECKING
 
-from .engine import Turn
+from .engine import Turn, _detect_customer_pronoun
 from .prompts import FIELD_LABELS
 from .supabase_sync import sync_to_supabase_async
 
@@ -102,31 +102,43 @@ class FollowUpManager:
                 log.info("Follow-up already sent for listing %s. Skipping.", listing.listing_id)
                 return
 
-            # Identify the best missing item to ask for
-            missing_item = None
-            if not prop.fields.get("hinh_anh_so_do") and not prop.fields.get("phap_ly"):
-                missing_item = "hình ảnh sổ hồng hoặc giấy tờ pháp lý"
-            elif not prop.fields.get("hien_trang_su_dung"):
-                missing_item = "hiện trạng nhà mình (đang ở, để trống hay cho thuê)"
-            elif not prop.fields.get("so_tang") and not prop.fields.get("so_phong_ngu"):
-                missing_item = "số tầng và số phòng ngủ"
-            elif prop.missing_fields():
-                field_key = prop.missing_fields()[0]
-                missing_item = FIELD_LABELS.get(field_key, field_key)
-            else:
-                missing_item = "hình ảnh thực tế của căn nhà"
+            # Determine tone and pronoun based on conversation context
+            customer_pronoun = _detect_customer_pronoun(conv, "")
+            customer_is_em = (customer_pronoun == "em")
 
-            # Craft warm, natural follow-up message (25–35 words)
-            if getattr(listing, "listing_proposed", False):
-                follow_up_msg = (
-                    f"Dạ em chào anh/chị, em đã lưu thông tin căn nhà mình rồi ạ. "
-                    f"Để tin đăng đầy đủ và dễ chốt khách nhanh hơn, anh/chị gửi thêm giúp em {missing_item} nhé ạ!"
-                )
+            # Determine missing item or draft status
+            is_draft_ready = bool(getattr(conv, "listing_proposed", False) or prop.summary_ready())
+
+            if is_draft_ready:
+                if customer_is_em:
+                    follow_up_msg = (
+                        "Mình chào em nhé, bản tin căn nhà của em mình đã dự thảo sẵn ở trên rồi nè. "
+                        "Em xem qua thấy thông tin ổn chưa để mình tiến hành kết nối khách mua/thuê giúp em nhé!"
+                    )
+                else:
+                    follow_up_msg = (
+                        "Em chào anh/chị ạ, bản tin căn nhà mình em đã dự thảo sẵn ở trên rồi ạ. "
+                        "Anh/chị xem qua thấy thông tin ổn chưa để em tiến hành kết nối khách mua/thuê giúp mình nhé ạ!"
+                    )
             else:
-                follow_up_msg = (
-                    f"Dạ em chào anh/chị, em vẫn đang chờ thông tin về {missing_item} "
-                    f"để hoàn thiện tin đăng cho nhà mình ạ. Khi nào tiện anh/chị nhắn thêm cho em nhé!"
-                )
+                missing_fields = prop.missing_fields()
+                if missing_fields:
+                    field_key = missing_fields[0]
+                    field_label = FIELD_LABELS.get(field_key, field_key)
+                    missing_item = f"thông tin về {field_label}"
+                else:
+                    missing_item = "hình ảnh thực tế hoặc sổ hồng"
+
+                if customer_is_em:
+                    follow_up_msg = (
+                        f"Mình chào em, mình đang chờ {missing_item} "
+                        f"để hoàn thiện tin đăng cho căn nhà của em nè. Khi nào tiện em nhắn thêm cho mình nhé!"
+                    )
+                else:
+                    follow_up_msg = (
+                        f"Em chào anh/chị, em vẫn đang chờ {missing_item} "
+                        f"để hoàn thiện tin đăng cho nhà mình ạ. Khi nào tiện anh/chị nhắn thêm cho em nhé!"
+                    )
 
             # 1. Send via local bridge HTTP endpoint (non-fatal if bridge fails / test UID)
             req_data = json.dumps({"threadId": user_key, "message": follow_up_msg}).encode("utf-8")

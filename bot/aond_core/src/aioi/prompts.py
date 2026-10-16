@@ -213,6 +213,9 @@ CONVERSATION_POLICY = f"""CHÍNH SÁCH VÀ TƯ VẤN (chỉ giải thích khi kh
   • Khách nói "tối gửi", "mai gửi", "để coi lại sổ rồi báo", "đang bận": Cảm ơn, lịch sự chờ (vd: "Anh cứ làm việc, rảnh chụp gửi em nha, em chờ ạ"). TUYỆT ĐỐI KHÔNG hỏi dồn thêm câu nào trong lượt này.
 - KHI KHÁCH HỎI DÒ GIÁ THỊ TRƯỜNG:
   • Khách hỏi "khu này giờ bán được bao nhiêu em?": Không tự bịa giá, trả lời khéo: "Để em kiểm tra các giao dịch gần đây khu vực này rồi báo lại anh/chị nha. Căn này mình đang mong muốn bán tầm bao nhiêu ạ?"
+- KHI KHÁCH ĐÍNH CHÍNH / SỬA LẠI ĐỊA CHỈ HOẶC QUẬN:
+  • Nếu khách sửa lại địa chỉ hoặc đổi quận/phường (ví dụ trước đó nói Bình Tân nhưng giờ sửa lại thành Tân Bình vì đường Phạm Văn Hai thuộc Tân Bình):
+    -> Tiếp nhận ngay lập tức một cách vui vẻ, cập nhật địa chỉ chuẩn mới, TUYỆT ĐỐI KHÔNG hỏi lại thông tin đã biết, nối tiếp câu hỏi về trường tiếp theo hoặc hoàn thiện tin đăng!
 - KHI KHÁCH HỎI LINK BÀI ĐĂNG:
   • Trả lời: Bên em kết nối trực tiếp trong mạng lưới môi giới và khách mua nội bộ, không đăng đại trà lên web. Bản tin em gửi anh xem ở đây chính là bản chuẩn đang kết nối người mua ạ!
 
@@ -342,22 +345,13 @@ def build_chat_system(
     user_type: SellerRole = SellerRole.UNKNOWN,
     project_block: str = "",
 ) -> str:
-    """System prompt for the conversational reply (SRD §II tone rules)."""
-    ambiguous_area = prop.fields.get("dien_tich")
-    if next_field in ("dien_tich_dat", "dien_tich_nha") and ambiguous_area:
-        ask_line = (
-            f'Khách đã cho biết diện tích {ambiguous_area} nhưng CHƯA RÕ là diện tích ĐẤT hay '
-            f'diện tích SÀN (nhà phố/biệt thự/nhà cấp 4 có 2 diện tích khác nhau). CẤM tua lại các thông số khác. '
-            f'Hỏi đúng 1 câu duy nhất: "{ambiguous_area} này là diện tích đất hay diện tích sàn sử dụng vậy anh/chị?"'
-        )
-    else:
-        label = FIELD_LABELS.get(next_field, next_field or "")
-        natural = NATURAL_QUESTIONS.get(next_field, f"hỏi thêm {label}")
-        ask_line = (
-            f'Thông tin cần hỏi tiếp theo: "{label}". Mục tiêu: {natural}. Tiếp nhận nhanh gọn, tự nhiên (TUYỆT ĐỐI KHÔNG nịnh bợ, KHÔNG mở đầu bằng từ "Dạ", KHÔNG khen các thông số kỹ thuật thông thường), rồi hỏi đúng 1 ý này một cách khéo léo.'
-            if next_field
-            else "Dữ liệu đã khá đầy đủ. Cảm ơn anh/chị và xác nhận trạng thái tin một cách thân thiện."
-        )
+    label = FIELD_LABELS.get(next_field, next_field or "")
+    natural = NATURAL_QUESTIONS.get(next_field, f"hỏi thêm {label}")
+    ask_line = (
+        f'Thông tin cần hỏi tiếp theo: "{label}". Mục tiêu: {natural}. Tiếp nhận nhanh gọn, tự nhiên (TUYỆT ĐỐI KHÔNG nịnh bợ, KHÔNG mở đầu bằng từ "Dạ", KHÔNG khen các thông số kỹ thuật thông thường), rồi hỏi đúng 1 ý này một cách khéo léo.'
+        if next_field
+        else "Dữ liệu đã khá đầy đủ. Cảm ơn anh/chị và xác nhận trạng thái tin một cách thân thiện."
+    )
 
     group_guidance = ""
     if prop.group == PropertyGroup.RESIDENTIAL:
