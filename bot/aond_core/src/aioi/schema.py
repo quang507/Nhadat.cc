@@ -11,8 +11,8 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 
-# A bare house number / alley code: "391/34", "123", "12A", "198A/22", "15-17".
-_HOUSE_NO_RE = re.compile(r"^\d+[\d/\-.]*[A-Za-z]?$")
+# A bare house number / alley code: "391/34", "123", "12A", "198A/22", "15-17", with optional "đc:", "dc:", "đ/c:".
+_HOUSE_NO_RE = re.compile(r"^(?:(?:đ/?c|dc|địa chỉ)\s*:?\s*)?(\d+[\d/\-.]*[A-Za-z]?)$", re.IGNORECASE)
 
 
 def _merge_dia_chi(old: str, new: str) -> str:
@@ -27,8 +27,10 @@ def _merge_dia_chi(old: str, new: str) -> str:
         return old                              # nothing new, or already contained → keep richer old
     if old.lower() in new.lower():
         return new                              # new already includes the old → take fuller new
-    if _HOUSE_NO_RE.match(new):
-        return f"{new} {old}"                   # a house number → prepend, keep everything else
+    m = _HOUSE_NO_RE.match(new)
+    if m:
+        house_num = m.group(1)
+        return f"{house_num} {old}"             # a house number → prepend, keep everything else
     return new                                  # a genuinely different/fuller address → correction
 
 

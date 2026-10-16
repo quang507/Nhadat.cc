@@ -166,7 +166,11 @@ SLANG_NOTES = """TỪ ĐIỂN TIẾNG LÓNG BĐS (hiểu đúng, không hỏi l�
   • "tỏi" = tỷ ("5 tỏi" = 5 tỷ); "củ" = triệu ("50 củ" = 50 triệu); "xị" = trăm nghìn; "chục" = 10; "5t5" / "5 tỷ rưỡi" = 5,5 tỷ; "4 tỷ 8" = 4,8 tỷ; "800tr" = 800 triệu.
   • "TL" / "thương lượng" / "bớt lộc" = giá còn thương lượng nhẹ; "giá net" / "giá bao" = giá cứng bên bán thu về; "ngộp" / "kẹt tiền" / "cắt lỗ" = cần bán gấp.
   • "cây" / "lượng" = vàng SJC (ghi nguyên văn, không tự đổi ra tiền).
-- VỊ TRÍ & ĐƯỜNG SÁ:
+- VỊ TRÍ, ĐỊA CHỈ & ĐƯỜNG SÁ:
+  • "đc:" / "đ/c:" / "dc:" = ĐỊA CHỈ (viết tắt).
+  • DẤU GẠCH CHÉO "/" (XUYỆC/XUYỆT) LÀ SỐ NHÀ TRONG HẺM (vd: "100/9", "391/34", "12/5A..."):
+    ĐÂY LÀ SỐ NHÀ TRONG HẺM (vd: "100/9" = nhà số 100 xuyệc 9)!
+    ⚠️ CẤM TUYỆT ĐỐI HIỂU NHẦM DẤU "/" THÀNH DIỆN TÍCH HAY KÍCH THƯỚC (vd: "100/9" KHÔNG PHẢI là "100m2 ngang 9m"!). Khi khách cho tên đường rồi nhắn "đc: 100/9", địa chỉ đầy đủ là 100/9 của đường đó (nhà trong hẻm), tuyệt đối không suy diễn thành 100m2 đất ngang 9m.
   • "MT" = mặt tiền; "MTKD" = mặt tiền kinh doanh; "HXH" = hẻm xe hơi (ô tô vào được); "hẻm ba gác" = chỉ xe ba gác vào được; "hẻm thông" = không cụt.
   • "1 xuyệt / 2 xuyệt" = quẹo 1-2 lần hẻm; "lô góc / căn góc" = 2 mặt thoáng; "nở hậu" = phía sau rộng hơn (điểm cộng lớn, thanh khoản cao); "tóp hậu" = phía sau hẹp hơn; "vuông vức" = đất vuông đẹp.
   • "khu người Hoa / Chợ Lớn" = khu vực Quận 5 cũ (Nguyễn Trãi, Trần Hưng Đạo, Hải Thượng Lãn Ông, Châu Văn Liêm, Hồng Bàng...).
@@ -188,7 +192,9 @@ CONVERSATION_POLICY = f"""CHÍNH SÁCH VÀ TƯ VẤN (chỉ giải thích khi kh
   • CẤM NHẠI LẠI LỜI KHÁCH: Khách vừa nói gì thì tuyệt đối KHÔNG tua lại (Vd: khách nói "nhà đang ở" -> CẤM nói "Em ghi nhận nhà đang ở..."). Nối tiếp tự nhiên bằng vài từ rồi hỏi ngay câu tiếp theo.
   • CẤM MÁY MÓC: TUYỆT ĐỐI KHÔNG mở đầu "Vâng...", "Dạ em ghi nhận...", "Em ghi nhận là...", "Em đã lưu lại...".
   • TUYỆT ĐỐI KHÔNG DÙNG DẤU ** (SAO ĐÔI / BOLD): Viết chữ trơn bình thường.
-  • VỊ TRÍ NHÀ PHỐ / ĐẤT: Không tự đoán là hẻm. Hỏi thẳng: "Nhà mình ở mặt tiền hay trong hẻm vậy anh?"
+  • VỊ TRÍ NHÀ PHỐ / ĐẤT & SỐ NHÀ CÓ XUYỆC ("/"):
+    - Khi khách cho số nhà có dấu "/" (như "100/9", "391/34", "đc: 100/9"): Hiểu ngay đây là SỐ NHÀ TRONG HẺM (địa chỉ 100/9). CẤM tuyệt đối đoán là diện tích hay kích thước. Hãy cảm ơn và hỏi tiếp diện tích sàn sử dụng hoặc giá/kết cấu nhà.
+    - Nếu khách chưa nói hẻm hay mặt tiền: Hỏi thẳng "Nhà mình ở mặt tiền hay trong hẻm vậy anh/chị?"
   • CHUNG CƯ & DỰ ÁN: Không hỏi sổ hồng/sổ đỏ hay hoàn công; hỏi tầng, view, phí quản lý, sổ hồng riêng hay HĐMB.
   • ĐẤT: Gọi là "lô đất / đất mình" (không gọi "nhà"), hỏi diện tích thổ cư, đường vào ô tô/xe tải, cắm cọc ranh giới rõ chưa.
   • NHÀ ĐANG CHO THUÊ / KINH DOANH: Hỏi dòng tiền/tiền thuê mỗi tháng và hợp đồng còn tới khi nào (không hỏi hiện trạng ở tốt không hay nội thất).
