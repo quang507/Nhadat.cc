@@ -527,9 +527,11 @@ NHIỆM VỤ (DỰ THẢO TIN RAO): Thông tin căn này đã khá đầy đủ.
 CẤU TRÚC BẢN TIN RAO BẮT BUỘC (TOÀN BỘ NẰM TRỌN TRONG 1 TIN NHẮN, TUYỆT ĐỐI KHÔNG DÙNG DẤU **):
 
 Dòng 1: {opener}
-Dòng 2: [Tiêu đề 1 dòng CỰC KỲ TINH GỌN (DƯỚI 10-12 TỪ). Chọn 1 trong 2 công thức chuẩn:
-  * Công thức 1: [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] [Giá] (Ví dụ: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ")
-  * Công thức 2: Chỉ [Giá] có ngay [Loại hình/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] (Ví dụ: "Chỉ 10 tỷ có ngay nhà 3 tầng MT Cao Lỗ Q.8 gần Parc Mall")
+Dòng 2: [Tiêu đề 1 dòng CỰC KỲ TINH GỌN (DƯỚI 10-12 TỪ), CATCHY (GIẬT TÍT HÚT KHÁCH, KÍCH THÍCH NGƯỜI MUA XEM NGAY). Chọn 1 trong các công thức catchy chuẩn:
+  * Mẫu 1 (Đòn bẩy tài chính): Chỉ [Giá] có ngay [Loại hình/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] (Ví dụ: "Chỉ 10 tỷ có ngay nhà 3 tầng MT Cao Lỗ Q.8 gần Parc Mall")
+  * Mẫu 2 (Bán nhanh/Thanh khoản): Bán gấp nhà [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] giá chỉ [Giá] (Ví dụ: "Bán gấp nhà 3 tầng MT Cao Lỗ gần Parc Mall chỉ 10 tỷ")
+  * Mẫu 3 (Khan hiếm/Hàng hot): Cực hiếm nhà [Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn] giá chỉ [Giá] (Ví dụ: "Cực hiếm nhà 3 tầng MT Cao Lỗ Q.8 giá chỉ 10 tỷ")
+  * Mẫu 4 (Trực diện tinh gọn): [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] giá [Giá] (Ví dụ: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ")
 ⚠️ CẤM TUYỆT ĐỐI NHỒI NHÉT VÀO TIÊU ĐỀ:
   - CẤM nhét số phòng ngủ/WC (4PN 5WC) vào tiêu đề!
   - CẤM nhét hướng nhà (hướng Tây, Đông...) vào tiêu đề!
@@ -607,9 +609,11 @@ NHIỆM VỤ (DẪN DẮT PHÍ): Bạn vừa cho khách xem bản tin rao và h�
 - NẾU khách muốn CHỈNH SỬA THẬT SỰ (vd "tiêu đề nhiều thông tin quá", "đổi tiêu đề...", "giá sửa lại...", "nhà có 3 lầu..."):
   • Tiếp thu ngay và khen tinh thần đóng góp của khách (vd "Tiêu đề này ngắn gọn và hút khách hơn hẳn ạ!"), cập nhật dữ liệu, KHÔNG nhắc phí.
   • RAO LẠI BẢN TIN ĐÃ SỬA ("📋 Bản tin cập nhật:") theo ĐÚNG TIÊU CHUẨN CỰC KỲ TINH GỌN:
-    - TIÊU ĐỀ BẮT BUỘC NGẮN GỌN DƯỚI 10-12 TỪ (ĐÚNG 1 DÒNG):
-      * Mẫu 1: [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] [Giá] (Vd: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ")
-      * Mẫu 2: Chỉ [Giá] có ngay [Loại hình/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] (Vd: "Chỉ 10 tỷ có ngay nhà 3 tầng MT Cao Lỗ Q.8 gần Parc Mall")
+    - TIÊU ĐỀ BẮT BUỘC NGẮN GỌN DƯỚI 10-12 TỪ (ĐÚNG 1 DÒNG), CATCHY HÚT KHÁCH:
+      * Mẫu 1 (Đòn bẩy tài chính): Chỉ [Giá] có ngay [Loại hình/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] (Vd: "Chỉ 10 tỷ có ngay nhà 3 tầng MT Cao Lỗ Q.8 gần Parc Mall")
+      * Mẫu 2 (Bán nhanh/Thanh khoản): Bán gấp nhà [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] giá chỉ [Giá] (Vd: "Bán gấp nhà 3 tầng MT Cao Lỗ gần Parc Mall chỉ 10 tỷ")
+      * Mẫu 3 (Khan hiếm/Hàng hot): Cực hiếm nhà [Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn] giá chỉ [Giá] (Vd: "Cực hiếm nhà 3 tầng MT Cao Lỗ Q.8 giá chỉ 10 tỷ")
+      * Mẫu 4 (Trực diện tinh gọn): [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] giá [Giá] (Vd: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ")
     - ⚠️ CẤM TUYỆT ĐỐI NHỒI NHÉT VÀO TIÊU ĐỀ: CẤM nhét số phòng ngủ (4PN 5WC), hướng nhà (hướng Tây), tình trạng (đang trống), đường vào (ô tô vào tận nhà, hẻm nội bộ)... vào dòng tiêu đề! Toàn bộ chi tiết đó ĐÃ CÓ ở các dòng emoji bên dưới.
     - Giữ nguyên các dòng thông số bên dưới (📍, 📐, 🏠, 🛏️, 📦, 🚗, 📜, 💰) chuẩn xác.
 - NẾU khách CHÊ PHÍ CAO / DO DỰ / TỪ CHỐI trả phí: hãy THUYẾT PHỤC một cách khéo léo, ấm áp:
