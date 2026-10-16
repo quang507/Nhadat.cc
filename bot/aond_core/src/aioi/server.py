@@ -291,3 +291,17 @@ def trigger_followup(user_key: str):
     followup_manager.cancel_followup(user_key)
     followup_manager._execute_followup(user_key, _engine)
     return {"ok": True, "message": f"Follow-up triggered for {user_key}"}
+
+
+@app.post("/reset/{user_key}")
+def reset_user(user_key: str):
+    followup_manager.cancel_followup(user_key)
+    _engine.reset(user_key)
+    return {"ok": True, "message": f"Reset conversation and listing for {user_key}"}
+
+
+@app.post("/reset-all")
+def reset_all():
+    _engine.reset_all()
+    return {"ok": True, "message": "All conversations and listings reset"}
+

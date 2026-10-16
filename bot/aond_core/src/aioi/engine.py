@@ -1046,6 +1046,21 @@ class Engine:
         lead with `greeting()` (so a returning seller isn't greeted from scratch every restart)."""
         return not self.conversation(user_key).history
 
+    def reset(self, user_key: str) -> None:
+        """Reset all in-memory and database records for a specific user_key."""
+        self._conversations.pop(user_key, None)
+        if self._convstore is not None:
+            self._convstore.reset(user_key)
+
+    def reset_all(self) -> None:
+        """Reset all conversations, listings, and leads across all users."""
+        self._conversations.clear()
+        if self._convstore is not None:
+            self._convstore._conn.execute("DELETE FROM listings")
+            self._convstore._conn.execute("DELETE FROM buyer_leads")
+            self._convstore._conn.execute("DELETE FROM conversations")
+            self._convstore._conn.commit()
+
     def _dedup_basket(self, conv: Conversation) -> None:
         """Collapse listings that share a (dự án, mã số căn) — a seller can't list the same
         căn twice. Keeps the FIRST of each and merges the others' non-empty fields + media into
