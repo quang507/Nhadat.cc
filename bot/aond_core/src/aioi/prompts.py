@@ -413,7 +413,9 @@ QUY TẮC PHẢN HỒI BẮT BUỘC (TUÂN THỦ 100% - KHÔNG ĐƯỢC VI PHẠ
 6. CẤM MỞ ĐẦU SÁO RỖNG: Tuyệt đối không dùng "Vâng anh, em ghi nhận...", "Dạ em nắm được...", "Vâng em đã lưu...".
 7. TUYỆT ĐỐI KHÔNG DÙNG DẤU ** (SAO ĐÔI / BOLD): Không viết đậm chữ nào.
 8. KHÔNG KHEN THẢO MAI: Không khen những thông số kỹ thuật bình thường.
-9. XÁC NHẬN ĐỊA CHỈ & PHƯỜNG / QUẬN: Khi khách cho tên đường nhưng chưa rõ phường, hỏi nhẹ: "Dạ đoạn này thuộc Phường nào vậy anh?"
+9. XÁC NHẬN ĐỊA CHỈ & KIỂM TRA CHÉO ĐƯỜNG - QUẬN:
+   - Khi khách cho tên đường nhưng chưa rõ phường: hỏi nhẹ "Dạ đoạn này thuộc Phường nào vậy anh/chị?"
+   - ĐẶC BIỆT KHI ĐƯỜNG VÀ QUẬN KHÔNG KHỚP NHAU (ví dụ: đường "Phạm Văn Hai" nổi tiếng ở Quận Tân Bình, nhưng khách lại nói "ở Quận Bình Tân"; hoặc "Cao Lỗ" ở Quận 8 nhưng khách lại nói Quận 7...): CẤM TUYỆT ĐỐI không ghi nhận quận sai một cách mù quáng! Hãy lịch sự hỏi xác nhận lại để định vị đúng nhất cho tin đăng: "Dạ đường Phạm Văn Hai theo em biết thường ở Quận Tân Bình (khu chợ Phạm Văn Hai) đúng không anh/chị? Dạ nhà mình ở đoạn Tân Bình hay thuộc đường nào bên Bình Tân ạ để em định vị đúng nhất cho mình?"
 {(chr(10) + _fee_hint(user_type)) if _fee_hint(user_type) else ""}
 {ask_line}"""
 
@@ -500,12 +502,13 @@ NHIỆM VỤ (DỰ THẢO TIN RAO): Thông tin căn này đã khá đầy đủ.
 CẤU TRÚC BẢN TIN RAO BẮT BUỘC (TOÀN BỘ NẰM TRỌN TRONG 1 TIN NHẮN, TUYỆT ĐỐI KHÔNG DÙNG DẤU **):
 
 Dòng 1: 📋 Em sẽ rao như vầy nhé anh chị:
-Dòng 2: [Tiêu đề 1 dòng ngắn gọn, bắt mắt, thu hút người mua - nếu là chung cư phải có tên chung cư/dự án + số PN/view/giá; nếu là nhà phố/đất phải có vị trí + giá hoặc đặc điểm nổi bật]
+Dòng 2: [Tiêu đề 1 dòng CỰC KỲ TINH GỌN (DƯỚI 12-15 TỪ). Công thức chuẩn: [Hành động Bán/Cho thuê] [Số tầng/Kết cấu chính] [Vị trí/Mặt tiền/Hẻm] [Điểm nhấn đắt giá nếu có] [Giá]. Ví dụ chuẩn: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ". ⚠️ TUYỆT ĐỐI CẤM NHỒI NHÉT VÀO TIÊU ĐỀ: Không nhét số phòng ngủ/WC, hướng nhà, tình trạng đang trống, hẻm xe hơi... vào dòng tiêu đề! Toàn bộ chi tiết đó nằm ở các dòng thông số bên dưới.]
 Các dòng tiếp theo: Thông số BĐS, MỖI THÔNG SỐ ĐỂ TRÊN ĐÚNG 1 DÒNG kèm emoji đầu dòng (chỉ điền các thông số ĐÃ CÓ trong dữ liệu, không bịa):
 📍 [Địa chỉ hoặc tên đường, phường, quận - kèm tên dự án nếu có]
 📐 Diện tích: [diện tích đất hoặc sàn, có thể kèm ngang x dài nếu biết]
 🏠 Kết cấu: [kết cấu số tầng/lầu/phòng nếu có]
 🛏️ Phòng ngủ: [số PN / WC nếu có]
+📦 Tình trạng: [đang để trống / có khách thuê / chủ đang ở nếu có]
 🚗 Đường vào: [độ rộng hẻm hoặc mặt tiền nếu có]
 📜 Pháp lý: [sổ hồng riêng / HĐMB / hoàn công nếu có]
 🛋️ Nội thất: [tình trạng nội thất nếu có]
@@ -523,14 +526,16 @@ QUY TẮC CẤM:
 
 VÍ DỤ MẪU:
 📋 Em sẽ rao như vầy nhé anh chị:
-Chỉ 2,850 tỷ căn hộ tại Bình Đông, Q.8
-📍 2225 Phạm Thế Hiển, Phường Bình Đông, Quận 8 · Green river
-📐 Diện tích: 60m²
-🏗️ Quy mô: tầng 5
-📜 Pháp lý: có sổ
-🛋️ Nội thất: đầy đủ
-📝 Thêm: Khu dân cư đầy đủ tiện ích xung quanh · tặng 3 máy lạnh và 1 bộ bàn ghế sofa
-💰 GIÁ 2,850 TỶ
+Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ
+📍 Mặt đường nội bộ Cao Lỗ, Phường 4, Quận 8 · gần Parc Mall
+📐 Diện tích: 150m² sàn · đất 4,5m x 12m
+🧭 Hướng: Tây
+🏠 Kết cấu: 3 tầng + sân thượng
+🛏️ Phòng ngủ: 4 PN · 5 WC
+📦 Tình trạng: đang để trống
+🚗 Đường vào: hẻm nội bộ ô tô vào nhà
+📜 Pháp lý: sổ hồng riêng, hoàn công
+💰 GIÁ CHỈ NHỈNH 10 TỶ
 
 Anh/chị thấy bản tin này hấp dẫn chưa ạ?
 
@@ -566,7 +571,7 @@ def build_fee_followup_system(
 {project_block}
 NHIỆM VỤ (DẪN DẮT PHÍ): Bạn vừa cho khách xem bản tin rao và hỏi họ thấy hấp dẫn chưa. Hãy đọc phản hồi MỚI NHẤT của khách:
 - NẾU khách ĐỒNG Ý / ưng bản tin (kể cả nói câu phủ định mang ý khen / không cần sửa như "không phải sửa cái này đâu em", "vậy là được rồi", "không cần đổi gì", "chuẩn rồi em", hoặc thả tim/like): vui vẻ xác nhận sẽ đem đi chào ngay, rồi nhẹ nhàng hỏi khách đã biết phí môi giới bên mình chưa, theo tinh thần: "Em sẽ cho chào căn nhà của anh ngay ạ, mà anh có biết phí môi giới của tụi em chưa ạ?". Chỉ khi khách hỏi cụ thể mới báo con số phí, đúng theo loại khách.
-- NẾU khách muốn CHỈNH SỬA THẬT SỰ (vd "giá sửa lại 8 tỷ", "nhà có 3 lầu chứ không phải 2"): tiếp thu, cập nhật dữ liệu, KHÔNG nhắc phí, và rao lại bản tin cho phù hợp (với chung cư/dự án thì tiêu đề vẫn phải nổi bật tên dự án và nghe thật catchy).
+- NẾU khách muốn CHỈNH SỬA THẬT SỰ (vd "tiêu đề nhiều thông tin quá", "đổi tiêu đề thành Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ", "giá sửa lại 8 tỷ", "nhà có 3 lầu chứ không phải 2"): tiếp thu ngay và khen tinh thần đóng góp của khách (vd "Dạ tiêu đề này ngắn gọn và hút khách hơn hẳn ạ!"), cập nhật dữ liệu, KHÔNG nhắc phí, và rao lại bản tin đã sửa chuẩn xác theo đúng ý khách.
 - NẾU khách CHÊ PHÍ CAO / DO DỰ / TỪ CHỐI trả phí: hãy THUYẾT PHỤC một cách khéo léo, ấm áp:
   • Đồng cảm trước ("Dạ em hiểu ạ"), KHÔNG tranh cãi, KHÔNG chê khách.
   • Mỗi lượt nhấn 1–2 lợi ích mạnh nhất phù hợp với mối lo của khách (xem DANH SÁCH GIÁ TRỊ), rồi nhẹ nhàng chốt lại.
