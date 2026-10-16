@@ -14,9 +14,13 @@ import os
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from .schema import Conversation, Listing, Property, Turn, assign_assistant, BuyerLead
+from .schema import Property
+from .assistants import assign_assistant
+
+if TYPE_CHECKING:
+    from .engine import Conversation, Listing, Turn, BuyerLead
 
 log = logging.getLogger("aioi.supabase_store")
 
@@ -201,11 +205,13 @@ class SupabaseConversationStore:
         except Exception as e:
             log.error("Failed to save conversation to Supabase: %s", e)
 
-    def load(self, user_key: str) -> Conversation | None:
+    def load(self, user_key: str) -> Any:
         """Load conversation from Supabase.
         CRITICAL: If the seller or conversation was deleted on CRM (aioinhadat.vercel.app),
         this returns None so the bot immediately resets its session!
         """
+        from .engine import Conversation, Listing, Turn
+
         if not self.is_configured:
             return self.fallback.load(user_key) if self.fallback else None
 
