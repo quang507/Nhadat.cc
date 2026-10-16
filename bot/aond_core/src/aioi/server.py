@@ -43,12 +43,25 @@ def _init_engine() -> Engine:
         # Graceful local fallback storing files + thong_tin.json matching SharePoint structure
         media_store = LocalDirectoryMediaStore("sharepoint_store")
 
+    sqlite_store = SqliteConversationStore(settings.db_path)
+    if settings.supabase_service_role_key:
+        from .supabase_store import SupabaseConversationStore
+        conv_store = SupabaseConversationStore(
+            url=settings.supabase_url,
+            key=settings.supabase_service_role_key,
+            fallback_store=sqlite_store,
+        )
+        log.info("Initialized SupabaseConversationStore (Single Source of Truth) at %s", settings.supabase_url)
+    else:
+        conv_store = sqlite_store
+        log.info("Initialized local SqliteConversationStore at %s", settings.db_path)
+
     return Engine(
         provider,
         resolver=make_resolver(settings.google_api_key),
         folder_namer=make_folder_namer(settings.google_api_key),
         project_store=SqliteProjectStore(settings.db_path),
-        conversation_store=SqliteConversationStore(settings.db_path),
+        conversation_store=conv_store,
         media_store=media_store,
         max_photos_per_listing=settings.max_photos_per_listing,
         sync_json=True,

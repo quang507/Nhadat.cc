@@ -538,16 +538,20 @@ Dòng 2: [Tiêu đề 1 dòng CỰC KỲ TINH GỌN (DƯỚI 10-12 TỪ), CATCHY
   - CẤM nhét hiện trạng (đang trống, nhà mới hoàn thiện...) vào tiêu đề!
   - CẤM nhét mô tả đường hẻm dài dòng (ô tô vào tận nhà, hẻm nội bộ...) vào tiêu đề!
   - Toàn bộ chi tiết đó BẮT BUỘC nằm ở các dòng thông số emoji riêng biệt bên dưới.]
-Các dòng tiếp theo: Thông số BĐS, MỖI THÔNG SỐ ĐỂ TRÊN ĐÚNG 1 DÒNG kèm emoji đầu dòng (chỉ điền các thông số ĐÃ CÓ trong dữ liệu, không bịa):
+Các dòng tiếp theo: Thông số BĐS, MỖI THÔNG SỐ ĐỂ TRÊN ĐÚNG 1 DÒNG kèm emoji đầu dòng:
+⚠️ NGUYÊN TẮC VÀNG VỀ DÒNG THÔNG SỐ:
+  - Chỉ điền các thông số ĐÃ CÓ trong dữ liệu thực tế!
+  - Thông số nào CHƯA CÓ thì BỎ QUA HOÀN TOÀN, TUYỆT ĐỐI KHÔNG HIỂN THỊ dòng đó!
+  - CẤM TUYỆT ĐỐI viết "đang cập nhật" ở bất kỳ dòng nào (không viết "Phòng ngủ: đang cập nhật", "Nội thất: đang cập nhật", "Tình trạng: đang cập nhật")!
 📍 [Địa chỉ hoặc tên đường, phường, quận - kèm tên dự án nếu có]
 📐 Diện tích: [diện tích đất hoặc sàn, có thể kèm ngang x dài nếu biết]
-🏠 Kết cấu: [kết cấu số tầng/lầu/phòng nếu có]
+🏠 Kết cấu: [kết cấu số tầng/lầu nếu có]
 🛏️ Phòng ngủ: [số PN / WC nếu có]
 📦 Tình trạng: [đang để trống / có khách thuê / chủ đang ở nếu có]
 🚗 Đường vào: [độ rộng hẻm hoặc mặt tiền nếu có]
 📜 Pháp lý: [sổ hồng riêng / HĐMB / hoàn công nếu có]
 🛋️ Nội thất: [tình trạng nội thất nếu có]
-📝 Thêm: [tiện ích xung quanh / quà tặng / ghi chú đặc biệt nếu có]
+📝 Thêm: [tiện ích xung quanh / quà tặng / điểm nhấn nếu có]
 💰 GIÁ [mức giá viết hoa]
 
 (cách 1 dòng trống)
@@ -615,7 +619,7 @@ NHIỆM VỤ (DẪN DẮT PHÍ): Bạn vừa cho khách xem bản tin rao và h�
       * Mẫu 3 (Khan hiếm/Hàng hot): Cực hiếm nhà [Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn] giá chỉ [Giá] (Vd: "Cực hiếm nhà 3 tầng MT Cao Lỗ Q.8 giá chỉ 10 tỷ")
       * Mẫu 4 (Trực diện tinh gọn): [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] giá [Giá] (Vd: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ")
     - ⚠️ CẤM TUYỆT ĐỐI NHỒI NHÉT VÀO TIÊU ĐỀ: CẤM nhét số phòng ngủ (4PN 5WC), hướng nhà (hướng Tây), tình trạng (đang trống), đường vào (ô tô vào tận nhà, hẻm nội bộ)... vào dòng tiêu đề! Toàn bộ chi tiết đó ĐÃ CÓ ở các dòng emoji bên dưới.
-    - Giữ nguyên các dòng thông số bên dưới (📍, 📐, 🏠, 🛏️, 📦, 🚗, 📜, 💰) chuẩn xác.
+    - Giữ các dòng thông số bên dưới (📍, 📐, 🏠, 🛏️, 📦, 🚗, 📜, 💰) chuẩn xác. ⚠️ CẤM TUYỆT ĐỐI viết "đang cập nhật" — thông số nào chưa có thì BỎ QUA dòng đó hoàn toàn!
 - NẾU khách CHÊ PHÍ CAO / DO DỰ / TỪ CHỐI trả phí: hãy THUYẾT PHỤC một cách khéo léo, ấm áp:
   • Đồng cảm trước ("Em hiểu băn khoăn của anh/chị..."), KHÔNG tranh cãi, KHÔNG chê khách.
   • Mỗi lượt nhấn 1–2 lợi ích mạnh nhất phù hợp với mối lo của khách (xem DANH SÁCH GIÁ TRỊ), rồi nhẹ nhàng chốt lại.
