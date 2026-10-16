@@ -227,8 +227,8 @@ CONVERSATION_POLICY = f"""CHÍNH SÁCH VÀ TƯ VẤN (chỉ giải thích khi kh
 BUSINESS_CONTEXT = """BỐI CẢNH AI ƠI NHÀ ĐẤT (nền tảng nội bộ — chỉ nói ra khi khách hỏi, đừng thuyết giảng):
 - Người rao bán/cho thuê BĐS bằng cách chat Zalo tự nhiên (KHÔNG form). Nhiệm vụ của bạn: lặng lẽ gom đủ dữ liệu listing, giữ khách quay lại, và dùng gamification để khích lệ.
 - HAI loại khách — hãy nhận biết qua hội thoại rồi tư vấn cho đúng:
-  • Bên SỞ HỮU (chủ nhà; hoặc nhà đầu tư lướt sóng giữ HĐMB): phí 1% giá chốt, hoặc 3/4 tháng tiền thuê.
-  • Bên MÔI GIỚI (nhân viên môi giới; hoặc sàn giao dịch): phí 0.5% giá chốt, hoặc 3/4 tháng tiền thuê. Khích lệ đăng thêm hàng (≥10 căn) để lên Top.
+  • Bên SỞ HỮU (chủ nhà; hoặc nhà đầu tư lướt sóng giữ HĐMB): phí 1% giá chốt khi bán, hoặc 0.75 tháng tiền thuê (tức ba phần tư của 1 tháng tiền thuê, tuyệt đối không nói nhầm thành 3 hay 4 tháng).
+  • Bên MÔI GIỚI (nhân viên môi giới; hoặc sàn giao dịch): phí 0.5% giá chốt khi bán, hoặc 0.75 tháng tiền thuê. Khích lệ đăng thêm hàng (≥10 căn) để lên Top.
   • CHỦ ĐẦU TƯ: phí KHÔNG theo 1%/0.5% — thoả thuận riêng với dự án; đừng tự báo con số.
 - PHÍ CHỈ thu khi giao dịch THÀNH CÔNG. TUYỆT ĐỐI không bịa con số phí/ưu đãi/cam kết nào ngoài các mức trên. Chưa rõ vai người rao thì đừng báo phí, cứ hỏi khéo hoặc tư vấn chung.
 - Gamification: có Điểm uy tín và hạng Đồng/Bạc/Vàng; nên khen điểm mạnh và gợi ý cách tăng điểm (bổ sung ảnh, sổ hồng, thông tin còn thiếu)."""
@@ -239,15 +239,14 @@ def _fee_hint(role: SellerRole) -> str:
     if role in (SellerRole.CHU_NHA, SellerRole.LUOT_SONG):
         who = "CHÍNH CHỦ" if role == SellerRole.CHU_NHA else "NHÀ ĐẦU TƯ (chủ HĐMB)"
         return (
-            f"VAI NGƯỜI RAO: {who} (bên sở hữu). Nếu được hỏi phí, báo 1% giá chốt "
-            "(hoặc 3/4 tháng tiền thuê), chỉ thu khi giao dịch thành công."
+            f"VAI NGƯỜI RAO: {who} (bên sở hữu). Nếu được hỏi phí, báo 1% giá chốt khi bán, "
+            "hoặc 0.75 tháng tiền thuê (tức 3/4 của 1 tháng tiền thuê; TUYỆT ĐỐI KHÔNG giải thích là 3 hoặc 4 tháng), chỉ thu khi giao dịch thành công."
         )
     if role in (SellerRole.MOI_GIOI, SellerRole.SAN):
         who = "MÔI GIỚI" if role == SellerRole.MOI_GIOI else "SÀN GIAO DỊCH"
         return (
-            f"VAI NGƯỜI RAO: {who} (bên môi giới). Nếu được hỏi phí, báo 0.5% giá chốt "
-            "(hoặc 3/4 tháng tiền thuê), chỉ thu khi thành công; khích lệ đăng thêm hàng "
-            "(≥10 căn) để lên Top hiển thị."
+            f"VAI NGƯỜI RAO: {who} (bên môi giới). Nếu được hỏi phí, báo 0.5% giá chốt khi bán, "
+            "hoặc 0.75 tháng tiền thuê (tức 3/4 của 1 tháng tiền thuê; TUYỆT ĐỐI KHÔNG giải thích là 3 hoặc 4 tháng), chỉ thu khi thành công; khích lệ đăng thêm hàng (≥10 căn) để lên Top hiển thị."
         )
     if role == SellerRole.CHU_DAU_TU:
         return (
@@ -582,7 +581,7 @@ DỮ LIỆU BĐS:
 FEE_VALUE_POINTS = """- CHỈ thu phí KHI giao dịch thành công — khách không tốn đồng nào trước, không rủi ro.
 - Hệ thống tự điều cộng tác viên (CTV) dẫn khách tới xem nhà, chủ không phải tự tìm khách.
 - Tin được đẩy tới mạng lưới 20 nhà môi giới lõi + rổ khách mua đã được lọc (trợ lý M•ai), tiếp cận khách "nét".
-- Tin được chuẩn hóa, chấm điểm và ưu tiên lên Top hiển thị Quận 5 — bán nhanh hơn tự rao.
+- Tin được chuẩn hóa, chấm điểm và ưu tiên lên Top hiển thị khu vực của căn nhà — bán/cho thuê nhanh hơn tự rao.
 - Tiết kiệm thời gian, sàng lọc khách ảo, giữ liên lạc tự động qua Zalo."""
 
 
