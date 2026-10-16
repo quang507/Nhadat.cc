@@ -58,7 +58,7 @@ if (fs.existsSync(ENV_FILE)) {
 }
 
 const CHAT_REPLY_URL =
-  "https://rqxmmqmctpklqcmbfxuj.supabase.co/functions/v1/chat-reply";
+  process.env.CHAT_REPLY_URL || "http://127.0.0.1:8000/chat-reply";
 const ANON_KEY =
   "sb_publishable_f4wNO8jQcCDWn1QmNZQ7-g_BXDtYM3Y"; // key công khai, chỉ gọi được function
 
@@ -289,19 +289,43 @@ async function postJson(url, headers, payload, hanCho = 20_000) {
 const HAN_CHO_BO_NAO = 90_000; // lượt gọi có kèm model
 const HAN_CHO_NGAN = 10_000;   // hỏi lại / ghi sổ — trả về ngay
 
-// Gửi một tin (kèm ảnh nếu bộ não trả về) — dùng chung cho tin nhắn và reaction
-async function handleIncoming(threadId, text, imageUrl, msgId, tep) {
-  console.log(`← [${threadId}] ${text || (tep ? `[file ${tep.ten ?? ""}]` : "[ảnh]")}`);
+// G?i m?t tin (k?m ?nh n?u b? n?o tr? v?) ? d?ng chung cho tin nh?n v? reaction
+const userProfileCache = new Map();
+async function layTenZalo(tid) {
+  if (userProfileCache.has(tid)) return userProfileCache.get(tid);
+  try {
+    const res = await api.getUserInfo(String(tid));
+    const p = res?.changed_profiles?.[tid] || res?.unchanged_profiles?.[tid];
+    const ten = p?.displayName || p?.zaloName || "";
+    if (ten) {
+      userProfileCache.set(tid, ten);
+      return ten;
+    }
+  } catch (e) {
+    console.warn(`[Bridge] Kh?ng l?y ???c t?n Zalo ${tid}:`, e?.message);
+  }
+  return "";
+}
+
+async function handleIncoming(threadId, text, imageUrls, msgId, tep) {
+  const imgList = Array.isArray(imageUrls) ? imageUrls : (imageUrls ? [imageUrls] : []);
+  const imgDesc = imgList.length > 1 ? `[${imgList.length} ?nh]` : (imgList.length === 1 ? "[?nh]" : "");
+  console.log(`? [${threadId}] ${text || (tep ? `[file ${tep.ten ?? ""}]` : (imgDesc || "[tin nh?n]"))}`);
+  const zaloName = await layTenZalo(String(threadId));
   const payload = {
     external_user_id: String(threadId),
+    sender_name: zaloName || undefined,
+    user_name: zaloName || undefined,
     text: typeof text === "string" ? text : "",
-    image_url: imageUrl,
-    // SRS-5.1zzj (05/10/2026): file (PDF / CSV / XLSX) người bán gửi qua Zalo cá nhân — bộ não tải về và đọc.
+    image_urls: imgList,
+    image_url: imgList[0] || null,
+    // SRS-5.1zzj (05/10/2026): file (PDF / CSV / XLSX) ng??i b?n g?i qua Zalo c? nh?n ? b? n?o t?i v? v? ??c.
     file_url: tep?.url,
     file_name: tep?.ten,
     msg_id: msgId,
     channel: "zalo_personal_test",
   };
+
   let out = await postJson(CHAT_REPLY_URL, brainHeaders, payload, HAN_CHO_BO_NAO);
   // FR-162: in_flight = một bản sao của CÙNG tin này đang được xử lý — thường
   // là chính lượt đầu của postJson bị timeout 20s nên lượt thử lại chạm mặt nó.
@@ -382,6 +406,70 @@ async function handleIncoming(threadId, text, imageUrl, msgId, tep) {
       await ghiLoi("gửi ảnh", errDetail(e));
     }
   }
+
+  // Đồng bộ hội thoại thực tế sang CRM Supabase (với cờ sync_turn để không chạy duplicate AI bot)
+  const EDGE_SYNC_URL = "https://rqxmmqmctpklqcmbfxuj.supabase.co/functions/v1/chat-reply";
+  const ANON_KEY_SYNC = "sb_publishable_f4wNO8jQcCDWn1QmNZQ7-g_BXDtYM3Y";
+  fetch(EDGE_SYNC_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${ANON_KEY_SYNC}`,
+      "x-bridge-secret": process.env.BRIDGE_SECRET || "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      sync_turn: true,
+      external_user_id: String(threadId),
+      sender_name: zaloName || undefined,
+      text: typeof text === "string" ? text : "",
+      image_urls: imgList,
+      image_url: imgList[0] || null,
+      msg_id: msgId,
+      channel: "zalo_personal_test",
+      bot_reply: out?.reply || (bubbles.length ? bubbles[0] : ""),
+      bot_replies: bubbles,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  }).catch((e) => console.warn("[Edge Sync CRM error]:", e?.message));
+}
+
+
+// --- BỘ ĐỆM GOM TIN NHẮN GIẬT CỤC (Debounce Buffer) ---
+// Khách gõ nhiều tin ngắn liên tiếp: chờ 2.5s gom thành 1 tin trọn vẹn trước khi chuyển AI xử lý.
+const bufferTin = new Map();
+const DEBOUNCE_MS = 2500;
+
+function queueIncoming(threadId, text, imageUrl, msgId, tep) {
+  const tid = String(threadId);
+  const hienTai = bufferTin.get(tid) || {
+    texts: [],
+    imageUrls: [],
+    timer: null,
+    tep: null,
+    lastMsgId: null,
+  };
+  if (text) hienTai.texts.push(text.trim());
+  if (imageUrl && !hienTai.imageUrls.includes(imageUrl)) {
+    hienTai.imageUrls.push(imageUrl);
+  }
+  if (tep) hienTai.tep = tep;
+  hienTai.lastMsgId = msgId || hienTai.lastMsgId;
+
+  if (hienTai.timer) clearTimeout(hienTai.timer);
+
+  hienTai.timer = setTimeout(async () => {
+    bufferTin.delete(tid);
+    const textGom = hienTai.texts.filter(Boolean).join("\n");
+    if (!textGom && !hienTai.imageUrls.length && !hienTai.tep) return;
+    try {
+      await handleIncoming(tid, textGom, hienTai.imageUrls, hienTai.lastMsgId, hienTai.tep);
+    } catch (e) {
+      if (laPhienChet(e)) return await phienChet(errDetail(e));
+      await ghiLoi("xử lý tin gom", errDetail(e));
+    }
+  }, DEBOUNCE_MS);
+
+  bufferTin.set(tid, hienTai);
 }
 
 api.listener.on("message", async (message) => {
@@ -415,7 +503,29 @@ api.listener.on("message", async (message) => {
     let imageUrl;
     let tep; // SRS-5.1zzj: file đính kèm {url, ten}
     const msgType = String(message.data?.msgType ?? "");
-    if (text && typeof text === "object") {
+
+    // 1. Phân tích tin nhắn Vị trí (Location / GPS / Bản đồ)
+    if (/location|map/i.test(msgType) || (text && typeof text === "object" && (text.lat != null || text.latitude != null))) {
+      const lat = text?.lat ?? text?.latitude;
+      const lon = text?.lon ?? text?.lng ?? text?.longitude;
+      const diaChi = text?.address ?? text?.title ?? text?.description ?? "";
+      if (lat != null && lon != null) {
+        text = `[Vị trí GPS]: ${diaChi ? diaChi + " " : ""}(tọa độ: ${lat}, ${lon})`;
+      } else if (diaChi) {
+        text = `[Vị trí đã chia sẻ]: ${diaChi}`;
+      }
+    }
+    // 2. Phân tích tin nhắn Thoại (Voice / Audio)
+    else if (/voice|audio/i.test(msgType) || (text && typeof text === "object" && (text.voiceUrl || (text.href && /\.(m4a|aac|mp3|wav|ogg)$/i.test(text.href))))) {
+      const voiceUrl = text?.voiceUrl || text?.href || message.data?.voiceUrl || message.data?.url || (typeof text === 'string' && text.startsWith('http') ? text : '');
+      console.log(`[Bridge Voice] Nhan tin nhan thoai tu ${message.threadId}: url=${voiceUrl || '(chua co link)'}`);
+      text = "[Khách gửi tin nhắn thoại/ghi âm]";
+      if (voiceUrl) {
+        tep = { url: voiceUrl, ten: "tin_nhan_thoai.m4a" };
+      }
+    }
+    // 3. Phân tích tệp hoặc ảnh thông thường
+    else if (text && typeof text === "object") {
       if (text.href && (/file/i.test(msgType) || /\.(pdf|csv|xlsx?|docx?)$/i.test(String(text.title ?? text.fileName ?? "")))) {
         // zca-js: file chia sẻ cũng mang `href` + `title` — trước đây bị coi là ảnh, phân loại hỏng rồi rơi thành URL tạm.
         tep = { url: text.href, ten: String(text.title ?? text.fileName ?? "").slice(0, 200) || undefined };
@@ -430,7 +540,7 @@ api.listener.on("message", async (message) => {
       }
     }
     if ((typeof text !== "string" || !text.trim()) && !imageUrl && !tep) return;
-    await handleIncoming(
+    queueIncoming(
       message.threadId,
       text,
       imageUrl,
@@ -480,7 +590,6 @@ try {
 // escalation-feed, resolve SĐT → uid Zalo rồi nhắn từ acc clone, xong ack.
 // OA duyệt xong thì nudge tự gửi phía server, vòng này tự hết việc.
 const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
-const daBaoKhongTimRa = new Set(); // id việc đã ghi sổ "không resolve được" trong lần chạy này
 
 // CHỐNG CHỒNG LƯỢT. `setInterval` cứ 60 giây là bắn một lượt, KHÔNG cần biết
 // lượt trước xong chưa. Mỗi việc phải đi ba lượt mạng (tìm người → nhắn → báo
@@ -529,15 +638,7 @@ async function pumpEscalations() {
             if (uid) uidCache.set(it.phone, uid);
           }
         }
-        if (!uid) {
-          // Một dòng sổ cho mỗi việc mỗi lần chạy, không phải mỗi lượt kéo: 08–10/10 bảng admins rỗng → hai việc báo admin
-          // ghi 660 dòng trong 3 ngày, còi đếm "N lỗi" mỗi giờ mà vẫn chỉ là một chuyện (chưa có người nhận).
-          if (!daBaoKhongTimRa.has(it.id)) {
-            daBaoKhongTimRa.add(it.id);
-            await ghiLoi("escalation", `${it.id}: không resolve được ${it.name} (chưa có Zalo ID / SĐT người nhận)`);
-          }
-          continue;
-        }
+        if (!uid) { await ghiLoi("escalation", `${it.id}: không resolve được ${it.name}`); continue; }
         const msg = it.text ?? `🔔 nhadat.cc: ${it.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
         rememberSent(msg);
         await api.sendMessage(msg, String(uid), ThreadType.User);
@@ -578,27 +679,45 @@ try {
 
 vongKeo();
 
-// TAI NGHE ZALO PHẢI TỰ NỐI LẠI (10/10/2026). Bản trước gọi `listener.start()` trần: zca-js 2.1.2 khi đó hễ websocket
-// đóng một lần (mạng chớp, Zalo cắt, hoặc ai đó mở Zalo Web / Zalo PC bằng acc clone — mã 3000 "Another connection is
-// opened") là phát `closed` rồi thôi luôn. Bridge không nghe `closed` nên tai nghe chết vĩnh viễn, còn vòng kéo việc ở trên
-// vẫn chạy và vẫn điểm danh `bot_health` — /admin báo "sống" trong khi khách nhắn không ai trả lời (09/10 10:39 → 10/10).
-// Nay: `retryOnClose` để zca-js tự thử lại với các mã nó cho phép; hết lượt thử (hoặc mã không được thử) thì báo /admin,
-// ghi sổ, rồi thoát để systemd (Restart=always) dựng lại tiến trình — đăng nhập lại bằng phiên đã lưu, tai nghe mới.
-// Mã 3000 / 3003 = acc clone đang mở nơi khác: chờ 2 phút rồi mới dựng lại, để người đang mở Zalo Web kịp thấy cảnh báo
-// mà đóng (dựng lại ngay là giành phiên qua lại với họ mỗi 10 giây). Cách nối lại theo ZaloCRM (MIT, zalo-pool.ts).
-const MA_BI_CHIEM = new Set([3000, 3003]);
-api.listener.on("closed", async (code, reason) => {
-  const biChiem = MA_BI_CHIEM.has(Number(code));
-  const lyDo = biChiem
-    ? `acc clone đang mở ở Zalo Web / Zalo PC (mã ${code}) — bot không nghe được tin; đóng Zalo Web/PC, bridge tự nối lại sau 2 phút`
-    : `tai nghe Zalo đóng (mã ${code}${reason ? `: ${String(reason).slice(0, 80)}` : ""}) — bridge khởi động lại`;
-  console.log(`✖ ${lyDo}`);
-  await baoDangNhap("chua_ro", null, lyDo.slice(0, 200));
-  await ghiLoi("tai nghe zalo", lyDo);
-  setTimeout(() => process.exit(1), biChiem ? 120_000 : 3_000);
-});
-api.listener.on("error", (e) => {
-  // Có người nghe thì EventEmitter không ném nữa; lỗi giải mã một gói tin không đáng làm sập cả bridge — ghi sổ là đủ.
-  void ghiLoi("tai nghe zalo (error)", errDetail(e));
-});
-api.listener.start({ retryOnClose: true });
+
+// Local HTTP Send API on 127.0.0.1:5005 for proactive messages (follow-up, reminders)
+const SEND_PORT = process.env.SEND_PORT || 5005;
+try {
+  const sendServer = http.createServer(async (req, res) => {
+    if (req.method === 'POST' && req.url === '/send') {
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', async () => {
+        try {
+          const { threadId, message } = JSON.parse(body || '{}');
+          if (threadId && message) {
+            rememberSent(message);
+            if (/^\d{6,}$/.test(String(threadId))) {
+              await api.sendMessage(message, String(threadId), ThreadType.User);
+            } else {
+              console.log('📡 [Proactive Mock Test] -> [' + threadId + ']: ' + message.slice(0, 80));
+            }
+            console.log(`📡 [Proactive Send] -> [${threadId}]: ${message.slice(0, 80)}…`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+            return;
+          }
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing threadId or message' }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      });
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  sendServer.listen(SEND_PORT, '127.0.0.1', () => {
+    console.log(`📡 Local Send API listening on 127.0.0.1:${SEND_PORT}`);
+  });
+} catch (e) {
+  console.error('Failed to start sendServer:', e);
+}
+
+api.listener.start();
