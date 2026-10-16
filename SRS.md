@@ -78,9 +78,10 @@ Hệ thống được thiết kế độc lập, không phụ thuộc vào máy 
      * Thiếu lộ giới: Hỏi mặt tiền hay hẻm xe hơi.
    * Tuyệt đối không lặp lại kịch bản "chờ hình sổ hồng" nếu ngữ cảnh không phù hợp.
 
-5. **Cơ chế Reset phiên làm việc:**
-   * Lệnh Zalo: Nhắn `/reset`, `/clear`, `/xoa`, `reset session`, hoặc `xóa hết` để xóa sạch nháp và làm mới phiên chat.
-   * API endpoints:
+5. **Cơ chế Reset phiên làm việc (Làm mới cuộc trò chuyện):**
+   * **Lời chào / Sticker Reset tự nhiên:** Bất kỳ lúc nào khách hoặc người kiểm thử nhắn `hello`, `hi`, `alo`, `hello em`, `chào em`, hoặc gửi **sticker chào / sticker cảm xúc (`[sticker cảm xúc]`, `👋`)**, Bot sẽ tự động xóa sạch toàn bộ nháp cũ và làm mới cuộc trò chuyện ngay lập tức.
+   * **Lệnh Reset tường minh:** Nhắn `/reset`, `/clear`, `/xoa`, `reset session`, hoặc `xóa hết`.
+   * **API endpoints:**
      * `POST /reset/{user_key}`: Reset riêng từng khách hàng.
      * `POST /reset-all`: Reset toàn bộ hệ thống.
 

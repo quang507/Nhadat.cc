@@ -1495,8 +1495,19 @@ class Engine:
         clean_text = text.strip()
         cmd = clean_text.lower()
 
-        # Explicit admin/dev reset command — Clear session and all draft data
-        if cmd in ("/reset", "/clear", "/xoa", "reset session", "xóa hết"):
+        # Explicit reset command or greeting restart (hello, sticker greeting, /reset)
+        is_greeting_reset = (
+            cmd in (
+                "/reset", "/clear", "/xoa", "reset session", "xóa hết",
+                "hello", "hi", "alo", "helo", "hế lô", "halo",
+                "hello em", "hi em", "chào em", "chào bot",
+                "hello bot", "hi bot", "[sticker cảm xúc]", "👋", "🙋", "🙋‍♂️", "🙋‍♀️",
+            )
+            or (cmd.startswith("hello") and len(cmd) <= 10)
+            or (cmd.startswith("hi ") and len(cmd) <= 8)
+        )
+        if is_greeting_reset:
+            had_prior_history = len(conv.history) > 0
             new_li = Listing(prop=Property())
             conv.listings = [new_li]
             conv.active_listing_id = new_li.listing_id
@@ -1508,11 +1519,23 @@ class Engine:
             conv.last_receipts = []
             if self._convstore is not None:
                 self._convstore.reset(user_key)
-            reply = (
-                f"Dạ em chào anh/chị! Em là {conv.assistant.name} từ AI Ơi Nhà Đất.\n"
-                "Em đã làm mới phiên chat và xóa toàn bộ thông tin nháp trước đó rồi ạ. "
-                "Anh/chị có thể bắt đầu gửi thông tin nhà đất cần rao bán hoặc cho thuê nhé! 🏡✨"
-            )
+            
+            if had_prior_history and cmd in ("/reset", "/clear", "/xoa", "reset session", "xóa hết"):
+                reply = (
+                    f"Dạ em chào anh/chị! Em là {conv.assistant.name} từ AI Ơi Nhà Đất.\n"
+                    "Em đã làm mới phiên chat và xóa toàn bộ thông tin nháp trước đó rồi ạ. "
+                    "Anh/chị có thể bắt đầu gửi thông tin nhà đất cần rao bán hoặc cho thuê nhé! 🏡✨"
+                )
+            elif had_prior_history:
+                reply = (
+                    f"Chào anh/chị ạ! Em là {conv.assistant.name}, trợ lý bất động sản của AI Ơi Nhà Đất. 🏡✨\n"
+                    "Em đã làm mới cuộc trò chuyện rồi ạ. Anh/chị đang có căn chung cư, nhà phố hay đất cần gửi bán hoặc cho thuê vậy ạ?"
+                )
+            else:
+                reply = (
+                    f"Chào anh/chị ạ! Em là {conv.assistant.name}, trợ lý bất động sản của AI Ơi Nhà Đất. 🏡✨\n"
+                    "Anh/chị đang có căn chung cư, nhà phố hay đất cần gửi bán hoặc cho thuê vậy ạ?"
+                )
             conv.history.append(Turn("assistant", reply, now))
             conv.last_ai_at = now
             return self._build_result(conv, reply, captured=[], now=now)
