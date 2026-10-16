@@ -322,6 +322,23 @@ class Property:
                 self.fields[k] = v
                 newly.append(k)
 
+        # Guard: if dien_tich was erroneously extracted as a slash number (e.g. "100/9"), that is a house number, NOT area!
+        dt = self.fields.get("dien_tich") or ""
+        if re.match(r"^\s*\d+/\d+\s*$", dt):
+            if dt not in (self.fields.get("dia_chi") or ""):
+                self.fields["dia_chi"] = _merge_dia_chi(self.fields.get("dia_chi", ""), dt)
+            del self.fields["dien_tich"]
+            if "dien_tich" in newly:
+                newly.remove("dien_tich")
+
+        # Slash in address -> inherently an alley house ("nhà trong hẻm")
+        dia_chi_val = self.fields.get("dia_chi") or ""
+        if "/" in dia_chi_val and not self.fields.get("lo_gioi_hem"):
+            if re.search(r"\b\d+[\w]*\/[\d\w/]+", dia_chi_val):
+                self.fields["lo_gioi_hem"] = "Nhà hẻm"
+                if "lo_gioi_hem" not in newly:
+                    newly.append("lo_gioi_hem")
+
         # 1. Tự động suy luận loại hình nếu chưa có (Auto-inference loai_hinh)
         if self.loai_hinh is None:
             # Chung cư / Căn hộ: có số phòng ngủ, tầng/tòa, view ban công, phí quản lý hoặc dự án căn hộ
