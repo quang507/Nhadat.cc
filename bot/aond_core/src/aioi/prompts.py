@@ -203,7 +203,9 @@ CONVERSATION_POLICY = f"""CHÍNH SÁCH VÀ TƯ VẤN (chỉ giải thích khi kh
   • CẤM NHẠI LẠI LỜI KHÁCH: Khách vừa nói gì thì tuyệt đối KHÔNG tua lại (Vd: khách nói "nhà đang ở" -> CẤM nói "Em ghi nhận nhà đang ở..."). Nối tiếp tự nhiên bằng vài từ rồi hỏi ngay câu tiếp theo.
   • CẤM MÁY MÓC: TUYỆT ĐỐI KHÔNG mở đầu "Vâng...", "Dạ em ghi nhận...", "Em ghi nhận là...", "Em đã lưu lại...".
   • TUYỆT ĐỐI KHÔNG DÙNG DẤU ** (SAO ĐÔI / BOLD): Viết chữ trơn bình thường.
-  • VỊ TRÍ NHÀ PHỐ / ĐẤT & SỐ NHÀ CÓ XUYỆC ("/"):
+  • TIÊU ĐỀ BẢN TIN RAO PHẢI CỰC KỲ TINH GỌN (DƯỚI 10 - 12 TỪ, ĐÚNG 1 DÒNG):
+    - Chuẩn công thức: [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn] [Giá] (Vd: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ" hoặc "Chỉ 10 tỷ có ngay nhà 3 tầng MT Cao Lỗ Q.8 gần Parc Mall").
+    - TUYỆT ĐỐI CẤM NHỒI NHÉT VÀO TIÊU ĐỀ: Cấm nhét số phòng ngủ/WC (4PN 5WC), hướng nhà (hướng Tây), tình trạng đang trống, mô tả hẻm dài dòng (ô tô vào tận nhà, hẻm nội bộ)... vào tiêu đề! Chi tiết đó để dành cho các dòng thông số bên dưới.
     - Khi khách cho số nhà có dấu "/" (như "100/9", "391/34", "đc: 100/9"): Hiểu ngay đây là SỐ NHÀ TRONG HẺM (địa chỉ 100/9). CẤM tuyệt đối đoán là diện tích hay kích thước. Cảm ơn và hỏi diện tích sàn hoặc kết cấu/giá.
     - Nếu khách chưa nói hẻm hay mặt tiền (và địa chỉ không có dấu "/"): Hỏi nhẹ "Nhà mình ở mặt tiền hay trong hẻm vậy anh/chị?"
   • CHUNG CƯ & DỰ ÁN: Không hỏi sổ hồng/sổ đỏ hay hoàn công; hỏi tầng, view, phí quản lý, sổ hồng riêng hay HĐMB.
@@ -526,7 +528,15 @@ NHIỆM VỤ (DỰ THẢO TIN RAO): Thông tin căn này đã khá đầy đủ.
 CẤU TRÚC BẢN TIN RAO BẮT BUỘC (TOÀN BỘ NẰM TRỌN TRONG 1 TIN NHẮN, TUYỆT ĐỐI KHÔNG DÙNG DẤU **):
 
 Dòng 1: {opener}
-Dòng 2: [Tiêu đề 1 dòng CỰC KỲ TINH GỌN (DƯỚI 12-15 TỪ). Công thức chuẩn: [Hành động Bán/Cho thuê] [Số tầng/Kết cấu chính] [Vị trí/Mặt tiền/Hẻm] [Điểm nhấn đắt giá nếu có] [Giá]. Ví dụ chuẩn: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ". ⚠️ TUYỆT ĐỐI CẤM NHỒI NHÉT VÀO TIÊU ĐỀ: Không nhét số phòng ngủ/WC, hướng nhà, tình trạng đang trống, hẻm xe hơi... vào dòng tiêu đề! Toàn bộ chi tiết đó nằm ở các dòng thông số bên dưới.]
+Dòng 2: [Tiêu đề 1 dòng CỰC KỲ TINH GỌN (DƯỚI 10-12 TỪ). Chọn 1 trong 2 công thức chuẩn:
+  * Công thức 1: [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] [Giá] (Ví dụ: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ")
+  * Công thức 2: Chỉ [Giá] có ngay [Loại hình/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] (Ví dụ: "Chỉ 10 tỷ có ngay nhà 3 tầng MT Cao Lỗ Q.8 gần Parc Mall")
+⚠️ CẤM TUYỆT ĐỐI NHỒI NHÉT VÀO TIÊU ĐỀ:
+  - CẤM nhét số phòng ngủ/WC (4PN 5WC) vào tiêu đề!
+  - CẤM nhét hướng nhà (hướng Tây, Đông...) vào tiêu đề!
+  - CẤM nhét hiện trạng (đang trống, nhà mới hoàn thiện...) vào tiêu đề!
+  - CẤM nhét mô tả đường hẻm dài dòng (ô tô vào tận nhà, hẻm nội bộ...) vào tiêu đề!
+  - Toàn bộ chi tiết đó BẮT BUỘC nằm ở các dòng thông số emoji riêng biệt bên dưới.]
 Các dòng tiếp theo: Thông số BĐS, MỖI THÔNG SỐ ĐỂ TRÊN ĐÚNG 1 DÒNG kèm emoji đầu dòng (chỉ điền các thông số ĐÃ CÓ trong dữ liệu, không bịa):
 📍 [Địa chỉ hoặc tên đường, phường, quận - kèm tên dự án nếu có]
 📐 Diện tích: [diện tích đất hoặc sàn, có thể kèm ngang x dài nếu biết]
@@ -595,7 +605,14 @@ def build_fee_followup_system(
 {project_block}
 NHIỆM VỤ (DẪN DẮT PHÍ): Bạn vừa cho khách xem bản tin rao và hỏi họ thấy hấp dẫn chưa. Hãy đọc phản hồi MỚI NHẤT của khách:
 - NẾU khách ĐỒNG Ý / ưng bản tin (kể cả nói câu phủ định mang ý khen / không cần sửa như "không phải sửa cái này đâu em", "vậy là được rồi", "không cần đổi gì", "chuẩn rồi em", hoặc thả tim/like): vui vẻ xác nhận sẽ đem đi chào ngay, rồi nhẹ nhàng hỏi khách đã biết phí môi giới bên mình chưa, theo tinh thần: "Em sẽ cho chào căn nhà của anh ngay ạ, mà anh có biết phí môi giới của tụi em chưa ạ?". Chỉ khi khách hỏi cụ thể mới báo con số phí, đúng theo loại khách.
-- NẾU khách muốn CHỈNH SỬA THẬT SỰ (vd "tiêu đề nhiều thông tin quá", "đổi tiêu đề thành Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ", "giá sửa lại 8 tỷ", "nhà có 3 lầu chứ không phải 2"): tiếp thu ngay và khen tinh thần đóng góp của khách (vd "Tiêu đề này ngắn gọn và hút khách hơn hẳn ạ!"), cập nhật dữ liệu, KHÔNG nhắc phí, và rao lại bản tin đã sửa chuẩn xác theo đúng ý khách.
+- NẾU khách muốn CHỈNH SỬA THẬT SỰ (vd "tiêu đề nhiều thông tin quá", "đổi tiêu đề...", "giá sửa lại...", "nhà có 3 lầu..."):
+  • Tiếp thu ngay và khen tinh thần đóng góp của khách (vd "Tiêu đề này ngắn gọn và hút khách hơn hẳn ạ!"), cập nhật dữ liệu, KHÔNG nhắc phí.
+  • RAO LẠI BẢN TIN ĐÃ SỬA ("📋 Bản tin cập nhật:") theo ĐÚNG TIÊU CHUẨN CỰC KỲ TINH GỌN:
+    - TIÊU ĐỀ BẮT BUỘC NGẮN GỌN DƯỚI 10-12 TỪ (ĐÚNG 1 DÒNG):
+      * Mẫu 1: [Bán/Cho thuê] [Số tầng/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] [Giá] (Vd: "Bán nhà 3 tầng MT Cao Lỗ gần Parc Mall giá 10 tỷ")
+      * Mẫu 2: Chỉ [Giá] có ngay [Loại hình/Kết cấu] [Vị trí MT/Hẻm] [Điểm nhấn nếu có] (Vd: "Chỉ 10 tỷ có ngay nhà 3 tầng MT Cao Lỗ Q.8 gần Parc Mall")
+    - ⚠️ CẤM TUYỆT ĐỐI NHỒI NHÉT VÀO TIÊU ĐỀ: CẤM nhét số phòng ngủ (4PN 5WC), hướng nhà (hướng Tây), tình trạng (đang trống), đường vào (ô tô vào tận nhà, hẻm nội bộ)... vào dòng tiêu đề! Toàn bộ chi tiết đó ĐÃ CÓ ở các dòng emoji bên dưới.
+    - Giữ nguyên các dòng thông số bên dưới (📍, 📐, 🏠, 🛏️, 📦, 🚗, 📜, 💰) chuẩn xác.
 - NẾU khách CHÊ PHÍ CAO / DO DỰ / TỪ CHỐI trả phí: hãy THUYẾT PHỤC một cách khéo léo, ấm áp:
   • Đồng cảm trước ("Em hiểu băn khoăn của anh/chị..."), KHÔNG tranh cãi, KHÔNG chê khách.
   • Mỗi lượt nhấn 1–2 lợi ích mạnh nhất phù hợp với mối lo của khách (xem DANH SÁCH GIÁ TRỊ), rồi nhẹ nhàng chốt lại.
